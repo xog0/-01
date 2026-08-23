@@ -53,6 +53,9 @@
       if (!el.hasAttribute("data-i18n")) el.textContent = CFG.phone;
     });
     document.querySelectorAll("[data-mail-link]").forEach(function (el) {
+      var row = el.closest("li");
+      if (!CFG.email) { if (row) row.hidden = true; return; }
+      if (row) row.hidden = false;
       el.href = "mailto:" + CFG.email;
       el.textContent = CFG.email;
     });
@@ -142,8 +145,14 @@
 
   /* ---------- الآراء ---------- */
   function renderReviews() {
-    var grid = document.getElementById("reviewsGrid");
-    grid.innerHTML = (window.TESTIMONIALS || []).map(function (r) {
+    var list = window.TESTIMONIALS || [];
+    var section = document.getElementById("reviews");
+    var navLink = document.querySelector('#nav a[href="#reviews"]');
+    /* بدون تقييمات حقيقية يختفي القسم بالكامل بدل عرض قسم فارغ */
+    section.hidden = !list.length;
+    if (navLink) navLink.hidden = !list.length;
+    if (!list.length) return;
+    document.getElementById("reviewsGrid").innerHTML = list.map(function (r) {
       return '<blockquote class="review reveal"><div class="stars">★★★★★</div><p>' +
         esc(L(r.text)) + "</p><cite>" + esc(L(r.author)) + "</cite></blockquote>";
     }).join("");
@@ -151,7 +160,9 @@
 
   /* ---------- التوصيل + الدوام + السوشيال ---------- */
   function renderDelivery() {
-    document.getElementById("deliveryList").innerHTML = (CFG.delivery || []).map(function (d) {
+    var apps = (CFG.delivery || []).filter(function (d) { return d.url; });
+    document.querySelector(".delivery-strip").hidden = !apps.length;
+    document.getElementById("deliveryList").innerHTML = apps.map(function (d) {
       return '<li><a href="' + esc(d.url) + '" target="_blank" rel="noopener">' + esc(L(d.name)) + "</a></li>";
     }).join("");
   }
@@ -164,8 +175,11 @@
 
   function renderSocials() {
     var icons = { instagram: "IG", tiktok: "TT", snapchat: "SC", x: "X", facebook: "FB" };
-    document.getElementById("socials").innerHTML = Object.keys(CFG.social || {}).map(function (k) {
-      return '<li><a href="' + esc(CFG.social[k]) + '" target="_blank" rel="noopener" aria-label="' +
+    var social = CFG.social || {};
+    document.getElementById("socials").innerHTML = Object.keys(social).filter(function (k) {
+      return social[k];
+    }).map(function (k) {
+      return '<li><a href="' + esc(social[k]) + '" target="_blank" rel="noopener" aria-label="' +
         k + '">' + (icons[k] || k) + "</a></li>";
     }).join("");
   }
@@ -234,7 +248,9 @@
     window.addEventListener("scroll", function () {
       header.classList.toggle("scrolled", window.scrollY > 40);
       var pos = window.scrollY + 120, current = 0;
-      sections.forEach(function (sec, i) { if (sec && sec.offsetTop <= pos) current = i; });
+      sections.forEach(function (sec, i) {
+        if (sec && !sec.hidden && sec.offsetTop <= pos) current = i;
+      });
       links.forEach(function (a, i) { a.classList.toggle("active", i === current); });
     }, { passive: true });
   }
