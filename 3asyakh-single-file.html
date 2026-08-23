@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<!--
+  ============================================================
+  موقع ٣ أسياخ — ملف واحد مستقل
+  افتح هذا الملف بأي متصفح مباشرة، أو ارفعه لأي استضافة كما هو.
+
+  أين تعدّل؟ اضغط Ctrl+F وابحث عن:
+    SITE_CONFIG   → اسم المطعم، الهاتف، الواتساب، العنوان، الدوام، السوشيال
+    MENU_DATA     → الأصناف والأسعار
+    TESTIMONIALS  → آراء العملاء (فارغة الآن)
+    :root         → الألوان
+
+  هذا الملف مُولَّد — لا تعدّله إن كنت تعدّل ملفات المشروع،
+  بل شغّل: python3 build-single-file.py
+  ============================================================
+-->
+
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>٣ أسياخ | شاورما ومشاوي على الفحم — جدة</title>
+<meta name="description" content="٣ أسياخ في جدة — شاورما دجاج ولحم، كباب، شيش طاووق، وجبات عربية وأطباق أرز، وبوكسات جمعات ٤٠ قطعة. السيخ يبدأ من ١١ ريالاً. تصفّح المنيو واطلب عبر واتساب.">
+<meta name="theme-color" content="#0d0b09">
+
+<!-- Open Graph: تظهر عند مشاركة رابط الموقع في واتساب وتويتر -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="٣ أسياخ | شاورما ومشاوي على الفحم — جدة">
+<meta property="og:description" content="سيخ يُشوى على الفحم عند طلبك. يبدأ من ١١ ريالاً.">
+<meta property="og:image" content="assets/img/og-cover.jpg">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;600;700;900&family=Marcellus&display=swap" rel="stylesheet">
+<style>
+/* =====================================================================
+   مطعم الذواقة — ملف التنسيق
+   الألوان الأساسية في :root — غيّرها لتغيير هوية الموقع كاملة
+   ===================================================================== */
+:root{
+  --bg:#0c0a08;
+  --bg-2:#120f0c;
+  --surface:#16120e;
+  --surface-2:#1d1813;
+  --line:rgba(201,162,39,.18);
+  --gold:#c9a227;
+  --gold-soft:#e6cd7d;
+  --text:#f6f0e6;
+  --muted:#a89e90;
+  --wa:#25d366;
+  --radius:16px;
+  --radius-lg:24px;
+  --maxw:1180px;
+  --ff-ar:'Cairo',system-ui,'Segoe UI',sans-serif;
+  --ff-dis:'Marcellus','Cairo',serif;
+  --shadow:0 18px 45px rgba(0,0,0,.45);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none !important}
+html{scroll-behavior:smooth;scroll-padding-top:84px}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--ff-ar);font-size:16px;line-height:1.8;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+ul{margin:0;padding:0;list-style:none}
+h1,h2,h3,h4{margin:0;line-height:1.3;font-weight:700}
+p{margin:0 0 1rem}
+.container{width:min(100% - 2.5rem,var(--maxw));margin-inline:auto}
+
+/* ---------- عناصر مشتركة ---------- */
+.eyebrow{
+  color:var(--gold);font-size:.8rem;font-weight:700;letter-spacing:.18em;
+  text-transform:uppercase;margin:0 0 .6rem;display:flex;align-items:center;gap:.6rem;
+}
+.eyebrow::after{content:"";flex:0 0 44px;height:1px;background:linear-gradient(to left,var(--gold),transparent)}
+html[dir=ltr] .eyebrow::after{background:linear-gradient(to right,var(--gold),transparent)}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
+  padding:.85rem 1.9rem;border-radius:999px;font-weight:700;font-size:.95rem;
+  border:1px solid transparent;cursor:pointer;transition:.25s ease;white-space:nowrap;
+}
+.btn-sm{padding:.6rem 1.25rem;font-size:.85rem}
+.btn-gold{background:linear-gradient(135deg,var(--gold),var(--gold-soft));color:#1a1509;box-shadow:0 10px 26px rgba(201,162,39,.25)}
+.btn-gold:hover{transform:translateY(-2px);box-shadow:0 16px 34px rgba(201,162,39,.38)}
+.btn-ghost{border-color:var(--line);color:var(--text);background:rgba(255,255,255,.03)}
+.btn-ghost:hover{border-color:var(--gold);color:var(--gold-soft)}
+.btn-wa{background:var(--wa);color:#04240f}
+.btn-wa:hover{transform:translateY(-2px)}
+.link-gold{color:var(--gold-soft);font-weight:600;font-size:.9rem;border-bottom:1px solid var(--line)}
+.link-gold:hover{border-color:var(--gold)}
+
+.section{padding:clamp(4rem,9vw,7rem) 0}
+.section-alt{background:var(--surface)}
+.section-head{max-width:640px;margin:0 auto clamp(2rem,5vw,3.5rem);text-align:center}
+.section-head .eyebrow{justify-content:center}
+.section-head .eyebrow::after{display:none}
+.section-head h2,.about-copy h2{font-family:var(--ff-dis);font-size:clamp(1.9rem,4.5vw,2.9rem);font-weight:400}
+html[lang=ar] .section-head h2,html[lang=ar] .about-copy h2{font-family:var(--ff-ar);font-weight:700}
+.section-text{color:var(--muted);margin-top:.75rem}
+
+/* ---------- الهيدر ---------- */
+.site-header{
+  position:fixed;inset-inline:0;top:0;z-index:60;
+  background:linear-gradient(to bottom,rgba(12,10,8,.94),rgba(12,10,8,.62));
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  border-bottom:1px solid transparent;transition:.3s;
+}
+.site-header.scrolled{background:rgba(12,10,8,.95);border-bottom-color:var(--line)}
+.header-inner{display:flex;align-items:center;gap:1.25rem;min-height:74px}
+.logo{display:flex;align-items:center;gap:.7rem;flex:0 0 auto}
+.logo-mark{width:38px;height:38px;color:var(--gold);flex:0 0 38px}
+.logo-mark svg{width:100%;height:100%}
+.logo-text b{display:block;font-size:1.05rem;letter-spacing:.02em}
+.logo-text small{display:block;font-size:.68rem;color:var(--muted);letter-spacing:.06em}
+
+.nav{display:flex;gap:1.4rem;margin-inline:auto;font-size:.92rem;font-weight:600}
+.nav a{color:var(--muted);padding:.3rem 0;position:relative;transition:.2s}
+.nav a::after{content:"";position:absolute;inset-inline:0;bottom:0;height:2px;background:var(--gold);transform:scaleX(0);transition:.25s}
+.nav a:hover,.nav a.active{color:var(--text)}
+.nav a.active::after,.nav a:hover::after{transform:scaleX(1)}
+
+.nav-cta{display:none}
+.header-actions{display:flex;align-items:center;gap:.6rem;flex:0 0 auto}
+.lang-btn{
+  background:none;border:1px solid var(--line);color:var(--muted);
+  border-radius:999px;padding:.4rem 1rem;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer;transition:.2s;
+}
+.lang-btn:hover{color:var(--gold-soft);border-color:var(--gold)}
+.burger{display:none;flex-direction:column;gap:5px;background:none;border:0;cursor:pointer;padding:.4rem}
+.burger span{width:24px;height:2px;background:var(--text);transition:.3s;border-radius:2px}
+.burger[aria-expanded=true] span:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.burger[aria-expanded=true] span:nth-child(2){opacity:0}
+.burger[aria-expanded=true] span:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+
+/* ---------- الواجهة ---------- */
+.hero{position:relative;min-height:100svh;display:flex;align-items:center;padding:7rem 0 5rem;overflow:hidden}
+.hero-bg{
+  position:absolute;inset:0;
+  background:
+    radial-gradient(ellipse 60% 55% at 80% 20%,rgba(201,162,39,.20),transparent 60%),
+    radial-gradient(ellipse 70% 60% at 10% 85%,rgba(180,60,20,.18),transparent 65%),
+    linear-gradient(160deg,#0c0a08 0%,#161009 55%,#0c0a08 100%);
+}
+.hero-bg::after{
+  content:"";position:absolute;inset:0;opacity:.5;
+  background-image:radial-gradient(rgba(255,255,255,.045) 1px,transparent 1px);
+  background-size:5px 5px;
+}
+.hero-inner{position:relative}
+.hero-inner>*{max-width:720px;margin-inline-end:auto}
+.hero h1{
+  font-family:var(--ff-dis);font-weight:400;
+  font-size:clamp(2.5rem,7.5vw,4.6rem);line-height:1.15;margin:0 0 1.25rem;
+  background:linear-gradient(120deg,#fff 15%,var(--gold-soft) 55%,#fff 90%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+html[lang=ar] .hero h1{font-family:var(--ff-ar);font-weight:900;line-height:1.3}
+.hero-text{color:var(--muted);font-size:1.08rem;max-width:32em;margin-bottom:2rem}
+.hero-cta{display:flex;gap:.85rem;flex-wrap:wrap}
+.hero-stats{display:flex;gap:clamp(1.5rem,5vw,3.5rem);margin-top:3.5rem;flex-wrap:wrap}
+.hero-stats li{position:relative}
+.hero-stats b{display:block;font-size:clamp(1.6rem,4vw,2.2rem);color:var(--gold-soft);font-weight:700;line-height:1.2}
+.hero-stats span{font-size:.85rem;color:var(--muted)}
+.scroll-hint{
+  position:absolute;bottom:1.8rem;inset-inline-start:50%;transform:translateX(50%);
+  color:var(--muted);font-size:.75rem;letter-spacing:.15em;display:flex;flex-direction:column;
+  align-items:center;gap:.5rem;
+}
+html[dir=ltr] .scroll-hint{transform:translateX(-50%)}
+.scroll-hint i{width:1px;height:38px;background:linear-gradient(var(--gold),transparent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
+
+/* ---------- المنيو ---------- */
+.menu-controls{display:flex;gap:1rem;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:2.5rem;max-width:100%}
+.tabs{display:flex;gap:.5rem;flex-wrap:wrap;flex:1 1 auto;min-width:0}
+.tab{
+  background:var(--surface-2);border:1px solid var(--line);color:var(--muted);
+  border-radius:999px;padding:.55rem 1.25rem;font:inherit;font-size:.88rem;font-weight:600;cursor:pointer;transition:.22s;
+}
+.tab:hover{color:var(--text)}
+.tab.active{background:linear-gradient(135deg,var(--gold),var(--gold-soft));color:#1a1509;border-color:transparent}
+.search-wrap{position:relative;flex:0 1 260px}
+.search-wrap svg{position:absolute;inset-inline-start:.9rem;top:50%;transform:translateY(-50%);width:18px;height:18px;color:var(--muted)}
+.search-wrap input{
+  width:100%;background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+  border-radius:999px;padding:.7rem 2.6rem;font:inherit;font-size:.9rem;
+}
+.search-wrap input:focus{outline:none;border-color:var(--gold)}
+
+.cat-block{margin-bottom:3.5rem}
+.cat-head{display:flex;align-items:baseline;gap:1rem;margin-bottom:1.5rem;padding-bottom:.9rem;border-bottom:1px solid var(--line)}
+.cat-head h3{font-size:1.5rem;color:var(--gold-soft)}
+.cat-head span{color:var(--muted);font-size:.85rem}
+
+.items{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:1rem}
+.item{
+  display:flex;gap:1rem;background:var(--surface-2);border:1px solid rgba(255,255,255,.05);
+  border-radius:var(--radius);padding:1rem;transition:.25s;position:relative;overflow:hidden;
+}
+.item:hover{border-color:var(--line);transform:translateY(-3px);box-shadow:var(--shadow)}
+.item-thumb{
+  flex:0 0 84px;height:84px;border-radius:12px;display:grid;place-items:center;font-size:1.8rem;
+  background:linear-gradient(140deg,#241c12,#3a2a17);border:1px solid var(--line);
+}
+.item-thumb img{width:100%;height:100%;object-fit:cover;border-radius:12px}
+.item-body{flex:1;min-width:0}
+.item-top{display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem}
+.item h4{font-size:1.02rem}
+.item .desc{color:var(--muted);font-size:.85rem;line-height:1.6;margin:.35rem 0 0}
+.price{color:var(--gold-soft);font-weight:700;white-space:nowrap;font-size:1rem}
+.price small{font-size:.7rem;color:var(--muted);margin-inline-start:.2rem}
+.badge{
+  display:inline-block;margin-top:.6rem;font-size:.68rem;font-weight:700;
+  padding:.2rem .65rem;border-radius:999px;letter-spacing:.04em;
+}
+.badge.popular{background:rgba(201,162,39,.16);color:var(--gold-soft);border:1px solid var(--line)}
+.badge.spicy{background:rgba(214,64,32,.16);color:#f0805e;border:1px solid rgba(214,64,32,.3)}
+.badge.new{background:rgba(60,180,120,.14);color:#6fd6a5;border:1px solid rgba(60,180,120,.28)}
+.empty-state{text-align:center;color:var(--muted);padding:2rem 0}
+
+/* ---------- عن المطعم ---------- */
+.about-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(2rem,5vw,4rem);align-items:center;margin-bottom:clamp(3rem,6vw,4.5rem)}
+.about-copy p{color:var(--muted)}
+.about-copy h2{margin-bottom:1.25rem}
+.media-frame{
+  aspect-ratio:4/5;border-radius:var(--radius-lg);border:1px solid var(--line);
+  background:linear-gradient(150deg,#221a11,#100d0a);display:grid;place-items:center;
+  color:var(--muted);font-size:.85rem;position:relative;overflow:hidden;
+}
+.media-frame::before{content:"";position:absolute;inset:12px;border:1px solid var(--line);border-radius:calc(var(--radius-lg) - 8px)}
+.media-frame img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+
+.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem}
+.features li{background:var(--surface-2);border:1px solid rgba(255,255,255,.05);border-radius:var(--radius);padding:1.6rem;transition:.25s}
+.features li:hover{border-color:var(--line);transform:translateY(-4px)}
+.feat-ico{display:block;width:38px;height:38px;color:var(--gold);margin-bottom:.9rem}
+.feat-ico svg{width:100%;height:100%}
+.item-thumb .ph-ico{width:38px;height:38px;color:var(--gold);opacity:.65}
+.gallery-grid .ph-ico{width:46px;height:46px;color:var(--gold);opacity:.45}
+.features h3{font-size:1.05rem;margin-bottom:.4rem}
+.features p{color:var(--muted);font-size:.88rem;margin:0}
+
+/* ---------- المعرض ---------- */
+.gallery-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:1rem}
+.gallery-grid figure{
+  margin:0;aspect-ratio:1;border-radius:var(--radius);overflow:hidden;position:relative;
+  background:linear-gradient(150deg,#241c12,#14100c);border:1px solid var(--line);
+  display:grid;place-items:center;color:var(--muted);font-size:.8rem;transition:.3s;
+}
+.gallery-grid figure:nth-child(1),.gallery-grid figure:nth-child(6){grid-row:span 2;aspect-ratio:auto}
+.gallery-grid figure:hover{transform:scale(1.02);border-color:var(--gold)}
+.gallery-grid img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+
+/* ---------- الآراء ---------- */
+.reviews-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.25rem}
+.review{background:var(--bg);border:1px solid var(--line);border-radius:var(--radius);padding:1.9rem 1.6rem;position:relative}
+.review::before{content:"”";position:absolute;top:.2rem;inset-inline-start:1.2rem;font-size:4rem;color:var(--gold);opacity:.25;line-height:1;font-family:serif}
+.review .stars{color:var(--gold);letter-spacing:.15em;font-size:.9rem;margin-bottom:.75rem}
+.review p{font-size:.98rem;margin-bottom:1rem}
+.review cite{color:var(--gold-soft);font-style:normal;font-weight:700;font-size:.88rem}
+
+/* ---------- شريط التوصيل ---------- */
+.delivery-strip{padding:2.5rem 0;border-block:1px solid var(--line);background:var(--bg)}
+.delivery-strip .container{display:flex;align-items:center;justify-content:center;gap:1.5rem;flex-wrap:wrap}
+.delivery-strip h3{font-size:.95rem;color:var(--muted);font-weight:600}
+.delivery-strip ul{display:flex;gap:.75rem;flex-wrap:wrap}
+.delivery-strip a{
+  border:1px solid var(--line);border-radius:999px;padding:.55rem 1.4rem;
+  font-size:.88rem;font-weight:700;color:var(--gold-soft);transition:.22s;
+}
+.delivery-strip a:hover{background:rgba(201,162,39,.1);border-color:var(--gold)}
+
+/* ---------- تواصل ---------- */
+.contact-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(1.5rem,4vw,3rem)}
+.contact-list li{display:flex;gap:1rem;padding:1.15rem 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.contact-list h4{font-size:.82rem;color:var(--gold);letter-spacing:.08em;margin-bottom:.3rem;font-weight:700}
+.contact-list p{margin:0;color:var(--muted);font-size:.95rem}
+.contact-list a:hover{color:var(--gold-soft)}
+.c-ico{flex:0 0 24px;width:24px;height:24px;color:var(--gold);margin-top:.15rem}
+.c-ico svg{width:100%;height:100%}
+.hours-row{display:flex;justify-content:space-between;gap:1rem;color:var(--muted);font-size:.9rem;max-width:320px}
+.hours-row b{color:var(--text);font-weight:600}
+
+.contact-cta{display:flex;flex-direction:column;gap:1rem}
+.map-card{
+  flex:1;border-radius:var(--radius-lg);border:1px solid var(--line);padding:2.5rem 1.5rem;text-align:center;
+  background:
+    repeating-linear-gradient(45deg,rgba(201,162,39,.04) 0 2px,transparent 2px 14px),
+    linear-gradient(150deg,#1a1410,#100d0a);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:.75rem;min-height:230px;
+}
+.map-pin{width:48px;height:48px;color:var(--gold)}
+.map-pin svg{width:100%;height:100%}
+.map-card p{color:var(--muted);margin:0}
+.cta-row{display:flex;gap:.75rem;flex-wrap:wrap}
+.cta-row .btn{flex:1;min-width:150px}
+
+/* ---------- الفوتر ---------- */
+.site-footer{background:var(--surface);border-top:1px solid var(--line);padding:3rem 0 2rem}
+.footer-inner{display:grid;grid-template-columns:1fr auto;gap:1.5rem;align-items:center}
+.footer-brand{font-size:1.15rem;color:var(--gold-soft)}
+.footer-inner p{color:var(--muted);font-size:.85rem;margin:.25rem 0 0}
+.socials{display:flex;gap:.6rem}
+.socials a{
+  width:40px;height:40px;border-radius:50%;border:1px solid var(--line);
+  display:grid;place-items:center;color:var(--muted);transition:.22s;font-size:.95rem;
+}
+.socials a:hover{color:var(--gold);border-color:var(--gold);transform:translateY(-2px)}
+.footer-meta{grid-column:1/-1;border-top:1px solid rgba(255,255,255,.05);padding-top:1.25rem;
+  display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+
+/* ---------- زر الواتساب العائم ---------- */
+.wa-float{
+  position:fixed;inset-inline-end:1.25rem;bottom:1.25rem;z-index:70;
+  width:56px;height:56px;border-radius:50%;background:var(--wa);color:#fff;
+  display:grid;place-items:center;box-shadow:0 12px 30px rgba(37,211,102,.35);transition:.25s;
+}
+.wa-float svg{width:30px;height:30px}
+.wa-float:hover{transform:scale(1.08)}
+
+/* ---------- الحركة عند التمرير ---------- */
+.reveal{opacity:0;transform:translateY(24px);transition:opacity .7s ease,transform .7s ease}
+.reveal.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){
+  .reveal{opacity:1;transform:none;transition:none}
+  html{scroll-behavior:auto}
+}
+
+/* ---------- الجوال ---------- */
+@media (max-width:900px){
+  .about-grid,.contact-grid{grid-template-columns:1fr}
+  .about-media{order:-1;max-width:420px;margin-inline:auto}
+  .gallery-grid figure:nth-child(1),.gallery-grid figure:nth-child(6){grid-row:auto;aspect-ratio:1}
+}
+@media (max-width:820px){
+  .burger{display:flex}
+  .header-order{display:none}
+  /* بدون backdrop-filter على الجوال حتى يعمل الدرج الجانبي بالنسبة للشاشة كاملة */
+  .site-header{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(12,10,8,.96)}
+  body.nav-open{overflow:hidden}
+  /* درج القائمة يخرج من نفس الجهة التي فيها زر القائمة في كل اتجاه */
+  .nav{
+    position:fixed;top:0;bottom:0;right:0;left:auto;width:min(78vw,320px);
+    background:var(--surface);border-inline-start:1px solid var(--line);
+    flex-direction:column;justify-content:center;gap:1.75rem;padding:2rem;
+    transform:translateX(110%);transition:transform .35s ease;margin:0;font-size:1.1rem;
+    box-shadow:-18px 0 45px rgba(0,0,0,.5);
+  }
+  html[dir=rtl] .nav{right:auto;left:0;transform:translateX(-110%);box-shadow:18px 0 45px rgba(0,0,0,.5)}
+  .nav.open,html[dir=rtl] .nav.open{transform:translateX(0)}
+  .nav-cta{display:inline-flex;margin-top:.75rem;align-self:stretch}
+  .menu-controls{flex-direction:column;align-items:stretch}
+  .search-wrap{flex:1 1 auto}
+  .footer-inner{grid-template-columns:1fr;text-align:center;justify-items:center}
+  .footer-meta{justify-content:center;text-align:center}
+}
+@media (max-width:640px){
+  /* شريط التصنيفات يصبح قابلاً للسحب أفقياً بدل أن يتكدس */
+  .tabs{
+    flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;padding-bottom:.35rem;
+    max-width:100%;min-width:0;
+  }
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto}
+}
+@media (max-width:480px){
+  .items{grid-template-columns:1fr}
+  .hero-stats{gap:1.5rem}
+  .btn{padding:.75rem 1.4rem}
+  .logo-text small{display:none}
+  .logo-text b{font-size:.98rem}
+  .item-thumb{flex:0 0 68px;height:68px}
+  .wa-float{width:52px;height:52px}
+  .delivery-strip .container{flex-direction:column;gap:1rem}
+}
+
+</style>
+</head>
+<body>
+
+<!-- ==================== الهيدر ==================== -->
+<header class="site-header" id="header">
+  <div class="container header-inner">
+    <a href="#home" class="logo">
+      <span class="logo-mark" aria-hidden="true">
+        <svg viewBox="0 0 48 48" fill="none"><path d="M24 4c-2 6-8 8-8 15a8 8 0 0 0 16 0c0-7-6-9-8-15Z" fill="currentColor" opacity=".85"/><path d="M12 32h24M14 38h20" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+      </span>
+      <span class="logo-text">
+        <b data-brand></b>
+        <small data-tagline></small>
+      </span>
+    </a>
+
+    <nav class="nav" id="nav">
+      <a href="#home" data-i18n="nav.home"></a>
+      <a href="#menu" data-i18n="nav.menu"></a>
+      <a href="#about" data-i18n="nav.about"></a>
+      <a href="#gallery" data-i18n="nav.gallery"></a>
+      <a href="#reviews" data-i18n="nav.reviews"></a>
+      <a href="#contact" data-i18n="nav.contact"></a>
+      <a class="btn btn-gold nav-cta" data-wa-link data-i18n="nav.order"></a>
+    </nav>
+
+    <div class="header-actions">
+      <button class="lang-btn" id="langBtn" data-i18n="lang.switch"></button>
+      <a class="btn btn-gold btn-sm header-order" data-wa-link data-i18n="nav.order"></a>
+      <button class="burger" id="burger" aria-label="القائمة" aria-expanded="false"><span></span><span></span><span></span></button>
+    </div>
+  </div>
+</header>
+
+<!-- ==================== الواجهة ==================== -->
+<section class="hero" id="home">
+  <div class="hero-bg" aria-hidden="true"></div>
+  <div class="container hero-inner">
+    <p class="eyebrow" data-i18n="hero.eyebrow"></p>
+    <h1 data-i18n-html="hero.title"></h1>
+    <p class="hero-text" data-i18n="hero.text"></p>
+    <div class="hero-cta">
+      <a href="#menu" class="btn btn-gold" data-i18n="hero.cta1"></a>
+      <a class="btn btn-ghost" data-wa-link data-i18n="hero.cta2"></a>
+    </div>
+    <ul class="hero-stats" id="heroStats"></ul>
+  </div>
+  <a href="#menu" class="scroll-hint"><span data-i18n="hero.scroll"></span><i></i></a>
+</section>
+
+<!-- ==================== المنيو ==================== -->
+<section class="section" id="menu">
+  <div class="container">
+    <div class="section-head reveal">
+      <p class="eyebrow" data-i18n="menu.eyebrow"></p>
+      <h2 data-i18n="menu.title"></h2>
+      <p class="section-text" data-i18n="menu.text"></p>
+    </div>
+
+    <div class="menu-controls reveal">
+      <div class="tabs" id="menuTabs"></div>
+      <div class="search-wrap">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16.5 16.5 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input type="search" id="menuSearch" data-i18n-placeholder="menu.search">
+      </div>
+    </div>
+
+    <div id="menuContainer"></div>
+    <p class="empty-state" id="menuEmpty" hidden data-i18n="menu.empty"></p>
+  </div>
+</section>
+
+<!-- ==================== عن المطعم ==================== -->
+<section class="section section-alt" id="about">
+  <div class="container about-grid">
+    <div class="about-copy reveal">
+      <p class="eyebrow" data-i18n="about.eyebrow"></p>
+      <h2 data-i18n="about.title"></h2>
+      <p data-i18n="about.p1"></p>
+      <p data-i18n="about.p2"></p>
+    </div>
+    <div class="about-media reveal" aria-hidden="true">
+      <div class="media-frame"><span data-i18n="gallery.placeholder"></span></div>
+    </div>
+  </div>
+
+  <div class="container">
+    <ul class="features">
+      <li class="reveal"><span class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2c.6 3.6 4.5 4.8 4.5 9a4.5 4.5 0 0 1-9 0c0-1.6.8-2.6 1.6-3.6"/><path d="M12 22a5 5 0 0 0 5-5c0-2.2-1.7-3.3-2.6-5-.7 1.6-2.4 2.2-2.4 4 0-1.2-.9-2-1.8-2.6A5 5 0 0 0 7 17a5 5 0 0 0 5 5Z"/></svg></span><h3 data-i18n="feat1.t"></h3><p data-i18n="feat1.d"></p></li>
+      <li class="reveal"><span class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11h18a9 9 0 0 1-9 9 9 9 0 0 1-9-9Z"/><path d="M9 7c0-1 1-1.5 1-2.5S9 3 9 3M13 7c0-1 1-1.5 1-2.5S13 3 13 3M17 7c0-1 1-1.5 1-2.5S17 3 17 3"/></svg></span><h3 data-i18n="feat2.t"></h3><p data-i18n="feat2.d"></p></li>
+      <li class="reveal"><span class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15h16M6 19h12"/><path d="M8 11c0-3 2-4 2-6 1.5 1.5 2 2.5 2 4 .8-.8 1-1.6 1-2.6 1.6 1.4 2.6 3 2.6 4.6"/></svg></span><h3 data-i18n="feat3.t"></h3><p data-i18n="feat3.d"></p></li>
+      <li class="reveal"><span class="feat-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/></svg></span><h3 data-i18n="feat4.t"></h3><p data-i18n="feat4.d"></p></li>
+    </ul>
+  </div>
+</section>
+
+<!-- ==================== معرض الصور ==================== -->
+<section class="section" id="gallery">
+  <div class="container">
+    <div class="section-head reveal">
+      <p class="eyebrow" data-i18n="gallery.eyebrow"></p>
+      <h2 data-i18n="gallery.title"></h2>
+      <p class="section-text" data-i18n="gallery.text"></p>
+    </div>
+    <div class="gallery-grid" id="galleryGrid"></div>
+  </div>
+</section>
+
+<!-- ==================== آراء العملاء ==================== -->
+<section class="section section-alt" id="reviews">
+  <div class="container">
+    <div class="section-head reveal">
+      <p class="eyebrow" data-i18n="reviews.eyebrow"></p>
+      <h2 data-i18n="reviews.title"></h2>
+    </div>
+    <div class="reviews-grid" id="reviewsGrid"></div>
+  </div>
+</section>
+
+<!-- ==================== التوصيل ==================== -->
+<section class="delivery-strip">
+  <div class="container">
+    <h3 data-i18n="delivery.title"></h3>
+    <ul id="deliveryList"></ul>
+  </div>
+</section>
+
+<!-- ==================== تواصل معنا ==================== -->
+<section class="section" id="contact">
+  <div class="container">
+    <div class="section-head reveal">
+      <p class="eyebrow" data-i18n="contact.eyebrow"></p>
+      <h2 data-i18n="contact.title"></h2>
+    </div>
+
+    <div class="contact-grid">
+      <ul class="contact-list reveal">
+        <li>
+          <span class="c-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.4 7-11a7 7 0 1 0-14 0c0 5.6 7 11 7 11Z"/><circle cx="12" cy="10" r="2.6"/></svg></span>
+          <div><h4 data-i18n="contact.address"></h4><p data-address></p>
+          <a class="link-gold" data-maps-link target="_blank" rel="noopener" data-i18n="contact.map"></a></div>
+        </li>
+        <li>
+          <span class="c-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3h3l1.5 4.5-2 1.5a13 13 0 0 0 6 6l1.5-2L21 14.5v3a2.5 2.5 0 0 1-2.7 2.5A16.5 16.5 0 0 1 3.5 5.7 2.5 2.5 0 0 1 6.5 3Z"/></svg></span>
+          <div><h4 data-i18n="contact.phone"></h4><p><a data-tel-link dir="ltr"></a></p></div>
+        </li>
+        <li>
+          <span class="c-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.5l3.5 2"/></svg></span>
+          <div><h4 data-i18n="contact.hours"></h4><div id="hoursList"></div></div>
+        </li>
+        <li>
+          <span class="c-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg></span>
+          <div><h4 data-i18n="contact.email"></h4><p><a data-mail-link dir="ltr"></a></p></div>
+        </li>
+      </ul>
+
+      <div class="contact-cta reveal">
+        <div class="map-card">
+          <div class="map-pin" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.4 7-11a7 7 0 1 0-14 0c0 5.6 7 11 7 11Z"/><circle cx="12" cy="10" r="2.6"/></svg></div>
+          <p data-address></p>
+          <a class="btn btn-gold btn-sm" data-maps-link target="_blank" rel="noopener" data-i18n="contact.map"></a>
+        </div>
+        <div class="cta-row">
+          <a class="btn btn-wa" data-wa-link data-i18n="contact.wa"></a>
+          <a class="btn btn-ghost" data-tel-link data-i18n="contact.call"></a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ==================== الفوتر ==================== -->
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <div>
+      <b class="footer-brand" data-brand></b>
+      <p data-tagline></p>
+    </div>
+    <ul class="socials" id="socials"></ul>
+    <div class="footer-meta">
+      <p data-i18n="footer.made"></p>
+      <p>© <span id="year"></span> <span data-brand></span> — <span data-i18n="footer.rights"></span></p>
+    </div>
+  </div>
+</footer>
+
+<!-- زر الواتساب العائم -->
+<a class="wa-float" data-wa-link aria-label="WhatsApp">
+  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91S17.5 2 12.04 2Zm5.8 14.06c-.24.68-1.4 1.3-1.94 1.35-.5.05-1.13.07-1.82-.11-.42-.11-.96-.29-1.65-.59-2.9-1.25-4.79-4.17-4.94-4.36-.14-.19-1.18-1.57-1.18-3s.75-2.13 1.02-2.42c.27-.29.58-.36.78-.36h.56c.18 0 .42-.07.66.5.24.58.82 2 .89 2.15.07.14.12.31.02.5-.1.19-.15.31-.29.48-.14.17-.3.38-.43.51-.14.14-.29.29-.12.58.17.29.75 1.24 1.61 2.01 1.11.99 2.04 1.29 2.33 1.44.29.14.46.12.63-.07.17-.19.73-.85.92-1.15.19-.29.39-.24.65-.14.27.1 1.68.79 1.97.94.29.14.48.22.55.34.07.12.07.7-.17 1.38Z"/></svg>
+</a>
+
+<script>
+/* =====================================================================
+   ملف معلومات المطعم — عدّل القيم هنا فقط ولا تحتاج لمس بقية الملفات
+   العلامات (( )) تعني: بيانات تحتاج تأكيدك
+   ===================================================================== */
+window.SITE_CONFIG = {
+  brand: { ar: "٣ أسياخ", en: "3 Asyakh" },
+  tagline: { ar: "شاورما ومشاوي على الفحم", en: "Charcoal Shawarma & Grills" },
+
+  // (( أكّد الرقم )) — بصيغة دولية بدون + وبدون مسافات للواتساب
+  phone: "+966560651635",
+  whatsapp: "966560651635",
+  email: "",
+
+  // (( أكّد العنوان ورابط الخريطة ))
+  address: {
+    ar: "جدة — حي ميناء جدة الإسلامي",
+    en: "Jeddah — Islamic Port District"
+  },
+  mapsUrl: "https://www.google.com/maps/search/?api=1&query=%D9%A3+%D8%A3%D8%B3%D9%8A%D8%A7%D8%AE+%D8%AC%D8%AF%D8%A9",
+
+  // (( أكّد أوقات الدوام ))
+  hours: [
+    { day: { ar: "السبت – الخميس", en: "Sat – Thu" }, time: { ar: "١٢:٠٠ ظهراً – ٢:٠٠ فجراً", en: "12:00 PM – 2:00 AM" } },
+    { day: { ar: "الجمعة", en: "Friday" }, time: { ar: "١:٣٠ ظهراً – ٢:٠٠ فجراً", en: "1:30 PM – 2:00 AM" } }
+  ],
+
+  // (( ضع روابطك — احذف أي سطر لا تستخدمه ))
+  social: {
+    instagram: "",
+    tiktok: "",
+    snapchat: ""
+  },
+
+  // (( ضع رابط صفحتك في كل تطبيق — احذف ما لا ينطبق ))
+  delivery: [
+    { name: { ar: "هنقرستيشن", en: "HungerStation" }, url: "https://hungerstation.com/sa-ar/restaurants/regions/%D8%AC%D8%AF%D9%87/%D9%85%D9%8A%D9%86%D8%A7%D8%A1-%D8%AC%D8%AF%D8%A9-%D8%A7%D9%84%D8%A7%D8%B3%D9%84%D8%A7%D9%85%D9%8A/3-%D8%A7%D8%B3%D9%8A%D8%A7%D8%AE-163785" },
+    { name: { ar: "جاهز", en: "Jahez" }, url: "" },
+    { name: { ar: "كيتا", en: "Keeta" }, url: "" }
+  ],
+
+  currency: { ar: "ر.س", en: "SAR" },
+
+  // أرقام قسم الواجهة — مأخوذة من المنيو نفسه
+  stats: [
+    { value: "١١ ر.س", valueEn: "SAR 11", label: { ar: "يبدأ السيخ من", en: "Skewers from" } },
+    { value: "٤٠", valueEn: "40", label: { ar: "قطعة في بوكس الجمعات", en: "Pieces per party box" } },
+    { value: "٤", valueEn: "4", label: { ar: "أقسام في المنيو", en: "Menu sections" } }
+  ]
+};
+
+
+/* =====================================================================
+   المنيو — لإضافة صنف انسخ أي سطر { ... } وعدّله
+   badge: "popular" | "spicy" | "new" | null
+   img: اسم الصورة داخل assets/img/ مثل "shawarma.jpg" أو null
+   (( )) بجانب السعر تعني أنه استُنتج من نطاق سعري ويحتاج تأكيدك
+   ===================================================================== */
+window.MENU_DATA = [
+  {
+    id: "skewers",
+    name: { ar: "السيخ", en: "Skewers" },
+    note: { ar: "سندويشات مشوية على الفحم وتُحضّر عند الطلب", en: "Charcoal-grilled sandwiches, made to order" },
+    items: [
+      { name: { ar: "سيخ شاورما دجاج", en: "Chicken Shawarma Skewer" }, desc: { ar: "شاورما دجاج في خبز طازج مع الصوص", en: "Chicken shawarma in fresh bread with sauce" }, price: 11, badge: "popular", img: null },
+      { name: { ar: "سيخ شاورما لحم", en: "Meat Shawarma Skewer" }, desc: { ar: "شاورما لحم في خبز طازج مع الصوص", en: "Meat shawarma in fresh bread with sauce" }, price: 12, badge: "popular", img: null },
+      { name: { ar: "سيخ كباب دجاج", en: "Chicken Kebab Skewer" }, desc: { ar: "كباب دجاج مشوي على الفحم", en: "Charcoal-grilled chicken kebab" }, price: 12, badge: null, img: null },
+      { name: { ar: "سيخ كباب لحم", en: "Meat Kebab Skewer" }, desc: { ar: "كباب لحم مشوي على الفحم", en: "Charcoal-grilled meat kebab" }, price: 12, badge: null, img: null },
+      { name: { ar: "سيخ شيش طاووق", en: "Shish Tawook Skewer" }, desc: { ar: "دجاج متبّل ومشوي على الفحم", en: "Marinated chicken, charcoal-grilled" }, price: 13, badge: null, img: null },
+      { name: { ar: "سيخ كنافة", en: "Kunafa Skewer" }, desc: { ar: "كنافة محمّصة تُحضّر عند الطلب", en: "Toasted kunafa, made to order" }, price: 20, badge: "new", img: null }
+    ]
+  },
+  {
+    id: "meals",
+    name: { ar: "الوجبات والأطباق", en: "Meals & Plates" },
+    note: { ar: "وجبات كاملة تكفي شخصاً", en: "Complete single-serve meals" },
+    items: [
+      { name: { ar: "وجبة عربي دجاج", en: "Arabic Chicken Meal" }, desc: { ar: "خبز عربي مع الصوصات والمخلل", en: "Arabic bread with sauces and pickles" }, price: 29, badge: null, img: null },
+      { name: { ar: "وجبة عربي مكس", en: "Arabic Mixed Meal" }, desc: { ar: "دجاج ولحم في خبز عربي", en: "Chicken and meat in Arabic bread" }, price: 31, badge: null, img: null },
+      { name: { ar: "وجبة عربي لحم", en: "Arabic Meat Meal" }, desc: { ar: "لحم مشوي في خبز عربي", en: "Grilled meat in Arabic bread" }, price: 33, badge: null, img: null },
+      { name: { ar: "وجبة أرز دجاج", en: "Chicken Rice Meal" }, desc: { ar: "أرز مع دجاج مشوي وصوص", en: "Rice with grilled chicken and sauce" }, price: 27, badge: null, img: null },
+      { name: { ar: "وجبة أرز مكس", en: "Mixed Rice Meal" }, desc: { ar: "أرز مع دجاج ولحم", en: "Rice with chicken and meat" }, price: 30, badge: null, img: null },
+      { name: { ar: "وجبة أرز لحم", en: "Meat Rice Meal" }, desc: { ar: "أرز مع لحم مشوي وصوص", en: "Rice with grilled meat and sauce" }, price: 33, badge: null, img: null },
+      { name: { ar: "صحن مشويات", en: "Mixed Grill Plate" }, desc: { ar: "تشكيلة مشاوي على الفحم", en: "An assortment of charcoal grills" }, price: 35, badge: "popular", img: null }
+    ]
+  },
+  {
+    id: "boxes",
+    name: { ar: "بوكسات الجمعات", en: "Party Boxes" },
+    note: { ar: "٤٠ قطعة — تكفي العزائم والتجمعات", en: "40 pieces — made for gatherings" },
+    items: [
+      { name: { ar: "بوكس دجاج (٤٠ قطعة)", en: "Chicken Box (40 pcs)" }, desc: { ar: "٤٠ قطعة دجاج مشوية مع الصوصات", en: "40 grilled chicken pieces with sauces" }, price: 80, badge: null, img: null },
+      { name: { ar: "بوكس مكس (٤٠ قطعة)", en: "Mixed Box (40 pcs)" }, desc: { ar: "دجاج ولحم مع الصوصات", en: "Chicken and meat with sauces" }, price: 88, badge: "popular", img: null },
+      { name: { ar: "بوكس لحم (٤٠ قطعة)", en: "Meat Box (40 pcs)" }, desc: { ar: "٤٠ قطعة لحم مشوية مع الصوصات", en: "40 grilled meat pieces with sauces" }, price: 95, badge: null, img: null }
+    ]
+  },
+  {
+    id: "sides",
+    name: { ar: "المقبلات والصوصات", en: "Sides & Sauces" },
+    note: { ar: "إضافات تكمل الوجبة", en: "The finishing touches" },
+    items: [
+      { name: { ar: "حمص", en: "Hummus" }, desc: { ar: "حمص بالطحينة وزيت الزيتون", en: "Chickpeas with tahini and olive oil" }, price: 8.5, badge: null, img: null },
+      { name: { ar: "بطاطس", en: "Fries" }, desc: { ar: "بطاطس مقلية مع الصوص", en: "Fries served with sauce" }, price: 15.5, badge: null, img: null },
+      { name: { ar: "صوصات إضافية", en: "Extra Sauces" }, desc: { ar: "ثومية، حار، طحينة", en: "Garlic, hot, tahini" }, price: "2 – 2.5", badge: null, img: null }
+    ]
+  }
+];
+
+/* آراء العملاء — فارغة عمداً: لا نضع تقييمات غير حقيقية.
+   أرسل تقييمات حقيقية من خرائط جوجل وضعها هنا فيظهر القسم تلقائياً:
+   { text: { ar: "نص التقييم", en: "Review text" }, author: { ar: "الاسم", en: "Name" } }
+*/
+window.TESTIMONIALS = [];
+
+
+/* نصوص واجهة الموقع بلغتين */
+window.I18N = {
+  ar: {
+    "nav.home": "الرئيسية",
+    "nav.menu": "المنيو",
+    "nav.about": "عن المطعم",
+    "nav.gallery": "معرض الصور",
+    "nav.reviews": "آراء العملاء",
+    "nav.contact": "تواصل معنا",
+    "nav.order": "اطلب الآن",
+    "lang.switch": "English",
+
+    "hero.eyebrow": "على الفحم • يومياً",
+    "hero.title": "شاورما وأسياخ<br>على الفحم",
+    "hero.text": "سيخ يُتبّل ويُشوى على الفحم عند طلبك، في خبز طازج مع صوصاتنا. يبدأ من ١١ ريالاً.",
+    "hero.cta1": "تصفّح المنيو",
+    "hero.cta2": "اطلب عبر واتساب",
+    "hero.scroll": "اكتشف المزيد",
+
+    "menu.eyebrow": "المنيو",
+    "menu.title": "أطباقنا",
+    "menu.text": "الأسعار بالريال السعودي وقابلة للتغيير.",
+    "menu.all": "الكل",
+    "menu.search": "ابحث عن صنف…",
+    "menu.empty": "لا توجد نتائج مطابقة.",
+    "menu.order": "اطلب",
+    "badge.popular": "الأكثر طلباً",
+    "badge.spicy": "حار",
+    "badge.new": "جديد",
+
+    "about.eyebrow": "عن المطعم",
+    "about.title": "كل شيء يبدأ من السيخ",
+    "about.p1": "نتخصص في السيخ المشوي على الفحم: شاورما دجاج ولحم، كباب، وشيش طاووق. كل سيخ يُتبّل ويُشوى عند الطلب ويُقدّم في خبز طازج مع صوصاتنا.",
+    "about.p2": "وإلى جانب السندويشات نقدّم الوجبات العربية وأطباق الأرز وصحن المشويات، وبوكسات الجمعات بأربعين قطعة تكفي العزائم والتجمعات.",
+    "feat1.t": "مشوي على الفحم",
+    "feat1.d": "شوي تقليدي يعطي النكهة الحقيقية.",
+    "feat2.t": "يُحضّر عند الطلب",
+    "feat2.d": "لا شيء جاهز مسبقاً — سيخك يُشوى لك.",
+    "feat3.t": "بوكسات للعزائم",
+    "feat3.d": "٤٠ قطعة تكفي تجمّعك بسعر واحد.",
+    "feat4.t": "أسعار في المتناول",
+    "feat4.d": "السيخ يبدأ من ١١ ريالاً فقط.",
+
+    "gallery.eyebrow": "من داخل المطعم",
+    "gallery.title": "معرض الصور",
+    "gallery.text": "لمحات من مطبخنا وأطباقنا.",
+    "gallery.placeholder": "مكان الصورة",
+
+    "reviews.eyebrow": "آراء العملاء",
+    "reviews.title": "ماذا يقولون عنا",
+
+    "delivery.title": "متوفرون على تطبيقات التوصيل",
+
+    "contact.eyebrow": "تواصل معنا",
+    "contact.title": "زورونا أو اطلبوا توصيل",
+    "contact.address": "العنوان",
+    "contact.phone": "الهاتف",
+    "contact.hours": "أوقات الدوام",
+    "contact.email": "البريد الإلكتروني",
+    "contact.map": "افتح في خرائط جوجل",
+    "contact.wa": "تواصل عبر واتساب",
+    "contact.call": "اتصل بنا",
+
+    "footer.rights": "جميع الحقوق محفوظة",
+    "footer.made": "الأسعار بالريال السعودي",
+    "wa.msg": "السلام عليكم، أود الاستفسار عن الطلب",
+    "wa.item": "السلام عليكم، أرغب بطلب:"
+  },
+
+  en: {
+    "nav.home": "Home",
+    "nav.menu": "Menu",
+    "nav.about": "About",
+    "nav.gallery": "Gallery",
+    "nav.reviews": "Reviews",
+    "nav.contact": "Contact",
+    "nav.order": "Order Now",
+    "lang.switch": "العربية",
+
+    "hero.eyebrow": "Charcoal-grilled • Daily",
+    "hero.title": "Charcoal Shawarma<br>& Skewers",
+    "hero.text": "Every skewer is marinated and grilled over charcoal when you order it, served in fresh bread with our sauces. From SAR 11.",
+    "hero.cta1": "View Menu",
+    "hero.cta2": "Order on WhatsApp",
+    "hero.scroll": "Discover more",
+
+    "menu.eyebrow": "Our Menu",
+    "menu.title": "Our Dishes",
+    "menu.text": "Prices in Saudi Riyals and subject to change.",
+    "menu.all": "All",
+    "menu.search": "Search the menu…",
+    "menu.empty": "No matching items.",
+    "menu.order": "Order",
+    "badge.popular": "Best Seller",
+    "badge.spicy": "Spicy",
+    "badge.new": "New",
+
+    "about.eyebrow": "About Us",
+    "about.title": "It all starts with the skewer",
+    "about.p1": "We specialise in charcoal-grilled skewers: chicken and meat shawarma, kebab and shish tawook. Every skewer is marinated, grilled to order, and served in fresh bread with our own sauces.",
+    "about.p2": "Alongside the sandwiches we serve Arabic meals, rice plates, the mixed grill plate, and 40-piece party boxes built for gatherings.",
+    "feat1.t": "Charcoal Grilled",
+    "feat1.d": "Traditional grilling, true flavour.",
+    "feat2.t": "Made to Order",
+    "feat2.d": "Nothing pre-made — your skewer is grilled for you.",
+    "feat3.t": "Boxes for Gatherings",
+    "feat3.d": "40 pieces, one price, feeds the whole group.",
+    "feat4.t": "Honest Prices",
+    "feat4.d": "Skewers start at just SAR 11.",
+
+    "gallery.eyebrow": "Inside the restaurant",
+    "gallery.title": "Gallery",
+    "gallery.text": "A look at our kitchen and our plates.",
+    "gallery.placeholder": "Image placeholder",
+
+    "reviews.eyebrow": "Reviews",
+    "reviews.title": "What people say",
+
+    "delivery.title": "Available on delivery apps",
+
+    "contact.eyebrow": "Contact",
+    "contact.title": "Visit us or order delivery",
+    "contact.address": "Address",
+    "contact.phone": "Phone",
+    "contact.hours": "Opening Hours",
+    "contact.email": "Email",
+    "contact.map": "Open in Google Maps",
+    "contact.wa": "Chat on WhatsApp",
+    "contact.call": "Call Us",
+
+    "footer.rights": "All rights reserved",
+    "footer.made": "Prices in Saudi Riyals",
+    "wa.msg": "Hello, I'd like to ask about an order",
+    "wa.item": "Hello, I'd like to order:"
+  }
+};
+
+
+/* =====================================================================
+   منطق الموقع — لا حاجة لتعديل هذا الملف في الاستخدام العادي
+   ===================================================================== */
+(function () {
+  "use strict";
+
+  /* أيقونة تظهر مكان صورة الصنف عندما لا توجد صورة */
+  var PLACEHOLDER_ICON = '<svg class="ph-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v20"/><path d="M9 5.5c0-1.4 1.3-2.5 3-2.5s3 1.1 3 2.5-1.3 2.5-3 2.5-3-1.1-3-2.5Z"/><path d="M9 11c0-1.4 1.3-2.5 3-2.5s3 1.1 3 2.5-1.3 2.5-3 2.5-3-1.1-3-2.5Z"/><path d="M9 16.5c0-1.4 1.3-2.5 3-2.5s3 1.1 3 2.5S13.7 19 12 19s-3-1.1-3-2.5Z"/></svg>';
+
+  var CFG = window.SITE_CONFIG, MENU = window.MENU_DATA, I18N = window.I18N;
+  var lang = localStorage.getItem("lang") || "ar";
+  var activeCat = "all";
+  var query = "";
+
+  var t = function (key) { return (I18N[lang] && I18N[lang][key]) || key; };
+  var L = function (obj) { return obj ? (obj[lang] || obj.ar || obj.en || "") : ""; };
+  var esc = function (s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  };
+
+  /* ---------- روابط التواصل ---------- */
+  function waLink(itemName) {
+    var msg = itemName ? t("wa.item") + " " + itemName : t("wa.msg");
+    return "https://wa.me/" + CFG.whatsapp + "?text=" + encodeURIComponent(msg);
+  }
+
+  /* ---------- ترجمة الصفحة ---------- */
+  function applyLang() {
+    var html = document.documentElement;
+    html.lang = lang;
+    html.dir = lang === "ar" ? "rtl" : "ltr";
+    document.title = L(CFG.brand) + " | " + L(CFG.tagline);
+
+    document.querySelectorAll("[data-i18n]").forEach(function (el) {
+      el.textContent = t(el.dataset.i18n);
+    });
+    document.querySelectorAll("[data-i18n-html]").forEach(function (el) {
+      el.innerHTML = t(el.dataset.i18nHtml);
+    });
+    document.querySelectorAll("[data-i18n-placeholder]").forEach(function (el) {
+      el.placeholder = t(el.dataset.i18nPlaceholder);
+    });
+    document.querySelectorAll("[data-brand]").forEach(function (el) { el.textContent = L(CFG.brand); });
+    document.querySelectorAll("[data-tagline]").forEach(function (el) { el.textContent = L(CFG.tagline); });
+    document.querySelectorAll("[data-address]").forEach(function (el) { el.textContent = L(CFG.address); });
+
+    document.querySelectorAll("[data-wa-link]").forEach(function (el) { el.href = waLink(); });
+    document.querySelectorAll("[data-maps-link]").forEach(function (el) { el.href = CFG.mapsUrl; });
+    document.querySelectorAll("[data-tel-link]").forEach(function (el) {
+      el.href = "tel:" + CFG.phone;
+      if (!el.hasAttribute("data-i18n")) el.textContent = CFG.phone;
+    });
+    document.querySelectorAll("[data-mail-link]").forEach(function (el) {
+      var row = el.closest("li");
+      if (!CFG.email) { if (row) row.hidden = true; return; }
+      if (row) row.hidden = false;
+      el.href = "mailto:" + CFG.email;
+      el.textContent = CFG.email;
+    });
+
+    localStorage.setItem("lang", lang);
+    renderAll();
+  }
+
+  /* ---------- إحصائيات الواجهة ---------- */
+  function renderStats() {
+    var box = document.getElementById("heroStats");
+    box.innerHTML = CFG.stats.map(function (s) {
+      var v = lang === "ar" ? s.value : (s.valueEn || s.value);
+      return "<li><b>" + esc(v) + "</b><span>" + esc(L(s.label)) + "</span></li>";
+    }).join("");
+  }
+
+  /* ---------- تبويبات المنيو ---------- */
+  function renderTabs() {
+    var box = document.getElementById("menuTabs");
+    var tabs = [{ id: "all", label: t("menu.all") }].concat(
+      MENU.map(function (c) { return { id: c.id, label: L(c.name) }; })
+    );
+    box.innerHTML = tabs.map(function (tab) {
+      return '<button class="tab' + (tab.id === activeCat ? " active" : "") +
+        '" data-cat="' + tab.id + '">' + esc(tab.label) + "</button>";
+    }).join("");
+  }
+
+  /* ---------- الأصناف ---------- */
+  function matches(item) {
+    if (!query) return true;
+    var q = query.toLowerCase();
+    return (L(item.name) + " " + L(item.desc)).toLowerCase().indexOf(q) > -1;
+  }
+
+  function itemHTML(item) {
+    var name = L(item.name);
+    var thumb = item.img
+      ? '<img src="assets/img/' + esc(item.img) + '" alt="' + esc(name) + '" loading="lazy">'
+      : PLACEHOLDER_ICON;
+    var badge = item.badge
+      ? '<span class="badge ' + item.badge + '">' + esc(t("badge." + item.badge)) + "</span>"
+      : "";
+    return '<article class="item">' +
+      '<div class="item-thumb">' + thumb + "</div>" +
+      '<div class="item-body">' +
+        '<div class="item-top"><h4>' + esc(name) + "</h4>" +
+        '<span class="price">' + esc(item.price) + " <small>" + esc(L(CFG.currency)) + "</small></span></div>" +
+        '<p class="desc">' + esc(L(item.desc)) + "</p>" + badge +
+      "</div></article>";
+  }
+
+  function renderMenu() {
+    var wrap = document.getElementById("menuContainer");
+    var empty = document.getElementById("menuEmpty");
+    var cats = MENU.filter(function (c) { return activeCat === "all" || c.id === activeCat; });
+    var html = "", found = 0;
+
+    cats.forEach(function (cat) {
+      var items = cat.items.filter(matches);
+      if (!items.length) return;
+      found += items.length;
+      html += '<div class="cat-block reveal"><div class="cat-head"><h3>' + esc(L(cat.name)) +
+        "</h3><span>" + esc(L(cat.note)) + '</span></div><div class="items">' +
+        items.map(itemHTML).join("") + "</div></div>";
+    });
+
+    wrap.innerHTML = html;
+    empty.hidden = found > 0;
+    observeReveals();
+  }
+
+  /* ---------- المعرض ---------- */
+  function renderGallery() {
+    /* ضع أسماء صورك هنا بعد رفعها في assets/img/ — مثال: ["1.jpg","2.jpg", ...] */
+    var photos = [];
+    var grid = document.getElementById("galleryGrid");
+    var cells = photos.length ? photos : [null, null, null, null, null, null];
+    grid.innerHTML = cells.map(function (src) {
+      var inner = src
+        ? '<img src="assets/img/' + esc(src) + '" alt="" loading="lazy">'
+        : PLACEHOLDER_ICON;
+      return '<figure class="reveal">' + inner + "</figure>";
+    }).join("");
+  }
+
+  /* ---------- الآراء ---------- */
+  function renderReviews() {
+    var list = window.TESTIMONIALS || [];
+    var section = document.getElementById("reviews");
+    var navLink = document.querySelector('#nav a[href="#reviews"]');
+    /* بدون تقييمات حقيقية يختفي القسم بالكامل بدل عرض قسم فارغ */
+    section.hidden = !list.length;
+    if (navLink) navLink.hidden = !list.length;
+    if (!list.length) return;
+    document.getElementById("reviewsGrid").innerHTML = list.map(function (r) {
+      return '<blockquote class="review reveal"><div class="stars">★★★★★</div><p>' +
+        esc(L(r.text)) + "</p><cite>" + esc(L(r.author)) + "</cite></blockquote>";
+    }).join("");
+  }
+
+  /* ---------- التوصيل + الدوام + السوشيال ---------- */
+  function renderDelivery() {
+    var apps = (CFG.delivery || []).filter(function (d) { return d.url; });
+    document.querySelector(".delivery-strip").hidden = !apps.length;
+    document.getElementById("deliveryList").innerHTML = apps.map(function (d) {
+      return '<li><a href="' + esc(d.url) + '" target="_blank" rel="noopener">' + esc(L(d.name)) + "</a></li>";
+    }).join("");
+  }
+
+  function renderHours() {
+    document.getElementById("hoursList").innerHTML = (CFG.hours || []).map(function (h) {
+      return '<div class="hours-row"><b>' + esc(L(h.day)) + "</b><span>" + esc(L(h.time)) + "</span></div>";
+    }).join("");
+  }
+
+  function renderSocials() {
+    var icons = { instagram: "IG", tiktok: "TT", snapchat: "SC", x: "X", facebook: "FB" };
+    var social = CFG.social || {};
+    document.getElementById("socials").innerHTML = Object.keys(social).filter(function (k) {
+      return social[k];
+    }).map(function (k) {
+      return '<li><a href="' + esc(social[k]) + '" target="_blank" rel="noopener" aria-label="' +
+        k + '">' + (icons[k] || k) + "</a></li>";
+    }).join("");
+  }
+
+  function renderAll() {
+    renderStats(); renderTabs(); renderMenu(); renderGallery();
+    renderReviews(); renderDelivery(); renderHours(); renderSocials();
+  }
+
+  /* ---------- الحركة عند التمرير ---------- */
+  var io = null;
+  function observeReveals() {
+    if (!("IntersectionObserver" in window)) {
+      document.querySelectorAll(".reveal").forEach(function (el) { el.classList.add("in"); });
+      return;
+    }
+    if (!io) {
+      io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (e) {
+          if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); }
+        });
+      }, { threshold: .12, rootMargin: "0px 0px -40px" });
+    }
+    document.querySelectorAll(".reveal:not(.in)").forEach(function (el) { io.observe(el); });
+  }
+
+  /* ---------- الأحداث ---------- */
+  function bind() {
+    document.getElementById("langBtn").addEventListener("click", function () {
+      lang = lang === "ar" ? "en" : "ar";
+      applyLang();
+    });
+
+    var burger = document.getElementById("burger");
+    var nav = document.getElementById("nav");
+    function setNav(open) {
+      nav.classList.toggle("open", open);
+      document.body.classList.toggle("nav-open", open);
+      burger.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    burger.addEventListener("click", function () { setNav(!nav.classList.contains("open")); });
+    nav.addEventListener("click", function (e) { if (e.target.tagName === "A") setNav(false); });
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape") setNav(false); });
+    document.addEventListener("click", function (e) {
+      if (nav.classList.contains("open") && !nav.contains(e.target) && !burger.contains(e.target)) setNav(false);
+    });
+
+    document.getElementById("menuTabs").addEventListener("click", function (e) {
+      var btn = e.target.closest(".tab");
+      if (!btn) return;
+      activeCat = btn.dataset.cat;
+      renderTabs(); renderMenu();
+    });
+
+    var search = document.getElementById("menuSearch");
+    var timer;
+    search.addEventListener("input", function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () { query = search.value.trim(); renderMenu(); }, 180);
+    });
+
+    var header = document.getElementById("header");
+    var links = Array.prototype.slice.call(nav.querySelectorAll("a"));
+    var sections = links.map(function (a) { return document.querySelector(a.getAttribute("href")); });
+
+    window.addEventListener("scroll", function () {
+      header.classList.toggle("scrolled", window.scrollY > 40);
+      var pos = window.scrollY + 120, current = 0;
+      sections.forEach(function (sec, i) {
+        if (sec && !sec.hidden && sec.offsetTop <= pos) current = i;
+      });
+      links.forEach(function (a, i) { a.classList.toggle("active", i === current); });
+    }, { passive: true });
+  }
+
+  document.getElementById("year").textContent = new Date().getFullYear();
+  bind();
+  applyLang();
+  observeReveals();
+})();
+
+</script>
+</body>
+</html>
