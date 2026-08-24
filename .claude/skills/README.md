@@ -24,9 +24,24 @@ Sources: `github/awesome-copilot` (412), `inferen-sh/skills` (87),
 
 ## Activate a skill from the archive
 
+Use `bin/skill` from the repo root:
+
+```bash
+./bin/skill ls                # what is active
+./bin/skill find diagram      # search the archive by name and description
+./bin/skill info drawio       # frontmatter, files, required env vars
+./bin/skill on pptx drawio    # activate
+./bin/skill off drawio        # deactivate
+```
+
+Or copy by hand — activation is nothing more than this:
+
 ```bash
 cp -r .commandcode/skills/<name> .claude/skills/
 ```
+
+Claude Code picks up a newly activated skill during the session; it does not
+need a restart.
 
 Skills named `docx`, `pdf`, `pptx`, `xlsx` and `skill-creator` also ship with
 Claude Code itself, so copying those in duplicates an existing entry.
