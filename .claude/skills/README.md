@@ -12,17 +12,19 @@ keeping the list small keeps skill selection accurate.
 | `nano-banana-pro-openrouter` | github/awesome-copilot | Image gen/edit via OpenRouter — needs `uv` + `OPENROUTER_API_KEY` |
 | `nano-banana-pro` | intellectronica/agent-skills | Same model, called directly on Google's API — needs `uv` + `GEMINI_API_KEY` |
 | `marketing-psychology` | coreyhaines31/marketingskills | Mental models and cognitive biases applied to marketing — no dependencies |
+| `frontend-design-direction` | affaan-m/ECC | Design-direction checklist for UI work — anti-patterns and a review pass |
 
 ## Full archive
 
-All 522 installed skills are kept under `.commandcode/skills/` (the
+All 523 installed skills are kept under `.commandcode/skills/` (the
 `cmd skills` CLI install location). Nothing was lost — this directory is
 just the curated subset that Claude Code loads.
 
 Sources: `github/awesome-copilot` (412), `inferen-sh/skills` (87),
 `anthropics/skills` (19), `vercel-labs/skills` (1),
 `intellectronica/agent-skills` (1),
-`coreyhaines31/marketingskills` (1), `nexu-io/open-design` (1, a stub).
+`coreyhaines31/marketingskills` (1), `nexu-io/open-design` (1, a stub),
+`affaan-m/ECC` (1).
 
 ## Activate a skill from the archive
 
