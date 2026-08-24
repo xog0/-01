@@ -10,15 +10,17 @@ keeping the list small keeps skill selection accurate.
 | `agent-tools` | inferen-sh/skills | inference.sh via the `belt` CLI — needs `belt` installed + a network that allows `*.inference.sh` |
 | `skill-creator` | anthropics/skills | Create, eval and benchmark skills — runs fully locally |
 | `nano-banana-pro-openrouter` | github/awesome-copilot | Image gen/edit via OpenRouter — needs `uv` + `OPENROUTER_API_KEY` |
+| `nano-banana-pro` | intellectronica/agent-skills | Same model, called directly on Google's API — needs `uv` + `GEMINI_API_KEY` |
 
 ## Full archive
 
-All 519 installed skills are kept under `.commandcode/skills/` (the
+All 520 installed skills are kept under `.commandcode/skills/` (the
 `cmd skills` CLI install location). Nothing was lost — this directory is
 just the curated subset that Claude Code loads.
 
 Sources: `github/awesome-copilot` (412), `inferen-sh/skills` (87),
-`anthropics/skills` (19), `vercel-labs/skills` (1).
+`anthropics/skills` (19), `vercel-labs/skills` (1),
+`intellectronica/agent-skills` (1).
 
 ## Activate a skill from the archive
 
