@@ -15,17 +15,20 @@ keeping the list small keeps skill selection accurate.
 | `frontend-design-direction` | affaan-m/ECC | Design-direction checklist for UI work — anti-patterns and a review pass |
 | `ui-ux-pro-max` | nextlevelbuilder/ui-ux-pro-max-skill | Searchable UI/UX data — styles, palettes, font pairings, UX rules, 22 stacks. Ships a Python search tool (stdlib only) |
 | `seo-audit` | coreyhaines31/marketingskills | Technical, on-page and content SEO audit framework — includes international/hreflang guidance |
+| `content-strategy` | coreyhaines31/marketingskills | Planning what content to make and why — pillars, clusters, keyword research by buyer stage |
+| `copywriting` | coreyhaines31/marketingskills | Writing marketing copy — page structure, CTA guidelines, voice and tone |
+| `copy-editing` | coreyhaines31/marketingskills | Editing existing copy — a seven-sweep framework and plain-English alternatives |
 
 ## Full archive
 
-All 525 installed skills are kept under `.commandcode/skills/` (the
+All 528 installed skills are kept under `.commandcode/skills/` (the
 `cmd skills` CLI install location). Nothing was lost — this directory is
 just the curated subset that Claude Code loads.
 
 Sources: `github/awesome-copilot` (412), `inferen-sh/skills` (87),
 `anthropics/skills` (19), `vercel-labs/skills` (1),
 `intellectronica/agent-skills` (1),
-`coreyhaines31/marketingskills` (2), `nexu-io/open-design` (1, a stub),
+`coreyhaines31/marketingskills` (5), `nexu-io/open-design` (1, a stub),
 `affaan-m/ECC` (1), `nextlevelbuilder/ui-ux-pro-max-skill` (1).
 
 ## Activate a skill from the archive
