@@ -36,6 +36,21 @@ the owner, not by whoever installed the skill.
 
 ## Kept in the archive on purpose
 
+`ads` (coreyhaines31/marketingskills) — 2,625 lines, 16 files. Paid-media
+strategy and operations: separate playbooks for Google Search, Meta (current
+Andromeda-era system), LinkedIn B2B and ABM, plus conversion tracking,
+payback-period maths, audience targeting, a Google Ads audit checklist, audit
+guardrails, and a mandatory RSA output spec.
+
+`ad-creative` (coreyhaines31/marketingskills) — 2,576 lines, 13 files. The
+production half: a hook system, platform specs and formats, short-form and
+motion video specs, static templates, generative tooling, a creative roadmap,
+and an HTML template for reviewing creative with a client.
+
+These two are the largest skills in the archive and the pair complements
+rather than overlaps — `ads` decides where the budget goes, `ad-creative`
+makes what runs there.
+
 `offers` (coreyhaines31/marketingskills) — 1,560 lines on offer construction:
 the value equation, offer anatomy, guarantee design, bonus stacking,
 scarcity/urgency, naming, payment structure. Aimed at services and agencies,
@@ -62,14 +77,14 @@ turns execution-side:
 
 ## Full archive
 
-All 537 installed skills are kept under `.commandcode/skills/` (the
+All 539 installed skills are kept under `.commandcode/skills/` (the
 `cmd skills` CLI install location). Nothing was lost — this directory is
 just the curated subset that Claude Code loads.
 
 Sources: `github/awesome-copilot` (412), `inferen-sh/skills` (87),
 `anthropics/skills` (19), `vercel-labs/skills` (1),
 `intellectronica/agent-skills` (1), `refoundai/lenny-skills` (6),
-`coreyhaines31/marketingskills` (8), `nexu-io/open-design` (1, a stub),
+`coreyhaines31/marketingskills` (10), `nexu-io/open-design` (1, a stub),
 `affaan-m/ECC` (1), `nextlevelbuilder/ui-ux-pro-max-skill` (1).
 
 ## Activate a skill from the archive
