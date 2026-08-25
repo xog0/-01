@@ -18,16 +18,25 @@ keeping the list small keeps skill selection accurate.
 | `content-strategy` | coreyhaines31/marketingskills | Planning what content to make and why — pillars, clusters, keyword research by buyer stage |
 | `copywriting` | coreyhaines31/marketingskills | Writing marketing copy — page structure, CTA guidelines, voice and tone |
 | `copy-editing` | coreyhaines31/marketingskills | Editing existing copy — a seven-sweep framework and plain-English alternatives |
+| `seo-strategy` | refoundai/lenny-skills | SEO strategy — technical health, programmatic scaling, AI-driven discovery |
+| `positioning` | refoundai/lenny-skills | Competitive alternatives, value drivers, target segments |
+| `acquisition-channels` | refoundai/lenny-skills | Finding and mastering distribution channels |
+| `marketing-org-and-stack` | refoundai/lenny-skills | Marketing team structure and tooling |
+| `personal-brand-network` | refoundai/lenny-skills | Building a professional network and audience |
+| `pr-and-press` | refoundai/lenny-skills | Press strategy tied to business goals, not vanity metrics |
+| `gtm-positioning-strategy` | github/awesome-copilot | Positioning, longer and more prescriptive than the lenny one |
+| `press-release-writing` | github/awesome-copilot | AP-style press releases — the execution to pr-and-press's strategy |
+| `seo-content-brief` | github/awesome-copilot | Per-article SEO briefs — SERP analysis, headings, word counts |
 
 ## Full archive
 
-All 528 installed skills are kept under `.commandcode/skills/` (the
+All 534 installed skills are kept under `.commandcode/skills/` (the
 `cmd skills` CLI install location). Nothing was lost — this directory is
 just the curated subset that Claude Code loads.
 
 Sources: `github/awesome-copilot` (412), `inferen-sh/skills` (87),
 `anthropics/skills` (19), `vercel-labs/skills` (1),
-`intellectronica/agent-skills` (1),
+`intellectronica/agent-skills` (1), `refoundai/lenny-skills` (6),
 `coreyhaines31/marketingskills` (5), `nexu-io/open-design` (1, a stub),
 `affaan-m/ECC` (1), `nextlevelbuilder/ui-ux-pro-max-skill` (1).
 
