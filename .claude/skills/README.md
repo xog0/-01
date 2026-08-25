@@ -36,6 +36,28 @@ the owner, not by whoever installed the skill.
 
 ## Kept in the archive on purpose
 
+Six skills added to close gaps found by comparing the archive against the
+50 skills in coreyhaines31/marketingskills:
+
+`cro` — 857 lines. Conversion rate optimisation. The counterpart to the
+traffic skills: SEO and ads bring visitors, this turns them into orders.
+`marketing-psychology` points at it by name for page-level work.
+
+`analytics` — 1,260 lines · `attribution` — 662 lines. Measurement and source
+credit. `attribution` answers the question every client asks — where did this
+order come from — which is also how agency work gets proven.
+
+`emails` — 1,107 lines · `social` — 1,851 lines. Two channels with no coverage
+in the archive before this.
+
+`marketing-plan` — 4,478 lines, 15 files. The largest skill in the repo, and
+the one that assembles the rest into a single plan a client can be handed.
+
+Deliberately skipped as wrong-business-model: aso, revops, prospecting,
+sales-enablement, paywalls, signup, churn-prevention, community-marketing,
+marketing-council — these target SaaS, subscriptions, mobile apps and B2B
+sales motions.
+
 `ads` (coreyhaines31/marketingskills) — 2,625 lines, 16 files. Paid-media
 strategy and operations: separate playbooks for Google Search, Meta (current
 Andromeda-era system), LinkedIn B2B and ABM, plus conversion tracking,
@@ -77,14 +99,14 @@ turns execution-side:
 
 ## Full archive
 
-All 539 installed skills are kept under `.commandcode/skills/` (the
+All 545 installed skills are kept under `.commandcode/skills/` (the
 `cmd skills` CLI install location). Nothing was lost — this directory is
 just the curated subset that Claude Code loads.
 
 Sources: `github/awesome-copilot` (412), `inferen-sh/skills` (87),
 `anthropics/skills` (19), `vercel-labs/skills` (1),
 `intellectronica/agent-skills` (1), `refoundai/lenny-skills` (6),
-`coreyhaines31/marketingskills` (10), `nexu-io/open-design` (1, a stub),
+`coreyhaines31/marketingskills` (16), `nexu-io/open-design` (1, a stub),
 `affaan-m/ECC` (1), `nextlevelbuilder/ui-ux-pro-max-skill` (1).
 
 ## Activate a skill from the archive
