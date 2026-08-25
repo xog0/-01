@@ -28,7 +28,26 @@ keeping the list small keeps skill selection accurate.
 | `press-release-writing` | github/awesome-copilot | AP-style press releases — the execution to pr-and-press's strategy |
 | `seo-content-brief` | github/awesome-copilot | Per-article SEO briefs — SERP analysis, headings, word counts |
 
+## Rule: install to the archive, activate only on request
+
+New skills go into `.commandcode/skills/` and stay there. Do not copy one into
+this directory unless it was explicitly asked for — the active set is chosen by
+the owner, not by whoever installed the skill.
+
 ## Kept in the archive on purpose
+
+`offers` (coreyhaines31/marketingskills) — 1,560 lines on offer construction:
+the value equation, offer anatomy, guarantee design, bonus stacking,
+scarcity/urgency, naming, payment structure. Aimed at services and agencies,
+so it fits both pricing this agency's own packages and advising clients. It
+also carries "When NOT to use offer-design tactics" and a banned-vocabulary
+list — worth reading before applying any of it.
+
+`pricing` (coreyhaines31/marketingskills) — 830 lines, but SaaS-shaped: tiers,
+freemium, value metrics, Van Westendorp, MaxDiff. Searching its files for
+agency/retainer/consulting/project-based/hourly returns zero hits. Kept for a
+future SaaS client; `offers` is the one for service pricing, and both skills
+say so themselves.
 
 `marketing-ideas` (coreyhaines31/marketingskills) — a catalogue of 139 numbered
 marketing ideas across 17 categories, plus a guerrilla-marketing framework with
@@ -43,14 +62,14 @@ turns execution-side:
 
 ## Full archive
 
-All 535 installed skills are kept under `.commandcode/skills/` (the
+All 537 installed skills are kept under `.commandcode/skills/` (the
 `cmd skills` CLI install location). Nothing was lost — this directory is
 just the curated subset that Claude Code loads.
 
 Sources: `github/awesome-copilot` (412), `inferen-sh/skills` (87),
 `anthropics/skills` (19), `vercel-labs/skills` (1),
 `intellectronica/agent-skills` (1), `refoundai/lenny-skills` (6),
-`coreyhaines31/marketingskills` (6), `nexu-io/open-design` (1, a stub),
+`coreyhaines31/marketingskills` (8), `nexu-io/open-design` (1, a stub),
 `affaan-m/ECC` (1), `nextlevelbuilder/ui-ux-pro-max-skill` (1).
 
 ## Activate a skill from the archive
