@@ -28,16 +28,29 @@ keeping the list small keeps skill selection accurate.
 | `press-release-writing` | github/awesome-copilot | AP-style press releases — the execution to pr-and-press's strategy |
 | `seo-content-brief` | github/awesome-copilot | Per-article SEO briefs — SERP analysis, headings, word counts |
 
+## Kept in the archive on purpose
+
+`marketing-ideas` (coreyhaines31/marketingskills) — a catalogue of 139 numbered
+marketing ideas across 17 categories, plus a guerrilla-marketing framework with
+a named case library. Broad by design, so it competes with everything at
+selection time. Activate it when scoping a new client, deactivate when the work
+turns execution-side:
+
+```bash
+./bin/skill on marketing-ideas     # scoping a new client
+./bin/skill off marketing-ideas    # back to execution
+```
+
 ## Full archive
 
-All 534 installed skills are kept under `.commandcode/skills/` (the
+All 535 installed skills are kept under `.commandcode/skills/` (the
 `cmd skills` CLI install location). Nothing was lost — this directory is
 just the curated subset that Claude Code loads.
 
 Sources: `github/awesome-copilot` (412), `inferen-sh/skills` (87),
 `anthropics/skills` (19), `vercel-labs/skills` (1),
 `intellectronica/agent-skills` (1), `refoundai/lenny-skills` (6),
-`coreyhaines31/marketingskills` (5), `nexu-io/open-design` (1, a stub),
+`coreyhaines31/marketingskills` (6), `nexu-io/open-design` (1, a stub),
 `affaan-m/ECC` (1), `nextlevelbuilder/ui-ux-pro-max-skill` (1).
 
 ## Activate a skill from the archive
