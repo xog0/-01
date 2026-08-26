@@ -1,0 +1,13 @@
+# ارفع هذا الملف في الجذر: https://teqaniglass.com/robots.txt
+
+User-agent: *
+Allow: /
+
+# منع فهرسة لوحة التحكم في نتائج البحث
+Disallow: /admin/
+Disallow: /admin
+
+# السماح بفهرسة صور الأعمال والخدمات (مهمة لبحث الصور)
+Allow: /admin/img/
+
+Sitemap: https://teqaniglass.com/sitemap.xml
