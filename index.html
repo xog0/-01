@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نبضة | استوديو تسويق وهوية بصرية</title>
+<meta name="description" content="استوديو نبضة — هوية بصرية، تصميم مواقع، محتوى وحملات، وتحليل أداء للشركات الناشئة والمشاريع الصغيرة.">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#F7F8FA" media="(prefers-color-scheme: light)" id="themeColorLight">
+<meta name="theme-color" content="#0A1220" media="(prefers-color-scheme: dark)" id="themeColorDark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
+
+<script>
+/* Applied before first paint so the page never flashes the wrong theme. */
+(function () {
+  try {
+    var saved = localStorage.getItem('nabda-theme');
+    if (saved === 'dark' || saved === 'light') {
+      document.documentElement.setAttribute('data-theme', saved);
+    }
+  } catch (e) { /* private mode / blocked storage — fall back to the OS setting */ }
+})();
+</script>
+
+<style>
+  /* =========================================================
+     1. TOKENS
+     ========================================================= */
+  :root{
+    color-scheme:light;
+
+    /* Surfaces & text */
+    --ground:#F7F8FA;
+    --surface:#FFFFFF;
+    --surface-2:#F1F4F9;
+    --ink:#0F1E3D;
+    --muted:#54637F;
+    --placeholder:#66738E;
+
+    /* Rules */
+    --line:#DDE3EC;
+    --line-strong:#C0CBDC;
+
+    /* Brand */
+    --primary:#1B3A6B;      /* filled surfaces (buttons, panels) */
+    --primary-ink:#16325E;  /* brand colour used as TEXT on a light surface */
+    --gold:#C9A227;
+    --gold-hover:#B8931F;
+    --sky:#4A6FA5;          /* decorative */
+    --sky-ink:#3D5F91;      /* same accent, safe as text */
+
+    /* Dark bands (hero / contact / footer) */
+    --band:#0F1E3D;
+    --on-dark:#EEF2F8;
+    --on-dark-muted:#AEBBD0;
+    --on-primary-muted:#AEBBD0;   /* muted text on a --primary panel */
+    --dark-line:rgba(238,242,248,0.16);
+
+    /* Focus: 4.9:1 on light ground, 3.5:1 on the dark bands */
+    --focus:#8A6D10;
+    --focus-halo:rgba(138,109,16,0.24);
+
+    --shadow:rgba(15,30,61,0.32);
+
+    /* Type scale */
+    --step--1:0.875rem;
+    --step-0:1rem;
+    --step-1:1.125rem;
+    --step-2:1.375rem;
+    --step-3:clamp(1.75rem, 3.2vw, 2.4rem);
+    --step-4:clamp(2.1rem, 5vw, 3.4rem);
+
+    --radius:4px;
+    --maxw:1180px;
+    --header-h:74px;
+  }
+
+  /* --- Dark palette. Declared twice on purpose: once for the explicit
+         toggle, once for "system dark with no explicit choice". --- */
+  :root[data-theme="dark"]{
+    color-scheme:dark;
+    --ground:#0A1220;
+    --surface:#111D31;
+    --surface-2:#17263D;
+    --ink:#E9EEF7;
+    --muted:#9FB0CB;
+    --placeholder:#8092AE;
+    --line:rgba(233,238,247,0.13);
+    --line-strong:rgba(233,238,247,0.26);
+    --primary:#2B4C86;
+    --primary-ink:#8FB0E4;
+    --gold:#D8B540;
+    --gold-hover:#E5C558;
+    --sky:#6E93C9;
+    --sky-ink:#8FB0E4;
+    --band:#060C16;
+    --on-dark:#E9EEF7;
+    --on-dark-muted:#A9B8D0;
+    --on-primary-muted:#BAC7DB;   /* lifted: #A9B8D0 on #2B4C86 was 4.2:1 */
+    --dark-line:rgba(233,238,247,0.14);
+    --focus:#D8B540;
+    --focus-halo:rgba(216,181,64,0.26);
+    --shadow:rgba(0,0,0,0.55);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      color-scheme:dark;
+      --ground:#0A1220;
+      --surface:#111D31;
+      --surface-2:#17263D;
+      --ink:#E9EEF7;
+      --muted:#9FB0CB;
+      --placeholder:#8092AE;
+      --line:rgba(233,238,247,0.13);
+      --line-strong:rgba(233,238,247,0.26);
+      --primary:#2B4C86;
+      --primary-ink:#8FB0E4;
+      --gold:#D8B540;
+      --gold-hover:#E5C558;
+      --sky:#6E93C9;
+      --sky-ink:#8FB0E4;
+      --band:#060C16;
+      --on-dark:#E9EEF7;
+      --on-dark-muted:#A9B8D0;
+      --on-primary-muted:#BAC7DB;   /* lifted: #A9B8D0 on #2B4C86 was 4.2:1 */
+      --dark-line:rgba(233,238,247,0.14);
+      --focus:#D8B540;
+      --focus-halo:rgba(216,181,64,0.26);
+      --shadow:rgba(0,0,0,0.55);
+    }
+  }
+
+  /* On the dark bands the gold ring reads better than the dark-gold one. */
+  .hero, .contact, footer, .about-panel{
+    --focus:#D8B540;
+    --focus-halo:rgba(216,181,64,0.28);
+  }
+
+  /* =========================================================
+     2. BASE
+     ========================================================= */
+  *{margin:0;padding:0;box-sizing:border-box;}
+
+  html{
+    scroll-behavior:smooth;
+    /* Anchors used to land underneath the fixed header. */
+    scroll-padding-top:calc(var(--header-h) + 20px);
+  }
+
+  body{
+    font-family:'Almarai', system-ui, sans-serif;
+    font-weight:400;
+    background:var(--ground);
+    color:var(--ink);
+    line-height:1.9;                 /* Arabic needs the extra leading */
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+    transition:background-color .3s ease, color .3s ease;
+  }
+
+  h1,h2,h3,.brand,.stat-value{
+    font-family:'Cairo', system-ui, sans-serif;
+    text-wrap:balance;
+  }
+
+  /* Arabic is a connected script: letter-spacing pulls the joins apart.
+     Tracking is allowed ONLY on Latin runs (.latin). */
+  h1,h2,h3,p,li,label,cite,.brand,.eyebrow,.tag,.spec-label,button,a{
+    letter-spacing:normal;
+  }
+  .latin{
+    font-family:'Cairo', system-ui, sans-serif;
+    letter-spacing:0.12em;
+    font-variant-numeric:tabular-nums;
+  }
+
+  a{text-decoration:none;color:inherit;}
+  ul{list-style:none;}
+  img,svg{max-width:100%;display:block;}
+  section[id]{scroll-margin-top:calc(var(--header-h) + 20px);}
+
+  .sr-only{
+    position:absolute;
+    width:1px;height:1px;
+    padding:0;margin:-1px;
+    overflow:hidden;
+    clip:rect(0 0 0 0);
+    white-space:nowrap;
+    border:0;
+  }
+
+  :focus-visible{
+    outline:3px solid var(--focus);
+    outline-offset:2px;
+    border-radius:2px;
+    box-shadow:0 0 0 6px var(--focus-halo);
+  }
+
+  .skip-link{
+    position:absolute;
+    inset-block-start:-100%;
+    inset-inline-start:24px;
+    z-index:200;
+    background:var(--primary);
+    color:#EEF2F8;
+    padding:12px 22px;
+    border-radius:var(--radius);
+    font-weight:700;
+    transition:inset-block-start .2s ease;
+  }
+  .skip-link:focus{inset-block-start:14px;}
+
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{
+      animation-duration:0.01ms !important;
+      animation-iteration-count:1 !important;
+      transition-duration:0.01ms !important;
+      scroll-behavior:auto !important;
+    }
+  }
+
+  .shell{
+    max-width:var(--maxw);
+    margin:0 auto;
+    padding-inline:24px;
+  }
+
+  /* =========================================================
+     3. SCROLL REVEAL
+     The hidden state exists only when motion is welcome, so a
+     reduced-motion visitor can never end up with invisible content.
+     ========================================================= */
+  @media (prefers-reduced-motion: no-preference){
+    .reveal{
+      opacity:0;
+      transform:translateY(20px);
+      transition:opacity .7s ease, transform .7s cubic-bezier(.22,1,.36,1);
+      transition-delay:var(--reveal-delay, 0ms);
+    }
+    .reveal.is-in{opacity:1; transform:none;}
+  }
+
+  /* =========================================================
+     4. HEADER / NAV
+     ========================================================= */
+  header{
+    position:fixed;
+    inset:0 0 auto 0;
+    z-index:100;
+    background:color-mix(in srgb, var(--ground) 92%, transparent);
+    -webkit-backdrop-filter:blur(12px);
+    backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--line);
+    transition:box-shadow .25s ease, border-color .25s ease;
+  }
+  header.is-scrolled{
+    box-shadow:0 6px 24px color-mix(in srgb, var(--shadow) 45%, transparent);
+    border-bottom-color:var(--line-strong);
+  }
+  @supports not (background: color-mix(in srgb, red, blue)){
+    header{background:var(--ground);}
+  }
+
+  nav{
+    max-width:var(--maxw);
+    margin:0 auto;
+    display:flex;
+    align-items:center;
+    gap:16px;
+    padding:16px 24px;
+  }
+
+  .brand{
+    font-weight:800;
+    font-size:1.4rem;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    margin-inline-end:auto;
+  }
+  /* Wordmark rule — a straight gold stroke, not a dot */
+  .brand::before{
+    content:"";
+    width:3px;
+    height:22px;
+    background:var(--gold);
+    flex-shrink:0;
+  }
+
+  .nav-menu{
+    display:flex;
+    align-items:center;
+    gap:32px;
+  }
+  .nav-links{
+    display:flex;
+    gap:28px;
+    font-weight:700;
+    font-size:var(--step--1);
+  }
+  .nav-links a{
+    position:relative;
+    display:flex;
+    align-items:center;
+    min-height:44px;              /* comfortable touch target */
+    color:var(--muted);
+    transition:color .2s ease;
+  }
+  .nav-links a::after{
+    content:"";
+    position:absolute;
+    inset-block-end:8px;
+    inset-inline-start:0;         /* logical: grows from the start edge in any direction */
+    width:0; height:2px;
+    background:var(--gold);
+    transition:width .25s ease;
+  }
+  .nav-links a:hover{color:var(--ink);}
+  .nav-links a:hover::after{width:100%;}
+  .nav-links a[aria-current="true"]{color:var(--ink);}
+  .nav-links a[aria-current="true"]::after{width:100%;}
+
+  .nav-cta{
+    background:var(--primary);
+    color:#EEF2F8;
+    padding:12px 20px;
+    border-radius:var(--radius);
+    font-weight:700;
+    font-size:var(--step--1);
+    transition:background .2s ease, transform .2s ease;
+  }
+  .nav-cta:hover{background:var(--ink); transform:translateY(-1px);}
+
+  .nav-tools{display:flex; align-items:center; gap:8px;}
+  .icon-btn{
+    width:44px; height:44px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    background:transparent;
+    border:1px solid var(--line-strong);
+    border-radius:var(--radius);
+    color:var(--ink);
+    cursor:pointer;
+    transition:background .2s ease, border-color .2s ease, color .2s ease;
+  }
+  .icon-btn:hover{background:var(--surface-2); border-color:var(--primary-ink); color:var(--primary-ink);}
+  .icon-btn svg{width:20px; height:20px;}
+  /* One button, two glyphs — swapped by the active theme. */
+  .icon-sun{display:none;}
+  :root[data-theme="dark"] .icon-sun{display:block;}
+  :root[data-theme="dark"] .icon-moon{display:none;}
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]) .icon-sun{display:block;}
+    :root:not([data-theme="light"]) .icon-moon{display:none;}
+  }
+
+  .nav-toggle{display:none;}
+  .nav-toggle .bars{
+    display:flex; flex-direction:column; gap:4px; width:18px;
+  }
+  .nav-toggle .bars i{
+    display:block; height:2px; width:100%;
+    background:currentColor;
+    transition:transform .25s ease, opacity .2s ease;
+  }
+  .nav-toggle[aria-expanded="true"] .bars i:nth-child(1){transform:translateY(6px) rotate(45deg);}
+  .nav-toggle[aria-expanded="true"] .bars i:nth-child(2){opacity:0;}
+  .nav-toggle[aria-expanded="true"] .bars i:nth-child(3){transform:translateY(-6px) rotate(-45deg);}
+
+  /* --- Mobile navigation. The original hid the links outright below
+         480px, leaving phone visitors with no way to move around. --- */
+  @media (max-width:900px){
+    :root{--header-h:70px;}
+    .nav-toggle{display:inline-flex;}
+    .nav-menu{
+      position:absolute;
+      inset-inline:0;
+      top:100%;
+      display:none;
+      flex-direction:column;
+      align-items:stretch;
+      gap:0;
+      padding:6px 24px 22px;
+      background:var(--surface);
+      border-bottom:1px solid var(--line);
+      box-shadow:0 22px 44px var(--shadow);
+    }
+    .nav-menu[data-open="true"]{display:flex;}
+    @media (prefers-reduced-motion: no-preference){
+      .nav-menu[data-open="true"]{animation:menu-in .22s ease both;}
+    }
+    .nav-links{flex-direction:column; gap:0; font-size:var(--step-0);}
+    .nav-links a{
+      min-height:52px;
+      border-bottom:1px solid var(--line);
+      color:var(--ink);
+    }
+    .nav-links a::after{inset-block-end:12px;}
+    .nav-cta{
+      display:block;
+      text-align:center;
+      margin-top:18px;
+      padding:15px;
+      font-size:var(--step-0);
+    }
+  }
+  @keyframes menu-in{
+    from{opacity:0; transform:translateY(-8px);}
+    to{opacity:1; transform:none;}
+  }
+
+  /* =========================================================
+     5. HERO
+     ========================================================= */
+  .hero{
+    position:relative;
+    padding:170px 0 110px;
+    background:var(--band);
+    color:var(--on-dark);
+    overflow:hidden;
+  }
+  /* Fine measured grid — the studio's own drafting surface */
+  .hero::before{
+    content:"";
+    position:absolute;
+    inset:0;
+    background-image:
+      linear-gradient(to left, var(--dark-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--dark-line) 1px, transparent 1px);
+    background-size:72px 72px;
+    opacity:0.5;
+    mask-image:linear-gradient(to bottom, #000 20%, transparent 95%);
+    -webkit-mask-image:linear-gradient(to bottom, #000 20%, transparent 95%);
+  }
+  .hero::after{
+    content:"";
+    position:absolute;
+    inset-block-end:0;
+    inset-inline-start:0;      /* logical, so the rule anchors to the start edge in LTR too */
+    width:22%;
+    height:3px;
+    background:var(--gold);
+  }
+  .hero-inner{
+    position:relative;
+    z-index:2;
+    display:grid;
+    grid-template-columns:1.15fr 0.85fr;
+    gap:64px;
+    align-items:center;
+  }
+  .eyebrow{
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    color:var(--gold);
+    font-weight:800;
+    font-size:0.9rem;
+    margin-bottom:24px;
+  }
+  .eyebrow::before{
+    content:"";
+    width:28px; height:1px;
+    background:var(--gold);
+    flex-shrink:0;
+  }
+  .hero h1{
+    font-size:var(--step-4);
+    font-weight:800;
+    line-height:1.45;          /* was 1.25 — too tight for Arabic ascenders */
+    margin-bottom:24px;
+  }
+  .hero h1 em{
+    font-style:normal;
+    color:var(--gold);
+  }
+  .hero p{
+    font-size:var(--step-1);
+    color:var(--on-dark-muted);
+    max-width:52ch;
+    margin-bottom:38px;
+    font-weight:300;
+  }
+  .hero-actions{display:flex; gap:14px; flex-wrap:wrap;}
+
+  .btn-primary{
+    background:var(--gold);
+    color:var(--band);
+    padding:15px 30px;
+    border-radius:var(--radius);
+    font-weight:800;
+    font-size:var(--step-0);
+    display:inline-block;
+    transition:background .2s ease, transform .2s ease, box-shadow .2s ease;
+  }
+  .btn-primary:hover{
+    background:var(--gold-hover);
+    transform:translateY(-2px);
+    box-shadow:0 10px 24px color-mix(in srgb, var(--gold) 34%, transparent);
+  }
+  .btn-primary:active{transform:translateY(0);}
+  .btn-ghost{
+    border:1px solid var(--dark-line);
+    color:var(--on-dark);
+    padding:14px 28px;
+    border-radius:var(--radius);
+    font-weight:700;
+    font-size:var(--step-0);
+    transition:border-color .2s ease, background .2s ease, transform .2s ease;
+  }
+  .btn-ghost:hover{
+    border-color:var(--on-dark);
+    background:rgba(238,242,248,0.06);
+    transform:translateY(-2px);
+  }
+
+  /* Hero visual: a brand spec sheet — what this studio actually hands over */
+  .spec-sheet{
+    background:var(--surface);
+    color:var(--ink);
+    border-radius:var(--radius);
+    padding:30px;
+    box-shadow:0 24px 60px rgba(0,0,0,0.34);
+    border:1px solid var(--line);
+  }
+  .spec-head{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    gap:12px;
+    border-bottom:1px solid var(--line);
+    padding-bottom:16px;
+    margin-bottom:22px;
+  }
+  .spec-head b{
+    font-family:'Cairo',sans-serif;
+    font-size:1.5rem;
+    font-weight:800;
+  }
+  .spec-head .latin{
+    font-size:0.72rem;
+    color:var(--muted);
+    font-weight:700;
+  }
+  .spec-label{
+    font-size:0.82rem;
+    color:var(--muted);
+    font-weight:800;
+    margin-bottom:10px;
+  }
+  .swatches{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:8px;
+    margin-bottom:24px;
+  }
+  .swatch{
+    height:56px;
+    border-radius:2px;
+    /* Hairline so a chip whose colour matches the card still reads as a chip. */
+    box-shadow:inset 0 0 0 1px var(--line-strong);
+    display:flex;
+    align-items:flex-end;
+    padding:6px;
+    font-size:0.7rem;           /* was 0.58rem — unreadably small */
+    font-weight:700;
+    font-variant-numeric:tabular-nums;
+    letter-spacing:0.04em;
+    direction:ltr;
+  }
+  .specimen{
+    border-top:1px solid var(--line);
+    padding-top:18px;
+  }
+  .specimen-line{
+    font-family:'Cairo',sans-serif;
+    line-height:1.6;
+  }
+  .specimen-line.lg{font-size:1.5rem; font-weight:800;}
+  .specimen-line.sm{
+    font-family:'Almarai',sans-serif;
+    font-size:0.92rem;
+    font-weight:300;
+    color:var(--muted);
+  }
+
+  @media (max-width:900px){
+    .hero{padding:130px 0 90px;}
+    .hero-inner{grid-template-columns:1fr; gap:44px;}
+  }
+
+  /* =========================================================
+     6. SECTION FURNITURE
+     ========================================================= */
+  section{padding:104px 0;}
+  @media (max-width:600px){section{padding:72px 0;}}
+
+  .tag{
+    display:inline-flex;
+    align-items:center;
+    gap:10px;
+    font-weight:800;
+    color:var(--sky-ink);
+    font-size:0.88rem;
+    margin-bottom:16px;
+  }
+  /* Replaces the old letter-spacing: same "drafting note" feel, no broken joins. */
+  .tag::before{
+    content:"";
+    width:20px; height:2px;
+    background:currentColor;
+    flex-shrink:0;
+  }
+  .section-title{
+    font-size:var(--step-3);
+    font-weight:800;
+    line-height:1.5;
+    margin-bottom:18px;
+    max-width:22ch;
+  }
+  .section-title.flush{margin-bottom:0;}
+  .section-lead{
+    color:var(--muted);
+    font-size:var(--step-1);
+    max-width:58ch;
+    font-weight:300;
+  }
+
+  /* =========================================================
+     7. ABOUT
+     ========================================================= */
+  .about{background:var(--surface); border-block:1px solid var(--line);}
+  .about-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:72px;
+    align-items:start;
+  }
+  .about-stats{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:1px;
+    margin-top:40px;
+    background:var(--line);
+    border:1px solid var(--line);
+  }
+  .stat-card{
+    background:var(--surface);
+    padding:26px 24px;
+    transition:background .2s ease;
+  }
+  .stat-card:hover{background:var(--surface-2);}
+  .stat-value{
+    font-size:2rem;
+    font-weight:800;
+    display:block;
+    color:var(--primary-ink);
+    line-height:1.3;
+    font-variant-numeric:tabular-nums;
+  }
+  .stat-card dd{
+    color:var(--muted);
+    font-size:var(--step--1);
+    font-weight:300;
+    margin:0;
+  }
+  .about-panel{
+    background:var(--primary);
+    border-radius:var(--radius);
+    padding:44px 40px;
+    color:var(--on-dark);
+    border-top:3px solid var(--gold);
+  }
+  .about-panel .quote-mark{
+    font-family:'Cairo',sans-serif;
+    font-size:3rem;
+    color:var(--gold);
+    line-height:0.8;
+    display:block;
+    margin-bottom:18px;
+  }
+  .about-panel p{
+    font-size:var(--step-1);
+    line-height:2;
+    color:var(--on-dark);
+    font-weight:300;
+  }
+  .about-panel cite{
+    display:block;
+    margin-top:22px;
+    padding-top:18px;
+    border-top:1px solid var(--dark-line);
+    font-style:normal;
+    font-size:var(--step--1);
+    color:var(--on-primary-muted);
+  }
+  @media (max-width:900px){.about-grid{grid-template-columns:1fr; gap:44px;}}
+  @media (max-width:420px){.about-stats{grid-template-columns:1fr;}}
+
+  /* =========================================================
+     8. SERVICES
+     ========================================================= */
+  .services{background:var(--ground);}
+  .services-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    flex-wrap:wrap;
+    gap:24px;
+    margin-bottom:52px;
+    padding-bottom:28px;
+    border-bottom:1px solid var(--line-strong);
+  }
+  .service-grid{
+    display:grid;
+    grid-template-columns:repeat(3, 1fr);
+    gap:1px;
+    background:var(--line);
+    border:1px solid var(--line);
+  }
+  .service-card{
+    background:var(--surface);
+    padding:36px 32px;
+    transition:background .2s ease, transform .25s ease;
+    position:relative;
+  }
+  .service-card::after{
+    content:"";
+    position:absolute;
+    inset:auto 0 0 0;
+    height:2px;
+    background:var(--gold);
+    transform:scaleX(0);
+    transform-origin:right;   /* start edge in RTL */
+    transition:transform .25s ease;
+  }
+  [dir="ltr"] .service-card::after{transform-origin:left;}
+  .service-card:hover{background:var(--surface-2);}
+  .service-card:hover::after{transform:scaleX(1);}
+  .service-icon{
+    width:40px; height:40px;
+    color:var(--primary-ink);
+    margin-bottom:22px;
+    transition:transform .3s cubic-bezier(.22,1,.36,1);
+  }
+  .service-card:hover .service-icon{transform:translateY(-4px);}
+  .service-card:nth-child(3n+2) .service-icon{color:var(--gold);}
+  .service-card:nth-child(3n) .service-icon{color:var(--sky-ink);}
+  .service-card h3{
+    font-size:var(--step-2);
+    font-weight:700;
+    line-height:1.6;
+    margin-bottom:12px;
+  }
+  .service-card p{
+    color:var(--muted);
+    font-size:var(--step-0);
+    font-weight:300;
+    max-width:36ch;
+  }
+  @media (max-width:900px){.service-grid{grid-template-columns:1fr 1fr;}}
+  @media (max-width:600px){.service-grid{grid-template-columns:1fr;}}
+
+  /* =========================================================
+     9. CONTACT
+     ========================================================= */
+  .contact{
+    background:var(--band);
+    color:var(--on-dark);
+  }
+  .contact-grid{
+    display:grid;
+    grid-template-columns:0.9fr 1.1fr;
+    gap:64px;
+  }
+  .contact .tag{color:var(--gold);}
+  .contact .section-title{color:var(--on-dark);}
+  .contact .section-lead{color:var(--on-dark-muted);}
+  .contact-info-list{
+    margin-top:36px;
+    border-top:1px solid var(--dark-line);
+  }
+  .contact-info-item{
+    display:flex;
+    align-items:center;
+    gap:16px;
+    padding:18px 0;
+    border-bottom:1px solid var(--dark-line);
+  }
+  .contact-info-item .ico{
+    width:20px; height:20px;
+    color:var(--gold);
+    flex-shrink:0;
+  }
+  .contact-info-item dt{
+    font-size:0.82rem;
+    color:var(--on-dark-muted);
+    font-weight:700;
+  }
+  .contact-info-item dd{
+    font-size:var(--step-0);
+    color:var(--on-dark);
+    margin:0;
+  }
+  .contact-info-item a{
+    transition:color .2s ease;
+    border-bottom:1px solid transparent;
+  }
+  .contact-info-item a:hover{color:var(--gold); border-bottom-color:var(--gold);}
+
+  .social-row{display:flex; gap:10px; margin-top:28px; flex-wrap:wrap;}
+  .social-row a{
+    display:inline-flex;
+    align-items:center;
+    min-height:44px;
+    padding:8px 18px;
+    border:1px solid var(--dark-line);
+    border-radius:var(--radius);
+    font-size:0.85rem;
+    font-weight:700;
+    letter-spacing:0.06em;
+    transition:border-color .2s ease, color .2s ease, transform .2s ease;
+  }
+  .social-row a:hover{border-color:var(--gold); color:var(--gold); transform:translateY(-2px);}
+
+  /* --- Form --- */
+  form{
+    background:var(--surface);
+    color:var(--ink);
+    border-radius:var(--radius);
+    padding:36px;
+    display:flex;
+    flex-direction:column;
+    gap:20px;
+    border-top:3px solid var(--gold);
+    border-inline:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+  }
+  .field{display:flex; flex-direction:column; gap:8px;}
+  .field label{
+    font-weight:700;
+    font-size:0.88rem;
+    color:var(--muted);
+  }
+  .field input, .field textarea{
+    border:1px solid var(--line-strong);
+    border-radius:var(--radius);
+    padding:13px 15px;
+    font-family:'Almarai', sans-serif;
+    font-size:var(--step-0);
+    background:var(--surface);
+    color:var(--ink);
+    transition:border-color .2s ease, box-shadow .2s ease;
+  }
+  .field input::placeholder, .field textarea::placeholder{color:var(--placeholder);}
+  .field input:focus, .field textarea:focus{
+    border-color:var(--primary-ink);
+  }
+  .field input[aria-invalid="true"], .field textarea[aria-invalid="true"]{
+    border-color:#C0392B;
+    box-shadow:0 0 0 3px rgba(192,57,43,0.14);
+  }
+  :root[data-theme="dark"] .field input[aria-invalid="true"],
+  :root[data-theme="dark"] .field textarea[aria-invalid="true"]{border-color:#F08A7E;}
+  .field textarea{resize:vertical; min-height:112px; line-height:1.8;}
+  .field-error{
+    font-size:0.82rem;
+    font-weight:700;
+    color:#A5281B;
+    min-height:0;
+  }
+  .field-error:empty{display:none;}
+  :root[data-theme="dark"] .field-error{color:#F5A79C;}
+
+  .submit-btn{
+    background:var(--primary);
+    color:#EEF2F8;
+    border:none;
+    padding:15px;
+    border-radius:var(--radius);
+    font-family:'Cairo', sans-serif;
+    font-weight:700;
+    font-size:var(--step-0);
+    cursor:pointer;
+    transition:background .2s ease, transform .2s ease;
+  }
+  .submit-btn:hover:not(:disabled){background:var(--ink); transform:translateY(-1px);}
+  :root[data-theme="dark"] .submit-btn:hover:not(:disabled){background:var(--sky);}
+  .submit-btn:disabled{cursor:default; opacity:1;}
+  .submit-btn.is-sent{background:#1E7A4D;}
+
+  .form-status{
+    font-size:0.9rem;
+    font-weight:700;
+    color:#1E7A4D;
+    text-align:center;
+  }
+  :root[data-theme="dark"] .form-status{color:#6ED39F;}
+  .form-status:empty{display:none;}
+  .form-note{font-size:0.82rem; color:var(--muted); text-align:center;}
+
+  @media (max-width:900px){.contact-grid{grid-template-columns:1fr; gap:48px;}}
+  @media (max-width:520px){form{padding:26px 22px;}}
+
+  /* =========================================================
+     10. FOOTER
+     ========================================================= */
+  footer{
+    background:var(--band);
+    border-top:1px solid var(--dark-line);
+    color:var(--on-dark-muted);
+    padding:26px 24px;
+    text-align:center;
+    font-size:0.85rem;
+  }
+</style>
+</head>
+<body id="top">
+
+<a class="skip-link" href="#main">تخطَّ إلى المحتوى الرئيسي</a>
+
+<header id="siteHeader">
+  <nav aria-label="التنقل الرئيسي">
+    <a href="#top" class="brand">نبضة</a>
+
+    <div class="nav-menu" id="navMenu">
+      <ul class="nav-links">
+        <li><a href="#about">من نحن</a></li>
+        <li><a href="#services">خدماتنا</a></li>
+        <li><a href="#contact">تواصل معنا</a></li>
+      </ul>
+      <a href="#contact" class="nav-cta">ابدأ مشروعك</a>
+    </div>
+
+    <div class="nav-tools">
+      <button type="button" class="icon-btn" id="themeToggle" aria-label="تبديل المظهر الداكن">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+        </svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4.2"/>
+          <path d="M12 2v2.6M12 19.4V22M2 12h2.6M19.4 12H22M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M19.1 4.9l-1.9 1.9M6.8 17.2l-1.9 1.9"/>
+        </svg>
+      </button>
+
+      <button type="button" class="icon-btn nav-toggle" id="navToggle"
+              aria-expanded="false" aria-controls="navMenu" aria-label="فتح قائمة التنقل">
+        <span class="bars" aria-hidden="true"><i></i><i></i><i></i></span>
+      </button>
+    </div>
+  </nav>
+</header>
+
+<main id="main">
+
+<section class="hero">
+  <div class="shell hero-inner">
+    <div>
+      <span class="eyebrow reveal">استوديو تسويق وهوية بصرية</span>
+      <h1 class="reveal" style="--reveal-delay:80ms">نبني علامتك على <em>أساس واضح</em></h1>
+      <p class="reveal" style="--reveal-delay:160ms">نبضة استوديو يساعد الشركات الناشئة والمشاريع الصغيرة على بناء حضور تجاري متماسك — من نظام الهوية إلى الموقع والحملات وقياس النتائج.</p>
+      <div class="hero-actions reveal" style="--reveal-delay:240ms">
+        <a href="#contact" class="btn-primary">احجز استشارة مجانية</a>
+        <a href="#services" class="btn-ghost">شاهد خدماتنا</a>
+      </div>
+    </div>
+
+    <div class="spec-sheet reveal" style="--reveal-delay:320ms" aria-hidden="true">
+      <div class="spec-head">
+        <b>نبضة</b>
+        <span class="latin">BRAND SPEC — 01</span>
+      </div>
+
+      <p class="spec-label">لوحة الألوان</p>
+      <div class="swatches">
+        <div class="swatch" style="background:#0F1E3D; color:#EEF2F8;">0F1E3D</div>
+        <div class="swatch" style="background:#1B3A6B; color:#EEF2F8;">1B3A6B</div>
+        <div class="swatch" style="background:#4A6FA5; color:#0F1E3D;">4A6FA5</div>
+        <div class="swatch" style="background:#C9A227; color:#0F1E3D;">C9A227</div>
+      </div>
+
+      <p class="spec-label">الخطوط</p>
+      <div class="specimen">
+        <p class="specimen-line lg">Cairo — عناوين</p>
+        <p class="specimen-line sm">Almarai — نصوص ووصف</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="about" id="about" aria-labelledby="about-title">
+  <div class="shell about-grid">
+    <div>
+      <span class="tag reveal">من نحن</span>
+      <h2 class="section-title reveal" id="about-title" style="--reveal-delay:60ms">فريق صغير، وشغف كبير بالتفاصيل</h2>
+      <p class="section-lead reveal" style="--reveal-delay:120ms">تأسس استوديو نبضة على فكرة بسيطة: كل علامة تجارية تستحق قصة تُروى بوضوح وجرأة. نجمع بين التصميم والاستراتيجية لنصنع حضورًا رقميًا يعكس هوية عملائنا الحقيقية.</p>
+
+      <dl class="about-stats reveal" style="--reveal-delay:180ms">
+        <div class="stat-card">
+          <dt class="stat-value" data-to="120" data-prefix="+">+120</dt>
+          <dd>مشروع منجز</dd>
+        </div>
+        <div class="stat-card">
+          <dt class="stat-value" data-to="7">7</dt>
+          <dd>سنوات خبرة</dd>
+        </div>
+        <div class="stat-card">
+          <dt class="stat-value" data-to="98" data-suffix="%">98%</dt>
+          <dd>رضا العملاء</dd>
+        </div>
+        <div class="stat-card">
+          <dt class="stat-value" data-to="8" data-suffix=" ساعات">8 ساعات</dt>
+          <dd>دعم يومي</dd>
+        </div>
+      </dl>
+    </div>
+
+    <blockquote class="about-panel reveal" style="--reveal-delay:240ms">
+      <span class="quote-mark" aria-hidden="true">”</span>
+      <p>نؤمن أن التصميم الجيد ليس زخرفة، بل وسيلة توضيح. مهمتنا أن نجعل علامتك تُفهم وتُتذكر من أول لمحة.</p>
+      <cite>فريق نبضة</cite>
+    </blockquote>
+  </div>
+</section>
+
+<section class="services" id="services" aria-labelledby="services-title">
+  <div class="shell">
+    <div class="services-head">
+      <div>
+        <span class="tag reveal">خدماتنا</span>
+        <h2 class="section-title flush reveal" id="services-title" style="--reveal-delay:60ms">كل ما تحتاجه علامتك لتنمو</h2>
+      </div>
+      <p class="section-lead reveal" style="--reveal-delay:120ms">من الهوية البصرية إلى قياس الأداء، نقدّم حلولاً متكاملة تحت سقف واحد.</p>
+    </div>
+
+    <div class="service-grid">
+      <article class="service-card reveal">
+        <svg class="service-icon" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="3" y="3" width="17" height="17"/>
+          <circle cx="20" cy="20" r="9"/>
+        </svg>
+        <h3>الهوية البصرية</h3>
+        <p>تصميم شعارات وأنظمة بصرية متكاملة تعكس شخصية علامتك التجارية بوضوح.</p>
+      </article>
+
+      <article class="service-card reveal" style="--reveal-delay:70ms">
+        <svg class="service-icon" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="3" y="5" width="26" height="22"/>
+          <path d="M3 12h26"/>
+          <path d="M25 8.5h.01M21.5 8.5h.01M18 8.5h.01"/>
+        </svg>
+        <h3>تصميم المواقع</h3>
+        <p>مواقع إلكترونية سريعة وجذابة، مصمّمة لتحويل الزوار إلى عملاء فعليين.</p>
+      </article>
+
+      <article class="service-card reveal" style="--reveal-delay:140ms">
+        <svg class="service-icon" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M6 4h20v24H6z"/>
+          <path d="M11 11h10M11 16h10M11 21h6"/>
+        </svg>
+        <h3>المحتوى والتسويق</h3>
+        <p>استراتيجيات محتوى وحملات إعلانية مدروسة تصل لجمهورك المستهدف بدقة.</p>
+      </article>
+
+      <article class="service-card reveal">
+        <svg class="service-icon" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <circle cx="16" cy="6" r="3.5"/>
+          <circle cx="6" cy="24" r="3.5"/>
+          <circle cx="26" cy="24" r="3.5"/>
+          <path d="M13.5 8.5 8 20.5M18.5 8.5 24 20.5M9.5 24h13"/>
+        </svg>
+        <h3>إدارة السوشيال ميديا</h3>
+        <p>إدارة احترافية لحساباتك تبني حضورًا ثابتًا ومؤثرًا على منصات التواصل.</p>
+      </article>
+
+      <article class="service-card reveal" style="--reveal-delay:70ms">
+        <svg class="service-icon" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M4 28h24"/>
+          <rect x="6" y="18" width="5" height="10"/>
+          <rect x="14" y="12" width="5" height="16"/>
+          <rect x="22" y="6" width="5" height="22"/>
+        </svg>
+        <h3>تحليل الأداء والبيانات</h3>
+        <p>تقارير دورية ولوحات قياس توضّح أثر كل حملة وأين تذهب ميزانيتك التسويقية.</p>
+      </article>
+
+      <article class="service-card reveal" style="--reveal-delay:140ms">
+        <svg class="service-icon" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <circle cx="16" cy="16" r="13"/>
+          <circle cx="16" cy="16" r="6"/>
+          <path d="M16 3v5M16 24v5M3 16h5M24 16h5"/>
+        </svg>
+        <h3>الاستشارات التسويقية</h3>
+        <p>جلسات استشارية لمساعدتك على بناء خطة نمو واضحة وقابلة للتنفيذ.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="contact" id="contact" aria-labelledby="contact-title">
+  <div class="shell contact-grid">
+    <div>
+      <span class="tag reveal">تواصل معنا</span>
+      <h2 class="section-title reveal" id="contact-title" style="--reveal-delay:60ms">لنبدأ مشروعك القادم</h2>
+      <p class="section-lead reveal" style="--reveal-delay:120ms">راسلنا أو تواصل معنا مباشرة، وسيرد عليك أحد أعضاء الفريق خلال يوم عمل واحد.</p>
+
+      <dl class="contact-info-list reveal" style="--reveal-delay:180ms">
+        <div class="contact-info-item">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M5 3h4l2 5-2.5 1.5a12 12 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z"/>
+          </svg>
+          <div>
+            <dt>اتصل بنا</dt>
+            <dd><a href="tel:+966501234567" dir="ltr">+966 50 123 4567</a></dd>
+          </div>
+        </div>
+        <div class="contact-info-item">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <rect x="2" y="5" width="20" height="14"/>
+            <path d="m2 6 10 7 10-7"/>
+          </svg>
+          <div>
+            <dt>راسلنا</dt>
+            <dd><a href="mailto:hello@nabda-studio.sa" dir="ltr" lang="en">hello@nabda-studio.sa</a></dd>
+          </div>
+        </div>
+        <div class="contact-info-item">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+            <path d="M12 22s8-6.4 8-12a8 8 0 1 0-16 0c0 5.6 8 12 8 12z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+          <div>
+            <dt>موقعنا</dt>
+            <dd>الدمام، المنطقة الشرقية، السعودية</dd>
+          </div>
+        </div>
+      </dl>
+
+      <div class="social-row reveal" style="--reveal-delay:240ms">
+        <a href="#" lang="en" aria-label="Instagram — حساب نبضة على انستغرام">Instagram</a>
+        <a href="#" lang="en" aria-label="X — حساب نبضة على إكس">X</a>
+        <a href="#" lang="en" aria-label="LinkedIn — صفحة نبضة على لينكدإن">LinkedIn</a>
+      </div>
+    </div>
+
+    <form id="contactForm" class="reveal" style="--reveal-delay:120ms" novalidate>
+      <div class="field">
+        <label for="name">الاسم الكامل</label>
+        <input type="text" id="name" name="name" autocomplete="name"
+               placeholder="اكتب اسمك هنا" aria-describedby="name-error" required>
+        <p class="field-error" id="name-error" role="alert"></p>
+      </div>
+      <div class="field">
+        <label for="email">البريد الإلكتروني</label>
+        <input type="email" id="email" name="email" autocomplete="email" inputmode="email" dir="ltr"
+               placeholder="example@email.com" aria-describedby="email-error" required>
+        <p class="field-error" id="email-error" role="alert"></p>
+      </div>
+      <div class="field">
+        <label for="message">تفاصيل المشروع</label>
+        <textarea id="message" name="message"
+                  placeholder="أخبرنا عن فكرتك أو مشروعك..." aria-describedby="message-error" required></textarea>
+        <p class="field-error" id="message-error" role="alert"></p>
+      </div>
+      <button type="submit" class="submit-btn">إرسال الرسالة</button>
+      <p class="form-status" id="formStatus" role="status" aria-live="polite"></p>
+      <p class="form-note">بياناتك محفوظة ولن تُشارك مع أي جهة خارجية.</p>
+    </form>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <p>© 2026 استوديو نبضة. جميع الحقوق محفوظة.</p>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var root = document.documentElement;
+  var motionOK = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- Theme ---------- */
+  var themeToggle = document.getElementById('themeToggle');
+  var systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+
+  function currentTheme() {
+    return root.getAttribute('data-theme') || (systemDark.matches ? 'dark' : 'light');
+  }
+
+  function syncThemeUI() {
+    var dark = currentTheme() === 'dark';
+    themeToggle.setAttribute('aria-label', dark ? 'تبديل إلى المظهر الفاتح' : 'تبديل إلى المظهر الداكن');
+    // Keep the browser chrome in step with the page.
+    var meta = dark
+      ? document.getElementById('themeColorDark')
+      : document.getElementById('themeColorLight');
+    if (meta) { meta.setAttribute('media', 'all'); }
+    var other = dark
+      ? document.getElementById('themeColorLight')
+      : document.getElementById('themeColorDark');
+    if (other) { other.setAttribute('media', 'not all'); }
+  }
+
+  themeToggle.addEventListener('click', function () {
+    var next = currentTheme() === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('nabda-theme', next); } catch (e) { /* storage blocked */ }
+    syncThemeUI();
+  });
+
+  // Follow the OS while the visitor has not made an explicit choice.
+  systemDark.addEventListener('change', function () {
+    if (!root.hasAttribute('data-theme')) { syncThemeUI(); }
+  });
+
+  syncThemeUI();
+
+  /* ---------- Mobile navigation ---------- */
+  var navToggle = document.getElementById('navToggle');
+  var navMenu = document.getElementById('navMenu');
+  var mobileQuery = window.matchMedia('(max-width: 900px)');
+
+  function setMenu(open) {
+    navToggle.setAttribute('aria-expanded', String(open));
+    navToggle.setAttribute('aria-label', open ? 'إغلاق قائمة التنقل' : 'فتح قائمة التنقل');
+    if (open) { navMenu.setAttribute('data-open', 'true'); }
+    else { navMenu.removeAttribute('data-open'); }
+  }
+
+  navToggle.addEventListener('click', function () {
+    var open = navToggle.getAttribute('aria-expanded') !== 'true';
+    setMenu(open);
+    if (open) {
+      var first = navMenu.querySelector('a');
+      if (first) { first.focus(); }
+    }
+  });
+
+  // A link closes the panel; focus goes to the section that was jumped to.
+  navMenu.addEventListener('click', function (e) {
+    if (e.target.closest('a') && mobileQuery.matches) { setMenu(false); }
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && navToggle.getAttribute('aria-expanded') === 'true') {
+      setMenu(false);
+      navToggle.focus();
+    }
+  });
+
+  document.addEventListener('click', function (e) {
+    if (navToggle.getAttribute('aria-expanded') !== 'true') { return; }
+    if (!e.target.closest('#navMenu') && !e.target.closest('#navToggle')) { setMenu(false); }
+  });
+
+  // Leaving the mobile breakpoint must not strand the panel open.
+  mobileQuery.addEventListener('change', function (e) {
+    if (!e.matches) { setMenu(false); }
+  });
+
+  /* ---------- Header shadow on scroll ---------- */
+  var header = document.getElementById('siteHeader');
+  var ticking = false;
+  function onScroll() {
+    if (ticking) { return; }
+    ticking = true;
+    requestAnimationFrame(function () {
+      header.classList.toggle('is-scrolled', window.scrollY > 8);
+      ticking = false;
+    });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+
+  /* ---------- Scroll reveal ---------- */
+  var revealables = document.querySelectorAll('.reveal');
+  if (motionOK && 'IntersectionObserver' in window) {
+    var revealObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('is-in');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: '0px 0px -10% 0px', threshold: 0.12 });
+    revealables.forEach(function (el) { revealObserver.observe(el); });
+  } else {
+    revealables.forEach(function (el) { el.classList.add('is-in'); });
+  }
+
+  /* ---------- Counting stats ---------- */
+  var stats = document.querySelectorAll('.stat-value[data-to]');
+
+  function countUp(el) {
+    var target = parseInt(el.getAttribute('data-to'), 10);
+    var prefix = el.getAttribute('data-prefix') || '';
+    var suffix = el.getAttribute('data-suffix') || '';
+    var duration = 1100;
+    var start = null;
+
+    function frame(now) {
+      if (start === null) { start = now; }
+      var p = Math.min((now - start) / duration, 1);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = prefix + Math.round(target * eased) + suffix;
+      if (p < 1) { requestAnimationFrame(frame); }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  if (motionOK && 'IntersectionObserver' in window) {
+    var statObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          countUp(entry.target);
+          statObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.5 });
+    stats.forEach(function (el) { statObserver.observe(el); });
+  }
+  // With reduced motion the markup already holds the final figure — nothing to do.
+
+  /* ---------- Active section in the nav ---------- */
+  var navAnchors = Array.prototype.slice.call(document.querySelectorAll('.nav-links a'));
+  var sections = navAnchors
+    .map(function (a) { return document.querySelector(a.getAttribute('href')); })
+    .filter(Boolean);
+
+  if ('IntersectionObserver' in window && sections.length) {
+    var spy = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) { return; }
+        navAnchors.forEach(function (a) {
+          var match = a.getAttribute('href') === '#' + entry.target.id;
+          if (match) { a.setAttribute('aria-current', 'true'); }
+          else { a.removeAttribute('aria-current'); }
+        });
+      });
+    }, { rootMargin: '-45% 0px -50% 0px' });
+    sections.forEach(function (s) { spy.observe(s); });
+  }
+
+  /* ---------- Contact form ---------- */
+  var form = document.getElementById('contactForm');
+  var submitBtn = form.querySelector('.submit-btn');
+  var formStatus = document.getElementById('formStatus');
+  var idleLabel = submitBtn.textContent;   // captured once, so a fast double submit
+                                           // can never leave the wrong label behind
+  var resetTimer = null;
+
+  var rules = {
+    name: function (v) {
+      if (!v.trim()) { return 'من فضلك اكتب اسمك الكامل.'; }
+      if (v.trim().length < 3) { return 'الاسم قصير جدًا — اكتب ثلاثة أحرف على الأقل.'; }
+      return '';
+    },
+    email: function (v) {
+      if (!v.trim()) { return 'من فضلك اكتب بريدك الإلكتروني.'; }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v.trim())) { return 'صيغة البريد الإلكتروني غير صحيحة.'; }
+      return '';
+    },
+    message: function (v) {
+      if (!v.trim()) { return 'أخبرنا باختصار عن مشروعك.'; }
+      if (v.trim().length < 10) { return 'أضف تفاصيل أكثر — عشرة أحرف على الأقل.'; }
+      return '';
+    }
+  };
+
+  function showError(field, message) {
+    var box = document.getElementById(field.id + '-error');
+    box.textContent = message;
+    if (message) { field.setAttribute('aria-invalid', 'true'); }
+    else { field.removeAttribute('aria-invalid'); }
+  }
+
+  Object.keys(rules).forEach(function (id) {
+    var field = document.getElementById(id);
+    // Clear an error as soon as the visitor starts fixing it; re-check on blur.
+    field.addEventListener('input', function () {
+      if (field.getAttribute('aria-invalid') === 'true' && !rules[id](field.value)) {
+        showError(field, '');
+      }
+    });
+    field.addEventListener('blur', function () {
+      if (field.value.trim()) { showError(field, rules[id](field.value)); }
+    });
+  });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (submitBtn.disabled) { return; }
+
+    var firstInvalid = null;
+    Object.keys(rules).forEach(function (id) {
+      var field = document.getElementById(id);
+      var message = rules[id](field.value);
+      showError(field, message);
+      if (message && !firstInvalid) { firstInvalid = field; }
+    });
+
+    if (firstInvalid) {
+      formStatus.textContent = '';
+      firstInvalid.focus();
+      return;
+    }
+
+    clearTimeout(resetTimer);
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'تم الإرسال بنجاح';
+    submitBtn.classList.add('is-sent');
+    formStatus.textContent = 'شكرًا لك — وصلتنا رسالتك وسنرد خلال يوم عمل واحد.';
+
+    resetTimer = setTimeout(function () {
+      submitBtn.textContent = idleLabel;
+      submitBtn.classList.remove('is-sent');
+      submitBtn.disabled = false;
+      form.reset();
+    }, 3000);
+  });
+})();
+</script>
+
+</body>
+</html>
