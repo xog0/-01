@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مطجن | القائمة الكاملة</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Almarai', sans-serif; background-color: #FAFAF8; color: #2D2D2D; scroll-behavior: smooth; }
+        .bg-pattern {
+            background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSIjMkQ2QTRGIiBmaWxsLW9wYWNpdHk9IjAuMDUiPiA8Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIxLjUiLz48L2c+PC9zdmc+');
+        }
+        .product-card { transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); background: white; border-radius: 24px; border: 1px solid rgba(0,0,0,0.03); overflow: hidden; }
+        .product-card:hover { transform: translateY(-8px); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08); }
+        .product-card:hover .product-img { transform: scale(1.06); }
+        .product-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.6s ease; background: #F1F1EE; }
+        .sticky-tabs { position: sticky; top: 64px; z-index: 40; background: rgba(250, 250, 248, 0.9); backdrop-filter: blur(12px); border-bottom: 1px solid rgba(0,0,0,0.05); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .active-tab { color: #2D6A4F; border-bottom: 3px solid #2D6A4F; font-weight: 800; }
+        .price-tag { color: #2D6A4F; font-weight: 800; }
+        .calories { color: #9CA3AF; font-size: 0.7rem; }
+        .hero-cover { width: 100%; height: 220px; object-fit: cover; }
+    </style>
+</head>
+<body class="bg-pattern">
+
+    <!-- Navbar -->
+    <nav class="fixed top-0 w-full z-50 bg-[#1B3329] text-white py-4 px-6 flex justify-between items-center shadow-xl">
+        <div class="flex items-center gap-3">
+            <img src="https://images.deliveryhero.io/image/hungerstation/restaurant/logo_ar/97545d7fef93cbdada8eab9167b4ffb8.png?width=256&quality=90"
+                 alt="شعار مطجن" class="w-10 h-10 rounded-xl object-contain bg-white p-1">
+            <div class="flex flex-col">
+                <span class="text-xl font-black tracking-widest text-[#D4AF37]">مطجن</span>
+                <span class="text-[8px] uppercase tracking-[0.2em] opacity-70">Authentic Matjan</span>
+            </div>
+        </div>
+        <div class="flex items-center gap-4">
+            <button onclick="toggleLang()" id="langBtn" class="border border-[#D4AF37] px-3 py-1 rounded-full text-[10px] font-bold text-[#D4AF37] hover:bg-[#D4AF37] hover:text-white transition">EN</button>
+            <div id="statusBadge" class="text-[10px] px-3 py-1 rounded-full bg-green-500/10 text-green-400 border border-green-500/30">مفتوح الآن 🟢</div>
+        </div>
+    </nav>
+
+    <!-- Hero Cover -->
+    <div class="pt-16">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="rounded-3xl overflow-hidden shadow-lg relative">
+                <img src="https://images.deliveryhero.io/image/hungerstation/restaurant/android_cover_photo/0ca13a7ef409f7f3a44e03c7533c2c3a.jpg?width=1440&quality=90"
+                     alt="غلاف مطجن" class="hero-cover">
+                <div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Header -->
+    <header class="pt-8 pb-8 px-6 text-center max-w-2xl mx-auto">
+        <h1 class="text-4xl font-extrabold text-[#2D6A4F] mb-3">فطورنا حكاية..</h1>
+        <p class="text-gray-500 text-sm leading-relaxed">من قلب جدة - حي النسيم، نقدم لكم أجود أنواع الفطور المحضر طازجاً بكل حب.</p>
+    </header>
+
+    <!-- Category Tabs -->
+    <div class="sticky-tabs mb-8">
+        <div class="flex gap-8 px-6 overflow-x-auto no-scrollbar py-4 justify-start md:justify-center text-sm font-bold text-gray-400">
+            <button onclick="filterMenu('all', this)" class="tab-link active-tab whitespace-nowrap">الكل</button>
+            <button onclick="filterMenu('diy', this)" class="tab-link whitespace-nowrap">اصنعها بنفسك</button>
+            <button onclick="filterMenu('boxes', this)" class="tab-link whitespace-nowrap">البوكسات</button>
+            <button onclick="filterMenu('breakfast', this)" class="tab-link whitespace-nowrap">فطور</button>
+            <button onclick="filterMenu('sandwich', this)" class="tab-link whitespace-nowrap">سندوتشات</button>
+            <button onclick="filterMenu('burger', this)" class="tab-link whitespace-nowrap">برجر</button>
+            <button onclick="filterMenu('dessert', this)" class="tab-link whitespace-nowrap">حلى</button>
+            <button onclick="filterMenu('drinks', this)" class="tab-link whitespace-nowrap">مشروبات</button>
+        </div>
+    </div>
+
+    <!-- Menu Grid -->
+    <div id="menuGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 px-6 max-w-6xl mx-auto mb-32">
+        <!-- JS items here -->
+    </div>
+
+    <!-- Floating Cart -->
+    <div class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 w-full px-6 max-w-md">
+        <button id="cartBtn" onclick="toggleCartModal()" class="w-full bg-[#2D6A4F] text-white py-4 rounded-2xl shadow-2xl flex justify-between items-center px-8 hover:bg-[#1B3329] transition transform active:scale-95">
+            <div class="flex items-center gap-3">
+                <span id="cartCount" class="bg-[#D4AF37] text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">0</span>
+                <span class="font-bold">عرض السلة</span>
+            </div>
+            <span id="cartTotalBtn" class="font-bold">0 ريال</span>
+        </button>
+    </div>
+
+    <!-- Cart Modal -->
+    <div id="cartModal" class="fixed inset-0 bg-black/60 z-[60] hidden backdrop-blur-sm flex justify-center items-end md:items-center">
+        <div class="bg-white w-full max-w-lg rounded-t-3xl md:rounded-3xl p-8 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-8 border-b pb-4">
+                <h2 class="text-2xl font-black text-[#2D6A4F]">طلباتك</h2>
+                <button onclick="toggleCartModal()" class="text-gray-400 text-3xl">&times;</button>
+            </div>
+            <div id="cartItems" class="space-y-4 mb-8"></div>
+            <div class="space-y-4 border-t pt-6">
+                <div class="flex justify-between items-center text-xl font-black">
+                    <span>الإجمالي:</span>
+                    <span id="cartTotalModal" class="text-[#2D6A4F]">0 ريال</span>
+                </div>
+                <input type="text" id="custName" placeholder="الاسم الكريم" class="w-full p-4 border rounded-xl bg-gray-50 focus:ring-2 focus:ring-[#2D6A4F] outline-none">
+                <select id="orderType" class="w-full p-4 border rounded-xl bg-gray-50">
+                    <option value="استلام من الفرع">استلام من الفرع (حي النسيم)</option>
+                    <option value="توصيل">توصيل</option>
+                </select>
+                <button onclick="submitOrder()" class="w-full bg-[#2D6A4F] text-white py-5 rounded-xl font-black text-lg shadow-lg">إتمام الطلب عبر واتساب</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // صور الأصناف — قاعدة الرابط مشتركة، ويُخزَّن اسم الملف فقط في كل صنف
+        const IMG_BASE = 'https://images.deliveryhero.io/image/hungerstation/menuitem/image_url_ref/';
+        const IMG_SUFFIX = '?width=800&quality=90';
+        const FALLBACK_IMG = 'https://images.deliveryhero.io/image/hungerstation/restaurant/logo_ar/97545d7fef93cbdada8eab9167b4ffb8.png?width=256&quality=90';
+        const imgUrl = file => IMG_BASE + file + IMG_SUFFIX;
+
+        const menuItems = [
+            // اصنعها بنفسك (بناءً على الصور)
+            { id: 101, cat: 'diy', ar: 'اصنعها بنفسك 1 (١٠ حبات)', en: 'DIY Box 1', price: 56, cal: 1850, star: true, img: '8afc40d2cd19f177b689eca6a5d98478.png' },
+            { id: 102, cat: 'diy', ar: 'اصنعها بنفسك 2 (٢٠ حبة)', en: 'DIY Box 2', price: 112, cal: 3700, img: '593fa513e17864f9d368c3d067a24d11.png' },
+            { id: 103, cat: 'diy', ar: 'اصنعها بنفسك 3 (٣٠ حبة)', en: 'DIY Box 3', price: 168, cal: 5500, img: '6b10f3ea986ddcaa86671667b6d64a8f.png' },
+
+            // البوكسات (بناءً على الصور والأسعار)
+            { id: 201, cat: 'boxes', ar: 'بوكس حارة اليمن', en: 'Haret Al-Yaman Box', price: 59, cal: 1420, star: true, img: '9397302260a5beaa62440c7b4e829efe.png' },
+            { id: 202, cat: 'boxes', ar: 'بوكس حارة البحر', en: 'Haret Al-Bahr Box', price: 39, cal: 980, img: '9397302260a5beaa62440c7b4e829efe.png' },
+            { id: 203, cat: 'boxes', ar: 'بوكس حارة المظلوم', en: 'Haret Al-Mazloom Box', price: 69, cal: 1560, img: '9397302260a5beaa62440c7b4e829efe.png' },
+            { id: 204, cat: 'boxes', ar: 'بوكس جمعة بلد', en: 'Jumaat Balad Box', price: 94, cal: 2100, star: true, img: '3437c16f27c66d7dc7013dc6a373d2ad.png' },
+
+            // فطور
+            { id: 1, cat: 'breakfast', ar: 'بيض مطجن', en: 'Matjan Eggs', price: 4, cal: 271, star: true, img: 'cbbbbf94560acc1603af3e2d2b39f3fc.png' },
+            { id: 2, cat: 'breakfast', ar: 'بيض مسلوق', en: 'Boiled Eggs', price: 4, cal: 276, img: '8be6a9e88ef16bfb4dbe035611931a93.png' },
+            { id: 3, cat: 'breakfast', ar: 'بيض مقلي', en: 'Fried Eggs', price: 4, cal: 316, img: 'cbbbbf94560acc1603af3e2d2b39f3fc.png' },
+            { id: 4, cat: 'breakfast', ar: 'شكشوكة', en: 'Shakshuka', price: 5, cal: 271, img: 'ef8cb5d8e1b9da05b0cb0d72ed3973f8.png' },
+            { id: 5, cat: 'breakfast', ar: 'إضافة بيضة', en: 'Extra Egg', price: 1, cal: 70, img: '8be6a9e88ef16bfb4dbe035611931a93.png' },
+
+            // سندوتشات
+            { id: 11, cat: 'sandwich', ar: 'سندوتش لحم', en: 'Beef Sandwich', price: 8, cal: 308, img: '5afde06e9e719a486e4dc2c6e72758fa.png' },
+            { id: 12, cat: 'sandwich', ar: 'سندوتش كبدة', en: 'Liver Sandwich', price: 8, cal: 394, img: '0bbf3fcb6ef65c52c0146476dbfb34bb.png' },
+            { id: 13, cat: 'sandwich', ar: 'سندوتش دجاج', en: 'Chicken Sandwich', price: 7, cal: 294, img: '2d7e4ece71532ab15862d42a0e53d60f.png' },
+            { id: 14, cat: 'sandwich', ar: 'سندوتش تونة', en: 'Tuna Sandwich', price: 5, cal: 306, img: '2bbd4b6fd8bd376ad16a0f70f32d0b11.png' },
+            { id: 15, cat: 'sandwich', ar: 'سندوتش زبدة فول سوداني', en: 'Peanut Butter Sandwich', price: 4, cal: 365, img: 'cc8b2e702f4c0517da5b6cfc295fc546.png' },
+            { id: 16, cat: 'sandwich', ar: 'مربى وجبن سايل', en: 'Jam & Cheese', price: 5, cal: 378, img: '82aa54a487a7716c6955630b2bca77ca.png' },
+            { id: 17, cat: 'sandwich', ar: 'جبن وبطاطس عمان', en: 'Cheese & Oman Chips', price: 5, cal: 365, img: '82ae36773b7762e2b8e1c50bba5c8bee.png' },
+            { id: 18, cat: 'sandwich', ar: 'حلاوة طحينية فينا', en: 'Halawa Sandwich', price: 5, cal: 382, img: 'c557137efeb6a4d9c20cf35995ff9436.png' },
+
+            // برجر
+            { id: 21, cat: 'burger', ar: 'برجر لحم', en: 'Beef Burger', price: 9, cal: 365, img: '827a2408c05188134782b71dbb03ab62.png' },
+            { id: 22, cat: 'burger', ar: 'برجر لحم مطجن', en: 'Matjan Beef Burger', price: 12, cal: 386, star: true, img: '731f0dcfe080f42b1789f5fd5c623ea0.png' },
+            { id: 23, cat: 'burger', ar: 'إضافة جبن', en: 'Extra Cheese', price: 3, cal: 50, img: 'bee5c98b36f4175a82834cad6234eb6f.png' },
+
+            // حلى
+            { id: 31, cat: 'dessert', ar: 'معصوب مطجن', en: 'Matjan Masoub', price: 7, cal: 875, star: true, img: 'd23cefc7cb3741b45d4e64b6622e88c5.jpg' },
+            { id: 32, cat: 'dessert', ar: 'عريكة مطجن', en: 'Matjan Arika', price: 8, cal: 780, star: true, img: '74e437d94028ae1731bcaa222b5a8022.jpg' },
+            { id: 33, cat: 'dessert', ar: 'إضافة عسل', en: 'Extra Honey', price: 2, cal: 60, img: 'dcc1faaccf7e3951e1d53f7a98779f3b.png' },
+
+            // مشروبات
+            { id: 41, cat: 'drinks', ar: 'عصير برتقال طازج', en: 'Fresh Orange Juice', price: 9, cal: 184, img: 'ccf52492078091161cd735b3d5a56bf7.png' },
+            { id: 42, cat: 'drinks', ar: 'عصير توت', en: 'Berry Juice', price: 6, cal: 184, img: 'aff900b62d9391a4a35bda216e224cb8.png' },
+            { id: 43, cat: 'drinks', ar: 'شاهي', en: 'Tea', price: 3, cal: 14, img: '3ede85012b3cbf64e12ba57f34384989.png' },
+            { id: 44, cat: 'drinks', ar: 'عدني', en: 'Adani Tea', price: 4, cal: 309, star: true, img: 'c2595cd0a32012f99244986534798187.png' }
+        ];
+
+        let cart = [];
+        let currentLang = 'ar';
+
+        function renderMenu(filter = 'all') {
+            const grid = document.getElementById('menuGrid');
+            grid.innerHTML = '';
+            const items = filter === 'all' ? menuItems : menuItems.filter(i => i.cat === filter);
+
+            items.forEach(item => {
+                grid.innerHTML += `
+                    <div class="product-card">
+                        <div class="h-52 bg-[#F1F1EE] relative overflow-hidden">
+                            <img src="${imgUrl(item.img)}" alt="${item.ar}" loading="lazy" class="product-img" onerror="this.onerror=null; this.src='${FALLBACK_IMG}'; this.style.objectFit='contain'; this.style.padding='2rem';">
+                            ${item.star ? '<span class="absolute top-4 right-4 bg-[#D4AF37] text-white text-[10px] px-3 py-1 rounded-full font-bold shadow-lg">⭐ مطجن</span>' : ''}
+                        </div>
+                        <div class="p-6">
+                            <div class="flex justify-between items-start mb-1">
+                                <h3 class="font-black text-lg">${currentLang === 'ar' ? item.ar : item.en}</h3>
+                                <span class="price-tag">${item.price} <small class="text-[8px]">SAR</small></span>
+                            </div>
+                            <p class="calories mb-6">${item.cal} CAL / سعرة</p>
+                            <button onclick="addToCart(${item.id})" class="w-full bg-[#FAFAF8] text-[#2D6A4F] border border-[#2D6A4F]/10 py-3 rounded-xl font-bold text-sm hover:bg-[#2D6A4F] hover:text-white transition">+ أضف للسلة</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function addToCart(id) {
+            const item = menuItems.find(i => i.id === id);
+            const inCart = cart.find(c => c.id === id);
+            if(inCart) inCart.qty++;
+            else cart.push({...item, qty: 1});
+            updateCartUI();
+
+            // Animation
+            const btn = document.getElementById('cartBtn');
+            btn.classList.add('scale-105');
+            setTimeout(() => btn.classList.remove('scale-105'), 200);
+        }
+
+        function updateCartUI() {
+            const count = cart.reduce((a, b) => a + b.qty, 0);
+            const total = cart.reduce((a, b) => a + (b.price * b.qty), 0);
+
+            document.getElementById('cartCount').innerText = count;
+            document.getElementById('cartTotalBtn').innerText = total + ' ريال';
+            document.getElementById('cartTotalModal').innerText = total + ' ريال';
+
+            const list = document.getElementById('cartItems');
+            if(cart.length === 0) {
+                list.innerHTML = '<p class="text-center text-gray-400 py-10">سلتك فاضية.. جرب بوكساتنا!</p>';
+                return;
+            }
+
+            list.innerHTML = '';
+            cart.forEach(item => {
+                list.innerHTML += `
+                    <div class="flex justify-between items-center bg-gray-50 p-4 rounded-2xl">
+                        <div class="flex items-center gap-3">
+                            <img src="${imgUrl(item.img)}" alt="${item.ar}" loading="lazy" class="w-14 h-14 rounded-xl object-cover bg-white" onerror="this.onerror=null; this.src='${FALLBACK_IMG}'; this.style.objectFit='contain';">
+                            <div>
+                                <p class="font-black text-sm">${currentLang === 'ar' ? item.ar : item.en}</p>
+                                <p class="text-xs text-[#2D6A4F]">${item.price * item.qty} ريال</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4">
+                            <button onclick="changeQty(${item.id}, -1)" class="w-8 h-8 rounded-full bg-white border flex items-center justify-center">-</button>
+                            <span class="font-bold text-sm">${item.qty}</span>
+                            <button onclick="changeQty(${item.id}, 1)" class="w-8 h-8 rounded-full bg-[#2D6A4F] text-white flex items-center justify-center">+</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function changeQty(id, delta) {
+            const item = cart.find(i => i.id === id);
+            item.qty += delta;
+            if(item.qty <= 0) cart = cart.filter(c => c.id !== id);
+            updateCartUI();
+        }
+
+        function toggleCartModal() {
+            document.getElementById('cartModal').classList.toggle('hidden');
+        }
+
+        function filterMenu(cat, btn) {
+            document.querySelectorAll('.tab-link').forEach(el => el.classList.remove('active-tab'));
+            btn.classList.add('active-tab');
+            renderMenu(cat);
+        }
+
+        function submitOrder() {
+            const name = document.getElementById('custName').value;
+            const type = document.getElementById('orderType').value;
+            if(!name) return alert('يا ليت تزوّدنا باسمك الكريم');
+
+            let msg = `*طلب جديد - مطجن*%0A`;
+            msg += `الاسم: ${name}%0A`;
+            msg += `النوع: ${type}%0A`;
+            msg += `--------------------------%0A`;
+            cart.forEach(i => { msg += `• ${i.ar} (x${i.qty})%0A`; });
+            msg += `--------------------------%0A`;
+            msg += `*الإجمالي: ${document.getElementById('cartTotalModal').innerText}*`;
+
+            window.open(`https://wa.me/966561679794?text=${encodeURIComponent(msg)}`);
+        }
+
+        function toggleLang() {
+            currentLang = currentLang === 'ar' ? 'en' : 'ar';
+            document.dir = currentLang === 'ar' ? 'rtl' : 'ltr';
+            document.getElementById('langBtn').innerText = currentLang === 'ar' ? 'EN' : 'AR';
+            renderMenu();
+        }
+
+        // Initialize
+        renderMenu();
+    </script>
+</body>
+</html>
