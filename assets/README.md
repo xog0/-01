@@ -4,27 +4,27 @@
 
 | # | الملف | المشروع |
 |---|---|---|
-| — | `hero.jpg` | صورة أعلى الصفحة — واجهة زجاجية أثناء التركيب |
-| ١ | `01-storefront-restaurant.jpg` | واجهة محل مطعم — سيكوريت وباب زجاجي |
-| ٢ | `02-villa-annex-facade.jpg` | ملحق فيلا — واجهة ريفلكتف ومشربية |
-| ٣ | `03-stair-railing-lit.jpg` | درابزين درج — مع إضاءة الدرجات |
-| ٤ | `04-villa-entrance-sliding-door.jpg` | مدخل فيلا — باب سحب بإطار أسود |
-| ٥ | `05-office-partitions-stripes.jpg` | قواطع مكتب — شرائح مصنفرة ومفصلات ستانلس |
-| ٦ | `06-corner-shower-enclosure.jpg` | كابينة استحمام ركنية — إطار أسود |
-| ٧ | `07-roof-terrace-glazing.jpg` | تزجيج سطح — أبواب سحب زجاجية |
-| ٨ | `08-gold-handle-glass-doors.jpg` | أبواب زجاجية — إكسسوارات ذهبية |
-| ٩ | `09-storefront-double-height.jpg` | واجهة محل — بارتفاع دورين |
-| ١٠ | `10-stair-railing-smoked.jpg` | درابزين درج — زجاج دخاني |
-| ١١ | `11-stair-railing-marble.jpg` | درابزين درج رخام — قواعد سوداء |
-| ١٢ | `12-salon-sliding-partitions.jpg` | قواطع صالون — أبواب سحب بسكك سوداء |
-| ١٣ | `13-office-frosted-sliding-partitions.jpg` | قواطع مكاتب — أبواب سحب مصنفرة |
-| ١٤ | `14-patterned-sliding-partitions.jpg` | قواطع بأبواب سحب — نقش مصنفر هندسي |
-| ١٥ | `15-office-striped-partitions.jpg` | قواطع مكتب — شرائط مصنفرة |
-| ١٦ | `16-frosted-sliding-door.jpg` | باب سحب مصنفر — سكة ستانلس |
-| ١٧ | `17-interior-doors-black-fittings.jpg` | أبواب داخلية — مفصلات ومقابض سوداء |
-| ١٨ | `18-interior-double-door.jpg` | باب داخلي مزدوج — إطار أسود |
-| ١٩ | `19-arched-frosted-entrance.jpg` | مدخل بقوس — زجاج مصنفر بنقش |
-| ٢٠ | `20-sliding-bath-screen.jpg` | حاجز بانيو — باب سحب بإطار أسود |
+| — | `hero.jpg` | صورة أعلى الصفحة — واجهة محل مطعم بسيكوريت وباب زجاجي |
+| ١ | `01-villa-annex-facade.jpg` | ملحق فيلا — واجهة ريفلكتف ومشربية |
+| ٢ | `02-stair-railing-lit.jpg` | درابزين درج — مع إضاءة الدرجات |
+| ٣ | `03-villa-entrance-sliding-door.jpg` | مدخل فيلا — باب سحب بإطار أسود |
+| ٤ | `04-office-partitions-stripes.jpg` | قواطع مكتب — شرائح مصنفرة ومفصلات ستانلس |
+| ٥ | `05-corner-shower-enclosure.jpg` | كابينة استحمام ركنية — إطار أسود |
+| ٦ | `06-roof-terrace-glazing.jpg` | تزجيج سطح — أبواب سحب زجاجية |
+| ٧ | `07-gold-handle-glass-doors.jpg` | أبواب زجاجية — إكسسوارات ذهبية |
+| ٨ | `08-storefront-double-height.jpg` | واجهة محل — بارتفاع دورين |
+| ٩ | `09-stair-railing-smoked.jpg` | درابزين درج — زجاج دخاني |
+| ١٠ | `10-stair-railing-marble.jpg` | درابزين درج رخام — قواعد سوداء |
+| ١١ | `11-salon-sliding-partitions.jpg` | قواطع صالون — أبواب سحب بسكك سوداء |
+| ١٢ | `12-office-frosted-sliding-partitions.jpg` | قواطع مكاتب — أبواب سحب مصنفرة |
+| ١٣ | `13-patterned-sliding-partitions.jpg` | قواطع بأبواب سحب — نقش مصنفر هندسي |
+| ١٤ | `14-office-striped-partitions.jpg` | قواطع مكتب — شرائط مصنفرة |
+| ١٥ | `15-frosted-sliding-door.jpg` | باب سحب مصنفر — سكة ستانلس |
+| ١٦ | `16-interior-doors-black-fittings.jpg` | أبواب داخلية — مفصلات ومقابض سوداء |
+| ١٧ | `17-interior-double-door.jpg` | باب داخلي مزدوج — إطار أسود |
+| ١٨ | `18-arched-frosted-entrance.jpg` | مدخل بقوس — زجاج مصنفر بنقش |
+| ١٩ | `19-sliding-bath-screen.jpg` | حاجز بانيو — باب سحب بإطار أسود |
+| ٢٠ | `20-storefront-reflective.jpg` | واجهة محل — زجاج ريفلكتف أثناء التركيب |
 
 ## إضافة مشاريع جديدة
 
@@ -35,8 +35,13 @@
 الصفحة تعرض أول تسعة مشاريع، والباقي خلف زر «عرض المزيد».
 لذلك رتّب أقوى تسع صور في المقدمة.
 
+## تغيير صورة الهيرو
+
+استبدل `hero.jpg` بالصورة الجديدة، وعدّل وصفها ونصها البديل في `index.html`
+داخل `<div class="pane">`. إطار الهيرو بنسبة 4:3 — فاختر صورة أفقية.
+
 ## ملاحظات
 
-- صور المعرض تُقصّ بنسبة 4:3، وصورة الهيرو بنسبة 4:5 على الشاشات الكبيرة.
+- صور المعرض تُقصّ بنسبة 4:3.
 - بعض الصور تحمل ختم كاميرا `HONOR X7d 5G` في الزاوية — يُفضّل قصّه.
 - إن حُذف ملف صورة، يظهر مكانه وصف المشروع بدل صورة مكسورة.
