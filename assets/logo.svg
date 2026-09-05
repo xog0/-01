@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="256" height="256" role="img" aria-label="شعار مؤسسة جمانة الذهبية">
+  <title>جمانة الذهبية</title>
+  <path d="M11 13h10l-5 16z" fill="#A9640F"/>
+  <path d="M8 5h16l5 8-13 16L3 13z" fill="none" stroke="#1C4640" stroke-width="1.7" stroke-linejoin="round"/>
+  <path d="M3 13h26M8 5l3 8M24 5l-3 8M11 13l5 16M21 13l-5 16" fill="none" stroke="#1C4640" stroke-width="1.1" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

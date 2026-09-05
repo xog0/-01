@@ -14,6 +14,7 @@
      مواضع الصور معلَّمة بـ .ph — استبدل كل واحدة بـ <img>.
      ============================================================ -->
 
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHBhdGggZD0iTTExIDEzaDEwbC01IDE2eiIgZmlsbD0iI0E5NjQwRiIvPjxwYXRoIGQ9Ik04IDVoMTZsNSA4LTEzIDE2TDMgMTN6IiBmaWxsPSJub25lIiBzdHJva2U9IiMxQzQ2NDAiIHN0cm9rZS13aWR0aD0iMS43IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+PHBhdGggZD0iTTMgMTNoMjZNOCA1bDMgOE0yNCA1bC0zIDhNMTEgMTNsNSAxNk0yMSAxM2wtNSAxNiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMUM0NjQwIiBzdHJva2Utd2lkdGg9IjEuMSIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPjwvc3ZnPg==">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
@@ -29,6 +30,7 @@
     --edge:#8FB5AC;        /* 2.24:1 — زخرفي فقط، ممنوع على النص */
     --amber:#A9640F;
     --amber-d:#8E5309;
+    --amber-l:#D08C2A;   /* ذهبي للأسطح الداكنة */
 
     --muted:#5A6360;       /* رمادي مائل للأخضر — مختار لا موروث */
     --line:#DEE2DF;
@@ -105,15 +107,11 @@
     gap:18px; padding:13px 22px;
   }
   .brand{display:flex; align-items:center; gap:11px; font-weight:800; font-size:1.2rem;}
-  .brand-mark{
-    width:34px; height:34px; flex-shrink:0;
-    border:1.5px solid var(--glass);
-    position:relative; background:var(--surface);
-  }
-  .brand-mark::after{
-    content:""; position:absolute; inset:6px 6px auto auto;
-    width:12px; height:12px; background:var(--edge);
-  }
+  /* الشعار: حجر كريم مفصَّص — أوجهه ألواح زجاج، وواجهته السفلية ذهبية */
+  .mark{flex-shrink:0; color:var(--glass);}
+  .mark .m-line{fill:none; stroke:currentColor; stroke-linejoin:round; stroke-linecap:round;}
+  .mark .m-gold{fill:var(--amber);}
+  .brand .mark{width:34px; height:34px;}
   .nav-links{display:flex; gap:26px; font-size:.9rem; font-weight:700;}
   .nav-links a{color:var(--muted); padding:5px 0; position:relative; transition:color .2s;}
   .nav-links a::after{
@@ -364,6 +362,9 @@
   footer{background:var(--ink); color:var(--on-dark-mut); padding:44px 0 30px; font-size:.87rem;}
   .f-grid{display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:36px; margin-bottom:32px;}
   footer h4{font-family:'Cairo',sans-serif; color:#fff; font-size:.94rem; font-weight:700; margin-bottom:13px;}
+  .f-brand{display:flex; align-items:center; gap:10px; font-size:1.05rem;}
+  .f-brand .mark{width:28px; height:28px; color:var(--edge);}
+  .f-brand .m-gold{fill:var(--amber-l);}
   footer li{padding:4px 0;}
   footer a:hover{color:var(--edge);}
   .legal{
@@ -386,7 +387,11 @@
 
 <header>
   <nav>
-    <a href="#" class="brand"><span class="brand-mark"></span>جمانة الذهبية</a>
+    <a href="#" class="brand"><svg class="mark" viewBox="0 0 32 32" role="img" aria-label="شعار جمانة الذهبية">
+        <path class="m-gold" d="M11 13h10l-5 16z"/>
+        <path class="m-line" d="M8 5h16l5 8-13 16L3 13z" stroke-width="1.7"/>
+        <path class="m-line" d="M3 13h26M8 5l3 8M24 5l-3 8M11 13l5 16M21 13l-5 16" stroke-width="1.1"/>
+      </svg> جمانة الذهبية</a>
     <ul class="nav-links">
       <li><a href="#services">خدماتنا</a></li>
       <li><a href="#work">أعمالنا</a></li>
@@ -800,7 +805,11 @@
   <div class="shell">
     <div class="f-grid">
       <div>
-        <h4>جمانة الذهبية</h4>
+        <h4 class="f-brand"><svg class="mark" viewBox="0 0 32 32" role="img" aria-label="شعار جمانة الذهبية">
+        <path class="m-gold" d="M11 13h10l-5 16z"/>
+        <path class="m-line" d="M8 5h16l5 8-13 16L3 13z" stroke-width="1.7"/>
+        <path class="m-line" d="M3 13h26M8 5l3 8M24 5l-3 8M11 13l5 16M21 13l-5 16" stroke-width="1.1"/>
+      </svg> جمانة الذهبية</h4>
         <p>مؤسسة متخصصة في تركيب وصيانة أعمال الزجاج منذ عام ٢٠١١، ومقرّها الدمام — حي الخضرية. نفّذنا أكثر من ١٠٠٠ مشروع بين واجهات مبانٍ ومحلات، وأعمال بيوت وفلل، وكبائن شاور وبلكونات، في المنطقة الشرقية بالكامل.</p>
       </div>
       <div>
