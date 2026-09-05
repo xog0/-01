@@ -261,6 +261,9 @@
   }
   .ph b{font-family:'Cairo',sans-serif; font-size:.85rem; font-weight:700; color:var(--glass);}
   .ph span{font-size:.72rem;}
+  /* الصورة تغطي الموضع؛ وإن لم يوجد الملف يظهر الوصف تحتها */
+  .ph{position:relative; overflow:hidden;}
+  .ph img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;}
 
   /* ===== المعرض ===== */
   .gallery{background:var(--surface); border-block:1px solid var(--line);}
@@ -403,6 +406,7 @@
         <div class="ph">
           <b>صورة الهيرو</b>
           <span>واجهة زجاجية من تنفيذكم — عمودية</span>
+          <img src="assets/hero.jpg" alt="واجهة زجاجية من تنفيذ مؤسسة جمانة الذهبية" onerror="this.remove()">
         </div>
       </div>
     </div>
@@ -540,12 +544,26 @@
     </div>
 
     <div class="gal-grid">
-      <div class="ph"><b>مشروع ١</b><span>واجهة مبنى — قبل / بعد</span></div>
-      <div class="ph"><b>مشروع ٢</b><span>واجهة محل تجاري</span></div>
-      <div class="ph"><b>مشروع ٣</b><span>تزجيج بلكونة</span></div>
-      <div class="ph"><b>مشروع ٤</b><span>قاطع مصنفر داخلي</span></div>
-      <div class="ph"><b>مشروع ٥</b><span>درابزين زجاجي</span></div>
-      <div class="ph"><b>مشروع ٦</b><span>تركيب شتر</span></div>
+      <figure class="ph">
+        <b>مشروع ١</b><span>واجهة محل تجاري — سيكوريت وباب زجاجي</span>
+        <img src="assets/01-shopfront-restaurant.jpg" alt="واجهة محل مطعم بزجاج سيكوريت وباب زجاجي وإطارات سوداء" loading="lazy" onerror="this.remove()">
+      </figure>
+      <figure class="ph">
+        <b>مشروع ٢</b><span>قواطع مكاتب زجاجية — شرائح مصنفرة</span>
+        <img src="assets/02-office-partitions.jpg" alt="قواطع مكتبية زجاجية بشرائح مصنفرة وأبواب زجاجية بمقابض سوداء" loading="lazy" onerror="this.remove()">
+      </figure>
+      <figure class="ph">
+        <b>مشروع ٣</b><span>تزجيج سطح — أبواب سحب زجاجية</span>
+        <img src="assets/03-roof-terrace-glazing.jpg" alt="تزجيج جلسة سطح بأبواب سحب زجاجية وإطارات سوداء" loading="lazy" onerror="this.remove()">
+      </figure>
+      <figure class="ph">
+        <b>مشروع ٤</b><span>واجهة محل بارتفاع دورين</span>
+        <img src="assets/04-storefront-double-height.jpg" alt="واجهة محل زجاجية بارتفاع دورين" loading="lazy" onerror="this.remove()">
+      </figure>
+      <figure class="ph">
+        <b>مشروع ٥</b><span>أبواب زجاجية داخلية مزدوجة</span>
+        <img src="assets/05-interior-glass-doors.jpg" alt="باب زجاجي داخلي مزدوج بمقابض سوداء" loading="lazy" onerror="this.remove()">
+      </figure>
     </div>
   </div>
 </section>
