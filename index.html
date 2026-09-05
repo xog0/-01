@@ -268,6 +268,14 @@
   /* ===== المعرض ===== */
   .gallery{background:var(--surface); border-block:1px solid var(--line);}
   .gal-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+  .more-wrap{display:flex; justify-content:center; margin-top:26px;}
+  .more{
+    background:transparent; border:1px solid var(--glass); color:var(--glass);
+    padding:12px 30px; border-radius:var(--r); cursor:pointer;
+    font-family:'Cairo',sans-serif; font-weight:800; font-size:.95rem;
+    transition:background .2s,color .2s;
+  }
+  .more:hover{background:var(--glass); color:#fff;}
   @media (max-width:860px){ .gal-grid{grid-template-columns:1fr 1fr;} }
   @media (max-width:520px){ .gal-grid{grid-template-columns:1fr;} }
 
@@ -543,7 +551,7 @@
       <p class="lead">صور من مواقع العمل — قبل وبعد حيثما توفّرت الصور.</p>
     </div>
 
-    <div class="gal-grid">
+    <div class="gal-grid" id="galGrid">
       <figure class="ph">
         <b>مشروع ١</b><span>واجهة محل تجاري — سيكوريت وباب زجاجي</span>
         <img src="assets/01-shopfront-restaurant.jpg" alt="واجهة محل مطعم بزجاج سيكوريت وباب زجاجي وإطارات سوداء" loading="lazy" onerror="this.remove()">
@@ -604,6 +612,10 @@
         <b>مشروع ١٥</b><span>درابزين درج — تفصيل التثبيت</span>
         <img src="assets/15-stair-railing-detail.jpg" alt="تفصيل تثبيت درابزين الدرج الزجاجي بمشابك سوداء" loading="lazy" onerror="this.remove()">
       </figure>
+    </div>
+
+    <div class="more-wrap" hidden>
+      <button type="button" class="more" id="galMore" aria-expanded="false" aria-controls="galGrid"></button>
     </div>
   </div>
 </section>
@@ -779,6 +791,36 @@
 
 <script>
   document.getElementById('yr').textContent = new Date().getFullYear();
+
+  // المعرض: نعرض أول تسعة مشاريع، والباقي خلف زر — يُنفَّذ بالجافاسكربت
+  // حتى تظهر كل المشاريع لمن يعطّله أو لمحركات البحث
+  (function () {
+    const grid = document.getElementById('galGrid');
+    const wrap = document.querySelector('.more-wrap');
+    const btn  = document.getElementById('galMore');
+    if (!grid || !wrap || !btn) return;
+
+    const items  = Array.from(grid.children);
+    const SHOWN  = 9;
+    const hidden = items.slice(SHOWN);
+    if (!hidden.length) return;
+
+    let open = false;
+    function apply() {
+      hidden.forEach(function (el) { el.hidden = !open; });
+      btn.textContent = open ? 'عرض أقل' : 'عرض ' + hidden.length + ' مشاريع أخرى';
+      btn.setAttribute('aria-expanded', String(open));
+    }
+
+    wrap.hidden = false;
+    apply();
+
+    btn.addEventListener('click', function () {
+      open = !open;
+      apply();
+      if (!open) grid.scrollIntoView({ block: 'start' });
+    });
+  })();
 
   const form = document.getElementById('qf');
 
