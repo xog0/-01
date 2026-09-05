@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>جمانة الذهبية | تركيب وصيانة الزجاج</title>
+<meta name="description" content="جمانة الذهبية — تركيب وصيانة أعمال الزجاج في الدمام — واجهات المباني، البيوت والفلل، واجهات المحلات، الشتر، البلكونات، السيكوريت والمصنفر. معاينة وعرض سعر.">
+
+<!-- ============================================================
+     نسخة تجريبية — جمانة الذهبية
+     ------------------------------------------------------------
+     كل ما بين [[ ]] بيانات مؤقتة تُستبدل ببيانات العميل الحقيقية.
+     ابحث عن [[ لتصل إلى كل موضع يحتاج تعبئة.
+     مواضع الصور معلَّمة بـ .ph — استبدل كل واحدة بـ <img>.
+     ============================================================ -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@600;700;800;900&family=Almarai:wght@300;400;700;800&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    /* لوحة مأخوذة من مادة الشغل: حافة الزجاج الحقيقية خضراء */
+    --ground:#F3F4F2;
+    --surface:#FFFFFF;
+    --ink:#14191A;
+    --glass:#1C4640;
+    --glass-d:#123430;
+    --edge:#8FB5AC;        /* 2.24:1 — زخرفي فقط، ممنوع على النص */
+    --amber:#A9640F;
+    --amber-d:#8E5309;
+
+    --muted:#5A6360;       /* رمادي مائل للأخضر — مختار لا موروث */
+    --line:#DEE2DF;
+    --line-2:#EBEEEB;
+    --on-dark:#EDF1EF;
+    --on-dark-mut:#9FB3AE;
+    --dark-line:rgba(237,241,239,.15);
+    --danger:#B3261E;
+
+    --s0:1rem;
+    --s1:1.125rem;
+    --s2:1.375rem;
+    --s3:clamp(1.6rem,3.4vw,2.3rem);
+    --s4:clamp(2.1rem,5.2vw,3.5rem);
+
+    --r:3px;
+    --maxw:1160px;
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:'Almarai',system-ui,sans-serif;
+    background:var(--ground);
+    color:var(--ink);
+    line-height:1.9;
+    overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,.brand{font-family:'Cairo',system-ui,sans-serif; text-wrap:balance;}
+  a{text-decoration:none; color:inherit;}
+  ul{list-style:none;}
+  img,svg{max-width:100%; display:block;}
+  a:focus-visible,button:focus-visible,input:focus-visible,
+  textarea:focus-visible,select:focus-visible,summary:focus-visible{
+    outline:3px solid var(--amber); outline-offset:3px;
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important; transition:none!important;}
+    html{scroll-behavior:auto;}
+  }
+  .shell{max-width:var(--maxw); margin:0 auto; padding-inline:22px;}
+
+  /* خط قياس — العلامة البنائية للموقع، مأخوذة من الرسم الهندسي */
+  .measure{
+    position:relative; height:1px; background:var(--line);
+    margin:0 0 34px; max-width:120px;
+  }
+  .measure::before,.measure::after{
+    content:""; position:absolute; top:-4px; width:1px; height:9px; background:var(--glass);
+  }
+  .measure::before{inset-inline-start:0;}
+  .measure::after{inset-inline-end:0;}
+
+  /* ===== شريط علوي ===== */
+  .topbar{
+    background:var(--glass-d); color:var(--on-dark);
+    font-size:.82rem; padding:8px 0;
+  }
+  .topbar .shell{display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap;}
+  .topbar a{font-weight:700;}
+  .topbar span{color:var(--on-dark-mut); font-weight:300;}
+
+  /* ===== الترويسة ===== */
+  header{
+    position:sticky; top:0; z-index:60;
+    background:rgba(243,244,242,.94);
+    backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  nav{
+    max-width:var(--maxw); margin:0 auto;
+    display:flex; align-items:center; justify-content:space-between;
+    gap:18px; padding:13px 22px;
+  }
+  .brand{display:flex; align-items:center; gap:11px; font-weight:800; font-size:1.2rem;}
+  .brand-mark{
+    width:34px; height:34px; flex-shrink:0;
+    border:1.5px solid var(--glass);
+    position:relative; background:var(--surface);
+  }
+  .brand-mark::after{
+    content:""; position:absolute; inset:6px 6px auto auto;
+    width:12px; height:12px; background:var(--edge);
+  }
+  .nav-links{display:flex; gap:26px; font-size:.9rem; font-weight:700;}
+  .nav-links a{color:var(--muted); padding:5px 0; position:relative; transition:color .2s;}
+  .nav-links a::after{
+    content:""; position:absolute; inset:auto 0 0 auto;
+    width:0; height:2px; background:var(--amber); transition:width .25s;
+  }
+  .nav-links a:hover{color:var(--ink);}
+  .nav-links a:hover::after{width:100%;}
+  .nav-cta{
+    background:var(--amber); color:#fff; padding:9px 18px;
+    border-radius:var(--r); font-weight:800; font-size:.88rem;
+    transition:background .2s;
+  }
+  .nav-cta:hover{background:var(--amber-d);}
+  @media (max-width:900px){ .nav-links{gap:16px; font-size:.8rem;} }
+  @media (max-width:620px){
+    nav{flex-wrap:wrap; row-gap:9px; padding-bottom:11px;}
+    .nav-links{order:3; width:100%; justify-content:space-between; gap:8px;}
+  }
+
+  /* ===== الهيرو ===== */
+  .hero{
+    position:relative; background:var(--glass-d); color:var(--on-dark);
+    padding:76px 0 0; overflow:hidden;
+  }
+  /* ألواح زجاج متراكبة — لا ضبابية مثلجة */
+  .hero::before{
+    content:""; position:absolute; inset:0;
+    background-image:
+      linear-gradient(to left,var(--dark-line) 1px,transparent 1px),
+      linear-gradient(to bottom,var(--dark-line) 1px,transparent 1px);
+    background-size:118px 118px;
+    mask-image:linear-gradient(to bottom,#000 30%,transparent 92%);
+  }
+  .hero-grid{
+    position:relative; z-index:2;
+    display:grid; grid-template-columns:1.1fr .9fr; gap:52px; align-items:center;
+    padding-bottom:64px;
+  }
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:10px;
+    font-size:.78rem; font-weight:700; letter-spacing:.16em;
+    color:var(--edge); margin-bottom:22px;
+  }
+  .eyebrow::before{content:""; width:26px; height:1px; background:var(--edge);}
+  .hero h1{
+    font-size:var(--s4); font-weight:800; line-height:1.28;
+    letter-spacing:-.02em; margin-bottom:20px; color:#fff;
+  }
+  .hero h1 em{font-style:normal; color:var(--edge);}
+  .hero p{
+    font-size:var(--s1); color:var(--on-dark-mut);
+    max-width:50ch; margin-bottom:32px; font-weight:300;
+  }
+  .cta-row{display:flex; gap:12px; flex-wrap:wrap;}
+  .btn{
+    padding:14px 28px; border-radius:var(--r);
+    font-weight:800; font-size:var(--s0); display:inline-block;
+    transition:background .2s,border-color .2s;
+  }
+  .btn-a{background:var(--amber); color:#fff;}
+  .btn-a:hover{background:var(--amber-d);}
+  .btn-b{border:1px solid var(--dark-line); color:#fff;}
+  .btn-b:hover{border-color:#fff; background:rgba(255,255,255,.07);}
+
+  /* لوح زجاج في الهيرو — موضع صورة */
+  .pane{
+    position:relative; aspect-ratio:4/5;
+    border:1px solid rgba(237,241,239,.22);
+    background:linear-gradient(148deg,rgba(143,181,172,.13),rgba(143,181,172,.03));
+  }
+  .pane::before{
+    content:""; position:absolute; inset:11px;
+    border:1px solid rgba(237,241,239,.12);
+  }
+  .pane .ph{position:absolute; inset:0; border:0; background:transparent; color:var(--on-dark-mut);}
+
+  /* شريط الثقة أسفل الهيرو */
+  .trust{
+    position:relative; z-index:2;
+    border-top:1px solid var(--dark-line);
+    display:grid; grid-template-columns:repeat(4,1fr);
+  }
+  .trust div{padding:20px 0; padding-inline-end:14px;}
+  .trust div+div{border-inline-start:1px solid var(--dark-line); padding-inline-start:20px;}
+  .trust b{
+    display:block; font-family:'Cairo',sans-serif; font-size:1.35rem;
+    font-weight:800; color:var(--edge); line-height:1.35;
+    font-variant-numeric:tabular-nums;
+  }
+  .trust span{font-size:.8rem; color:var(--on-dark-mut); font-weight:300;}
+  @media (max-width:900px){
+    .hero{padding-top:52px;}
+    .hero-grid{grid-template-columns:1fr; gap:38px;}
+    .pane{aspect-ratio:16/10;}
+  }
+  @media (max-width:620px){
+    .trust{grid-template-columns:1fr 1fr; gap:0;}
+    .trust div:nth-child(3){border-inline-start:0; padding-inline-start:0;}
+    .trust div:nth-child(1),.trust div:nth-child(2){border-bottom:1px solid var(--dark-line);}
+  }
+
+  /* ===== الأقسام ===== */
+  section{padding:82px 0;}
+  .tag{
+    font-size:.74rem; font-weight:800; letter-spacing:.17em;
+    color:var(--glass); margin-bottom:12px; display:block;
+  }
+  h2{font-size:var(--s3); font-weight:800; line-height:1.42; letter-spacing:-.012em; margin-bottom:14px; max-width:22ch;}
+  .lead{color:var(--muted); font-size:var(--s1); max-width:58ch; font-weight:300;}
+  .head-row{display:flex; justify-content:space-between; align-items:flex-end; gap:24px; flex-wrap:wrap; margin-bottom:44px;}
+
+  /* ===== الخدمات ===== */
+  .services{background:var(--surface); border-block:1px solid var(--line);}
+  .srv-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line); border:1px solid var(--line);}
+  .srv{background:var(--surface); padding:30px 26px; position:relative; transition:background .2s;}
+  .srv::after{
+    content:""; position:absolute; inset:auto 0 0 0; height:2px;
+    background:var(--amber); transform:scaleX(0); transform-origin:right; transition:transform .25s;
+  }
+  .srv:hover{background:var(--ground);}
+  .srv:hover::after{transform:scaleX(1);}
+  .srv-ico{width:34px; height:34px; color:var(--glass); margin-bottom:18px;}
+  .srv:nth-child(3n) .srv-ico{color:var(--amber);}
+  .srv h3{font-size:1.06rem; font-weight:700; margin-bottom:8px; line-height:1.55;}
+  .srv p{color:var(--muted); font-size:.93rem; font-weight:300;}
+  @media (max-width:1000px){ .srv-grid{grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:560px){ .srv-grid{grid-template-columns:1fr;} }
+
+  /* ===== لماذا نحن ===== */
+  .why-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:26px;}
+  .why{border-top:2px solid var(--glass); padding-top:18px;}
+  .why h3{font-size:1rem; font-weight:700; margin-bottom:7px;}
+  .why p{color:var(--muted); font-size:.92rem; font-weight:300;}
+  @media (max-width:860px){ .why-grid{grid-template-columns:1fr 1fr; gap:22px;} }
+  @media (max-width:480px){ .why-grid{grid-template-columns:1fr;} }
+
+  /* ===== موضع صورة ===== */
+  .ph{
+    border:1px dashed var(--edge);
+    background:var(--ground);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:5px; color:var(--muted); font-size:.8rem; text-align:center; padding:14px;
+    aspect-ratio:4/3;
+  }
+  .ph b{font-family:'Cairo',sans-serif; font-size:.85rem; font-weight:700; color:var(--glass);}
+  .ph span{font-size:.72rem;}
+
+  /* ===== المعرض ===== */
+  .gallery{background:var(--surface); border-block:1px solid var(--line);}
+  .gal-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:16px;}
+  @media (max-width:860px){ .gal-grid{grid-template-columns:1fr 1fr;} }
+  @media (max-width:520px){ .gal-grid{grid-template-columns:1fr;} }
+
+  /* ===== الآراء ===== */
+  .rev-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
+  .rev{background:var(--surface); border:1px solid var(--line); padding:26px 24px; border-top:2px solid var(--edge);}
+  .stars{color:var(--amber); font-size:.9rem; letter-spacing:.14em; margin-bottom:12px;}
+  .rev p{font-size:.96rem; margin-bottom:16px;}
+  .rev cite{
+    display:block; padding-top:13px; border-top:1px solid var(--line-2);
+    font-style:normal; font-size:.85rem; color:var(--muted);
+  }
+  @media (max-width:860px){ .rev-grid{grid-template-columns:1fr;} }
+
+  /* ===== الأسئلة الشائعة ===== */
+  .faq{background:var(--surface); border-block:1px solid var(--line);}
+  .faq-list{border-top:1px solid var(--line); max-width:820px;}
+  details{border-bottom:1px solid var(--line);}
+  summary{
+    padding:20px 0; cursor:pointer; list-style:none;
+    font-family:'Cairo',sans-serif; font-weight:700; font-size:1.02rem;
+    display:flex; justify-content:space-between; align-items:center; gap:16px;
+    line-height:1.6;
+  }
+  summary::-webkit-details-marker{display:none;}
+  summary::after{
+    content:""; flex-shrink:0;
+    width:11px; height:11px;
+    border-inline-end:2px solid var(--glass); border-bottom:2px solid var(--glass);
+    transform:rotate(45deg); margin-bottom:5px; transition:transform .22s;
+  }
+  details[open] summary::after{transform:rotate(-135deg); margin-bottom:0;}
+  details p{padding:0 0 22px; color:var(--muted); font-size:.96rem; max-width:66ch;}
+
+  /* ===== نموذج عرض السعر ===== */
+  .quote{background:var(--glass-d); color:var(--on-dark);}
+  .q-grid{display:grid; grid-template-columns:.85fr 1.15fr; gap:52px;}
+  .quote .tag{color:var(--edge);}
+  .quote h2{color:#fff;}
+  .quote .lead{color:var(--on-dark-mut);}
+  .q-info{margin-top:32px; border-top:1px solid var(--dark-line);}
+  .q-item{display:flex; align-items:center; gap:14px; padding:15px 0; border-bottom:1px solid var(--dark-line);}
+  .q-item svg{width:19px; height:19px; color:var(--edge); flex-shrink:0;}
+  .q-item b{display:block; font-size:.7rem; letter-spacing:.11em; color:var(--on-dark-mut); font-weight:700;}
+  .q-item span{font-size:.96rem; color:#fff;}
+  .social{display:flex; gap:9px; margin-top:24px;}
+  .social a{
+    padding:7px 15px; border:1px solid var(--dark-line); border-radius:var(--r);
+    font-size:.78rem; font-weight:700; transition:border-color .2s,color .2s;
+  }
+  .social a:hover{border-color:var(--edge); color:var(--edge);}
+
+  form{
+    background:var(--surface); color:var(--ink); padding:32px;
+    border-radius:var(--r); border-top:3px solid var(--amber);
+    display:flex; flex-direction:column; gap:17px;
+  }
+  .legend{font-size:.8rem; color:var(--muted); margin-top:-5px;}
+  .req{color:var(--danger); font-weight:700;}
+  .field{display:flex; flex-direction:column; gap:7px;}
+  .field label{font-size:.73rem; font-weight:700; letter-spacing:.09em; color:var(--muted);}
+  .field input,.field select,.field textarea{
+    border:1px solid var(--line); border-radius:var(--r); padding:12px 14px;
+    font-family:'Almarai',sans-serif; font-size:.98rem;
+    background:var(--surface); color:var(--ink); transition:border-color .2s;
+  }
+  .field input::placeholder,.field textarea::placeholder{color:#8C948F;}
+  .field input:focus,.field select:focus,.field textarea:focus{outline:none; border-color:var(--glass);}
+  .field textarea{resize:vertical; min-height:96px; line-height:1.8;}
+  .field input[aria-invalid="true"],.field select[aria-invalid="true"],
+  .field textarea[aria-invalid="true"]{border-color:var(--danger);}
+  .err{color:var(--danger); font-size:.79rem; line-height:1.55;}
+  .two{display:grid; grid-template-columns:1fr 1fr; gap:17px;}
+  @media (max-width:520px){ .two{grid-template-columns:1fr;} }
+  .submit{
+    background:var(--amber); color:#fff; border:0; padding:14px;
+    border-radius:var(--r); font-family:'Cairo',sans-serif;
+    font-weight:800; font-size:var(--s0); cursor:pointer; transition:background .2s;
+  }
+  .submit:hover{background:var(--amber-d);}
+  .submit.sent{background:#1E7A4D;}
+  .note{font-size:.78rem; color:var(--muted); text-align:center;}
+  @media (max-width:900px){ .q-grid{grid-template-columns:1fr; gap:40px;} }
+
+  /* ===== زر واتساب عائم ===== */
+  .wa{
+    position:fixed; inset-inline-end:18px; bottom:18px; z-index:80;
+    width:54px; height:54px; border-radius:50%;
+    background:#25D366; display:flex; align-items:center; justify-content:center;
+    box-shadow:0 4px 16px rgba(0,0,0,.24); transition:transform .18s;
+  }
+  .wa:hover{transform:translateY(-2px);}
+  .wa svg{width:30px; height:30px; color:#fff;}
+  @media (max-width:768px){ .wa{bottom:78px;} }
+
+  /* ===== التذييل ===== */
+  footer{background:var(--ink); color:var(--on-dark-mut); padding:44px 0 30px; font-size:.87rem;}
+  .f-grid{display:grid; grid-template-columns:1.4fr 1fr 1fr; gap:36px; margin-bottom:32px;}
+  footer h4{font-family:'Cairo',sans-serif; color:#fff; font-size:.94rem; font-weight:700; margin-bottom:13px;}
+  footer li{padding:4px 0;}
+  footer a:hover{color:var(--edge);}
+  .legal{
+    display:flex; gap:22px; flex-wrap:wrap;
+    border-top:1px solid rgba(255,255,255,.1); padding-top:20px;
+    font-size:.79rem;
+  }
+  @media (max-width:760px){ .f-grid{grid-template-columns:1fr; gap:26px;} }
+</style>
+</head>
+<body>
+
+<!-- شريط علوي -->
+<div class="topbar">
+  <div class="shell">
+    <a href="tel:+966536649174" dir="ltr">0536649174</a>
+    <span>السبت – الخميس · ٦ صباحاً – ١٢ منتصف الليل</span>
+  </div>
+</div>
+
+<header>
+  <nav>
+    <a href="#" class="brand"><span class="brand-mark"></span>جمانة الذهبية</a>
+    <ul class="nav-links">
+      <li><a href="#services">خدماتنا</a></li>
+      <li><a href="#work">أعمالنا</a></li>
+      <li><a href="#faq">أسئلة شائعة</a></li>
+      <li><a href="#quote">تواصل معنا</a></li>
+    </ul>
+    <a href="#quote" class="nav-cta">اطلب عرض سعر</a>
+  </nav>
+</header>
+
+<!-- ===== الهيرو ===== -->
+<section class="hero">
+  <div class="shell">
+    <div class="hero-grid">
+      <div>
+        <span class="eyebrow">تركيب وصيانة أعمال الزجاج</span>
+        <h1>زجاج مركّب <em>بمقاس دقيق</em><br>من أول المعاينة للتسليم</h1>
+        <p>واجهات مبانٍ ومحلات، وزجاج بيوت وفلل، وشتر وبلكونات، وسيكوريت ومصنفر. معاينة على الموقع وعرض سعر واضح قبل بدء أي عمل.</p>
+        <div class="cta-row">
+          <a href="#quote" class="btn btn-a">اطلب عرض سعر</a>
+          <a href="tel:+966536649174" class="btn btn-b">اتصل الآن</a>
+        </div>
+      </div>
+
+      <div class="pane">
+        <div class="ph">
+          <b>صورة الهيرو</b>
+          <span>واجهة زجاجية من تنفيذكم — عمودية</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="trust">
+      <div><b>[[ ٢٠١X ]]</b><span>سنة التأسيس</span></div>
+      <div><b>[[ +XXX ]]</b><span>مشروع منفّذ</span></div>
+      <div><b>[[ X ]] سنوات</b><span>ضمان التركيب</span></div>
+      <div><b>مجانية</b><span>المعاينة والتسعير</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== الخدمات ===== -->
+<section class="services" id="services">
+  <div class="shell">
+    <div class="measure"></div>
+    <div class="head-row">
+      <div>
+        <span class="tag">خدماتنا</span>
+        <h2 style="margin-bottom:0;">ثمانية أعمال تحت مظلة واحدة</h2>
+      </div>
+      <p class="lead">من الواجهة الكاملة إلى تبديل لوح مكسور — نفس الفريق ونفس معايير التنفيذ.</p>
+    </div>
+
+    <div class="srv-grid">
+      <div class="srv">
+        <svg class="srv-ico" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="4" y="3" width="24" height="26"/><path d="M4 11h24M4 19h24M16 3v26"/>
+        </svg>
+        <h3>واجهات المباني</h3>
+        <p>تركيب واجهات زجاجية للمنشآت التجارية والسكنية بأنظمة تثبيت معتمدة.</p>
+      </div>
+
+      <div class="srv">
+        <svg class="srv-ico" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M3 14 16 4l13 10"/><path d="M6 13v15h20V13"/><rect x="12" y="18" width="8" height="10"/>
+        </svg>
+        <h3>البيوت والفلل</h3>
+        <p>نوافذ وأبواب وقواطع داخلية بمقاسات مأخوذة على الطبيعة.</p>
+      </div>
+
+      <div class="srv">
+        <svg class="srv-ico" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M3 11h26v18H3z"/><path d="M3 11 6 4h20l3 7"/><path d="M12 29V18h8v11"/>
+        </svg>
+        <h3>واجهات المحلات</h3>
+        <p>شوبفرونت بزجاج آمن وإطارات تتحمّل حركة المحل اليومية.</p>
+      </div>
+
+      <div class="srv">
+        <svg class="srv-ico" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="3" y="4" width="26" height="24"/>
+          <path d="M3 9h26M3 14h26M3 19h26M3 24h26"/>
+        </svg>
+        <h3>الشتر والستائر</h3>
+        <p>تركيب وصيانة الشتر اليدوي والكهربائي مع ضبط الحركة.</p>
+      </div>
+
+      <div class="srv">
+        <svg class="srv-ico" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M3 27h26M5 27V13h22v14"/><path d="M10 27V17M16 27V17M22 27V17"/><path d="M5 13h22"/>
+        </svg>
+        <h3>البلكونات</h3>
+        <p>تزجيج الشرفات ودرابزين زجاجي بمثبتات مقاومة للعوامل الجوية.</p>
+      </div>
+
+      <div class="srv">
+        <svg class="srv-ico" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="4" y="4" width="24" height="24"/><path d="M4 4l11 11-4 6 7 3-3 6"/>
+        </svg>
+        <h3>تبديل الزجاج المكسور</h3>
+        <p>استجابة سريعة لتأمين المكان وتركيب البديل بنفس المواصفة.</p>
+      </div>
+
+      <div class="srv">
+        <svg class="srv-ico" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M16 3l11 4v10c0 7-5 11-11 12C10 28 5 24 5 17V7z"/><path d="M11 16l3.5 3.5L21 13"/>
+        </svg>
+        <h3>زجاج سيكوريت</h3>
+        <p>زجاج مقوّى حرارياً يتفتّت لحبيبات غير حادّة عند الكسر.</p>
+      </div>
+
+      <div class="srv">
+        <svg class="srv-ico" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="4" y="4" width="24" height="24"/>
+          <path d="M9 9h.01M15 9h.01M21 9h.01M12 14h.01M18 14h.01M9 19h.01M15 19h.01M21 19h.01M12 24h.01M18 24h.01"/>
+        </svg>
+        <h3>زجاج مصنفر</h3>
+        <p>تعتيم جزئي للخصوصية مع تمرير الضوء — للحمامات والقواطع والمكاتب.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== لماذا نحن ===== -->
+<section>
+  <div class="shell">
+    <div class="measure"></div>
+    <span class="tag">لماذا نحن</span>
+    <h2>الفرق يظهر في التفاصيل الصغيرة</h2>
+    <p class="lead" style="margin-bottom:44px;">أربعة التزامات نطبّقها في كل عمل، صغيراً كان أو كبيراً.</p>
+
+    <div class="why-grid">
+      <div class="why">
+        <h3>معاينة قبل التسعير</h3>
+        <p>لا نسعّر بالتخمين. نأخذ المقاس على الطبيعة ونعاين التركيبة قبل أي رقم.</p>
+      </div>
+      <div class="why">
+        <h3>سعر واضح ومكتوب</h3>
+        <p>عرض سعر مفصّل بالبنود — لا مفاجآت بعد بدء التنفيذ.</p>
+      </div>
+      <div class="why">
+        <h3>ضمان مكتوب</h3>
+        <p>ضمان [[ X ]] سنوات على التركيب، وشهادة مواصفة على الزجاج.</p>
+      </div>
+      <div class="why">
+        <h3>تنظيف بعد التسليم</h3>
+        <p>نسلّم المكان نظيفاً ونرفع مخلّفات العمل — ليست خدمة إضافية.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== المعرض ===== -->
+<section class="gallery" id="work">
+  <div class="shell">
+    <div class="measure"></div>
+    <div class="head-row">
+      <div>
+        <span class="tag">أعمالنا</span>
+        <h2 style="margin-bottom:0;">مشاريع منفّذة</h2>
+      </div>
+      <p class="lead">صور من مواقع العمل — قبل وبعد حيثما توفّرت.</p>
+    </div>
+
+    <div class="gal-grid">
+      <div class="ph"><b>مشروع ١</b><span>واجهة مبنى — قبل / بعد</span></div>
+      <div class="ph"><b>مشروع ٢</b><span>واجهة محل تجاري</span></div>
+      <div class="ph"><b>مشروع ٣</b><span>تزجيج بلكونة</span></div>
+      <div class="ph"><b>مشروع ٤</b><span>قاطع مصنفر داخلي</span></div>
+      <div class="ph"><b>مشروع ٥</b><span>درابزين زجاجي</span></div>
+      <div class="ph"><b>مشروع ٦</b><span>تركيب شتر</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== الآراء ===== -->
+<section>
+  <div class="shell">
+    <div class="measure"></div>
+    <span class="tag">آراء العملاء</span>
+    <h2>ما قاله من تعاملوا معنا</h2>
+    <p class="lead" style="margin-bottom:44px;">تقييمات من عملاء سابقين.</p>
+
+    <div class="rev-grid">
+      <div class="rev">
+        <div class="stars" aria-label="خمسة من خمسة">★★★★★</div>
+        <p>[[ نص رأي العميل الأول — يُستبدل برأي حقيقي بموافقته ]]</p>
+        <cite>[[ الاسم ]] — [[ نوع العمل ]]</cite>
+      </div>
+      <div class="rev">
+        <div class="stars" aria-label="خمسة من خمسة">★★★★★</div>
+        <p>[[ نص رأي العميل الثاني ]]</p>
+        <cite>[[ الاسم ]] — [[ نوع العمل ]]</cite>
+      </div>
+      <div class="rev">
+        <div class="stars" aria-label="خمسة من خمسة">★★★★★</div>
+        <p>[[ نص رأي العميل الثالث ]]</p>
+        <cite>[[ الاسم ]] — [[ نوع العمل ]]</cite>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== الأسئلة الشائعة ===== -->
+<section class="faq" id="faq">
+  <div class="shell">
+    <div class="measure"></div>
+    <span class="tag">أسئلة شائعة</span>
+    <h2>ما يسأل عنه العملاء قبل الاتفاق</h2>
+    <p class="lead" style="margin-bottom:40px;">إجابات مباشرة على الأسئلة المتكررة.</p>
+
+    <div class="faq-list">
+      <details open>
+        <summary>كم تستغرق مدة التنفيذ؟</summary>
+        <p>[[ تُملأ بمدد فعلية. مثال: تبديل لوح مكسور خلال ٢٤–٤٨ ساعة من المعاينة. واجهة محل من ٣ إلى ٥ أيام عمل. واجهة مبنى كامل حسب المساحة، ويُحدَّد في عرض السعر. ]]</p>
+      </details>
+      <details>
+        <summary>ما الذي يشمله الضمان؟</summary>
+        <p>[[ تُملأ بتفاصيل الضمان الفعلي. مثال: ضمان X سنوات على التركيب والتثبيت، وضمان المصنّع على الزجاج نفسه. يشمل الضمان أعمال الشد والضبط ولا يشمل الكسر الناتج عن سوء الاستخدام. ]]</p>
+      </details>
+      <details>
+        <summary>كيف تُحتسب الأسعار؟</summary>
+        <p>[[ تُملأ بآلية التسعير الفعلية. مثال: يُحتسب السعر بالمتر المربع حسب نوع الزجاج وسماكته، مضافاً إليه الإطار والتركيب. المعاينة والتسعير مجاناً وبلا التزام. ]]</p>
+      </details>
+      <details>
+        <summary>هل المعاينة مجانية؟</summary>
+        <p>[[ نعم — نحضر للموقع، نأخذ المقاسات، ونرسل عرض سعر مكتوب خلال [[ X ]] ساعة عمل. ]]</p>
+      </details>
+      <details>
+        <summary>ما المناطق التي تغطونها؟</summary>
+        <p>[[ تُملأ بنطاق التغطية الفعلي — المدن والأحياء، وهل هناك رسوم انتقال خارج النطاق. ]]</p>
+      </details>
+      <details>
+        <summary>ما الفرق بين السيكوريت والزجاج العادي؟</summary>
+        <p>السيكوريت زجاج مقوّى حرارياً، أقوى من العادي بعدة أضعاف، وعند الكسر يتفتّت إلى حبيبات صغيرة غير حادّة بدل الشظايا. لذلك يُستخدم في الواجهات والأبواب والأماكن التي يمر بها الناس.</p>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ===== عرض السعر ===== -->
+<section class="quote" id="quote">
+  <div class="shell">
+    <div class="q-grid">
+      <div>
+        <span class="tag">تواصل معنا</span>
+        <h2>اطلب معاينة وعرض سعر</h2>
+        <p class="lead">املأ النموذج أو اتصل مباشرة. نرد خلال [[ X ]] ساعة عمل.</p>
+
+        <div class="q-info">
+          <div class="q-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M5 3h4l2 5-2.5 1.5a12 12 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z"/>
+            </svg>
+            <div><b>هاتف / واتساب</b><span dir="ltr">0536649174</span></div>
+          </div>
+          <div class="q-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <rect x="3" y="5" width="18" height="16"/><path d="M3 10h18M8 3v4M16 3v4"/>
+            </svg>
+            <div><b>أيام العمل</b><span>من السبت إلى الخميس</span></div>
+          </div>
+          <div class="q-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M12 22s8-6.4 8-12a8 8 0 1 0-16 0c0 5.6 8 12 8 12z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
+            <div><b>العنوان</b><span>الدمام — حي الخضرية</span></div>
+          </div>
+          <div class="q-item">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+            </svg>
+            <div><b>ساعات العمل</b><span>السبت – الخميس · ٦ صباحاً – ١٢ منتصف الليل</span></div>
+          </div>
+        </div>
+
+        <div class="social">
+          <a href="#">إنستجرام</a>
+          <a href="#">تيك توك</a>
+          <a href="#">فيسبوك</a>
+        </div>
+      </div>
+
+      <form id="qf" novalidate>
+        <p class="legend"><span class="req" aria-hidden="true">*</span> الحقول المطلوبة</p>
+
+        <div class="two">
+          <div class="field">
+            <label for="name">الاسم <span class="req" aria-hidden="true">*</span></label>
+            <input type="text" id="name" placeholder="اكتب اسمك" required aria-describedby="name-e">
+            <p class="err" id="name-e"></p>
+          </div>
+          <div class="field">
+            <label for="phone">رقم الجوال <span class="req" aria-hidden="true">*</span></label>
+            <input type="tel" id="phone" placeholder="05XXXXXXXX" dir="ltr" required aria-describedby="phone-e">
+            <p class="err" id="phone-e"></p>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="service">نوع الخدمة <span class="req" aria-hidden="true">*</span></label>
+          <select id="service" required aria-describedby="service-e">
+            <option value="">اختر الخدمة المطلوبة</option>
+            <option>واجهات المباني</option>
+            <option>البيوت والفلل</option>
+            <option>واجهات المحلات</option>
+            <option>الشتر والستائر</option>
+            <option>البلكونات</option>
+            <option>تبديل زجاج مكسور</option>
+            <option>زجاج سيكوريت</option>
+            <option>زجاج مصنفر</option>
+            <option>غير ذلك</option>
+          </select>
+          <p class="err" id="service-e"></p>
+        </div>
+
+        <div class="field">
+          <label for="city">المدينة أو الحي</label>
+          <input type="text" id="city" placeholder="لتحديد موعد المعاينة">
+        </div>
+
+        <div class="field">
+          <label for="details">تفاصيل العمل <span class="req" aria-hidden="true">*</span></label>
+          <textarea id="details" placeholder="المقاسات التقريبية، عدد الألواح، أو وصف المطلوب…" required aria-describedby="details-e"></textarea>
+          <p class="err" id="details-e"></p>
+        </div>
+
+        <button type="submit" class="submit">أرسل الطلب</button>
+        <p class="note">بياناتك تُستخدم للتواصل بخصوص طلبك فقط.</p>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- زر واتساب -->
+<a href="https://wa.me/966536649174" class="wa" aria-label="تواصل عبر واتساب">
+  <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+    <path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.1-.7.1-.2.3-.7 1-.9 1.2-.2.2-.3.2-.6.1-1.7-.9-2.8-1.5-4-3.4-.3-.5.3-.5.9-1.6.1-.2 0-.4 0-.5s-.7-1.6-.9-2.2c-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.1.2 2.1 3.2 5.1 4.5 1.9.8 2.6.9 3.5.7.6-.1 1.7-.7 1.9-1.4.2-.7.2-1.2.2-1.4-.1-.1-.3-.2-.6-.3z"/>
+    <path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3.1.8.8-3-.2-.3A8.2 8.2 0 1 1 12 20.2z"/>
+  </svg>
+</a>
+
+<footer>
+  <div class="shell">
+    <div class="f-grid">
+      <div>
+        <h4>جمانة الذهبية</h4>
+        <p>[[ نبذة قصيرة: من نحن، سنوات الخبرة، ونطاق العمل — سطران أو ثلاثة. ]]</p>
+      </div>
+      <div>
+        <h4>خدماتنا</h4>
+        <ul>
+          <li><a href="#services">واجهات المباني</a></li>
+          <li><a href="#services">واجهات المحلات</a></li>
+          <li><a href="#services">الشتر والبلكونات</a></li>
+          <li><a href="#services">السيكوريت والمصنفر</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>تواصل</h4>
+        <ul>
+          <li><a href="tel:+966536649174" dir="ltr">0536649174</a></li>
+          <li><a href="https://wa.me/966536649174">واتساب</a></li>
+          <li>من السبت إلى الخميس · ٦ ص – ١٢ ليلاً</li>
+          <li>الدمام — حي الخضرية</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="legal">
+      <span>© <span id="yr">2026</span> جمانة الذهبية — جميع الحقوق محفوظة</span>
+      <span>السجل التجاري: [[ الرقم ]]</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  document.getElementById('yr').textContent = new Date().getFullYear();
+
+  const form = document.getElementById('qf');
+
+  const MSG = {
+    name:    'اكتب اسمك حتى نعرف بمن نتواصل.',
+    phone:   'اكتب رقم جوال صحيح، مثل 0512345678',
+    service: 'اختر نوع الخدمة المطلوبة.',
+    details: 'صف المطلوب باختصار — المقاسات أو عدد الألواح يكفي.'
+  };
+
+  function setErr(el, text){
+    document.getElementById(el.id + '-e').textContent = text;
+    el.setAttribute('aria-invalid', text ? 'true' : 'false');
+  }
+
+  function check(el){
+    const v = el.value.trim();
+    let t = '';
+    if (!v) {
+      t = MSG[el.id];
+    } else if (el.id === 'phone' && !/^(?:\+?966|0)?5\d{8}$/.test(v.replace(/[\s-]/g, ''))) {
+      t = MSG.phone;
+    }
+    setErr(el, t);
+    return !t;
+  }
+
+  const fields = ['name', 'phone', 'service', 'details'].map(function (id) {
+    return document.getElementById(id);
+  });
+
+  // نتحقق عند مغادرة الحقل، ثم نتابع التصحيح لحظياً — لا نلاحق المستخدم أثناء الكتابة
+  fields.forEach(function (el) {
+    el.addEventListener('blur', function () { check(el); });
+    const live = el.tagName === 'SELECT' ? 'change' : 'input';
+    el.addEventListener(live, function () {
+      if (el.getAttribute('aria-invalid') === 'true') check(el);
+    });
+  });
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    const bad = fields.filter(function (el) { return !check(el); });
+    if (bad.length) { bad[0].focus(); return; }
+
+    const btn = form.querySelector('.submit');
+    const original = btn.textContent;
+    btn.textContent = 'تم استلام طلبك';
+    btn.classList.add('sent');
+    setTimeout(function () {
+      btn.textContent = original;
+      btn.classList.remove('sent');
+      form.reset();
+      fields.forEach(function (el) { setErr(el, ''); });
+    }, 2600);
+  });
+</script>
+
+</body>
+</html>
