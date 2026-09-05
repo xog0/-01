@@ -228,8 +228,8 @@
 
   /* ===== الخدمات ===== */
   .services{background:var(--surface); border-block:1px solid var(--line);}
-  .srv-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--line); border:1px solid var(--line);}
-  .srv{background:var(--surface); padding:30px 26px; position:relative; transition:background .2s;}
+  .srv-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:1px; background:var(--line); border:1px solid var(--line);}
+  .srv{background:var(--surface); padding:28px 22px; position:relative; transition:background .2s;}
   .srv::after{
     content:""; position:absolute; inset:auto 0 0 0; height:2px;
     background:var(--amber); transform:scaleX(0); transform-origin:right; transition:transform .25s;
@@ -240,7 +240,7 @@
   .srv:nth-child(3n) .srv-ico{color:var(--amber);}
   .srv h3{font-size:1.06rem; font-weight:700; margin-bottom:8px; line-height:1.55;}
   .srv p{color:var(--muted); font-size:.93rem; font-weight:300;}
-  @media (max-width:1000px){ .srv-grid{grid-template-columns:repeat(2,1fr);} }
+  @media (max-width:1100px){ .srv-grid{grid-template-columns:repeat(2,1fr);} .srv{padding:30px 26px;} }
   @media (max-width:560px){ .srv-grid{grid-template-columns:1fr;} }
 
   /* ===== لماذا نحن ===== */
@@ -435,7 +435,7 @@
     <div class="head-row">
       <div>
         <span class="tag">خدماتنا</span>
-        <h2 style="margin-bottom:0;">ثمانية أعمال تحت مظلة واحدة</h2>
+        <h2 style="margin-bottom:0;">عشرة أعمال تحت مظلة واحدة</h2>
       </div>
       <p class="lead">من الواجهة الكاملة إلى تبديل لوح مكسور — نفس الفريق ونفس معايير التنفيذ.</p>
     </div>
@@ -463,6 +463,23 @@
         </svg>
         <h3>واجهات المحلات</h3>
         <p>واجهات محلات بزجاج آمن وإطارات تتحمّل حركة المحل اليومية.</p>
+      </div>
+
+      <div class="srv">
+        <svg class="srv-ico" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <rect x="3" y="6" width="26" height="20"/><path d="M12 6v20M21 6v20"/><path d="M8 16h2M17 16h2"/>
+        </svg>
+        <h3>قواطع المكاتب والمحلات</h3>
+        <p>تقسيم المكاتب والمحلات بقواطع زجاجية مع أبواب وشرائح مصنفرة للخصوصية.</p>
+      </div>
+
+      <div class="srv">
+        <svg class="srv-ico" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+          <path d="M3 6h26"/><rect x="5" y="6" width="11" height="21"/><rect x="14" y="6" width="13" height="21"/>
+          <path d="M20 16h5m-2-2 2 2-2 2"/>
+        </svg>
+        <h3>أبواب السحب الزجاجية</h3>
+        <p>أبواب سحب بسكك ستانلس أو سوداء — للمجالس والمكاتب والملحقات.</p>
       </div>
 
       <div class="srv">
@@ -549,7 +566,7 @@
         <span class="tag">أعمالنا</span>
         <h2 style="margin-bottom:0;">مشاريع منفّذة</h2>
       </div>
-      <p class="lead">صور من مواقع العمل — قبل وبعد حيثما توفّرت الصور.</p>
+      <p class="lead">صور من مواقع العمل.</p>
     </div>
 
     <div class="gal-grid" id="galGrid">
@@ -776,6 +793,8 @@
             <option>واجهات المباني</option>
             <option>البيوت والفلل</option>
             <option>واجهات المحلات</option>
+            <option>قواطع المكاتب والمحلات</option>
+            <option>أبواب سحب زجاجية</option>
             <option>كبائن الشاور</option>
             <option>البلكونات</option>
             <option>تبديل زجاج مكسور</option>
