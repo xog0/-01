@@ -31,6 +31,10 @@
 | `23-building-entrance-lobby.jpg` | المعرض — مشروع ٢٣ | كابينة مدخل مبنى بدرابزين ستانلس |
 | `24-patterned-office-partitions.jpg` | المعرض — مشروع ٢٤ | قواطع إدارية بنقش مصنفر معيّن |
 | `25-sliding-bath-screen.jpg` | المعرض — مشروع ٢٥ | حاجز بانيو بباب سحب وإطار أسود |
+| `26-corner-shower-enclosure.jpg` | المعرض — مشروع ٢٦ | كابينة استحمام ركنية بإطار أسود |
+| `27-storefront-reflective-facade.jpg` | المعرض — مشروع ٢٧ | واجهة محل من زجاج ريفلكتف |
+| `28-patterned-sliding-partitions.jpg` | المعرض — مشروع ٢٨ | قواطع بأبواب سحب بنقش مصنفر هندسي |
+| `29-stair-railing-lit.jpg` | المعرض — مشروع ٢٩ | درابزين درج مع إضاءة الدرجات |
 
 ## ملاحظات
 
