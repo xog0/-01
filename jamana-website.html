@@ -312,13 +312,11 @@
   .q-item svg{width:19px; height:19px; color:var(--edge); flex-shrink:0;}
   .q-item b{display:block; font-size:.7rem; letter-spacing:.11em; color:var(--on-dark-mut); font-weight:700;}
   .q-item span{font-size:.96rem; color:#fff;}
-  form{
+  .contact-card{
     background:var(--surface); color:var(--ink); padding:32px;
     border-radius:var(--r); border-top:3px solid var(--amber);
     display:flex; flex-direction:column; gap:17px;
   }
-  .legend{font-size:.8rem; color:var(--muted); margin-top:-5px;}
-  .req{color:var(--danger); font-weight:700;}
   .field{display:flex; flex-direction:column; gap:7px;}
   .field label{font-size:.73rem; font-weight:700; letter-spacing:.09em; color:var(--muted);}
   .field input,.field select,.field textarea{
@@ -329,17 +327,21 @@
   .field input::placeholder,.field textarea::placeholder{color:#8C948F;}
   .field input:focus,.field select:focus,.field textarea:focus{outline:none; border-color:var(--glass);}
   .field textarea{resize:vertical; min-height:96px; line-height:1.8;}
-  .field input[aria-invalid="true"],.field select[aria-invalid="true"],
-  .field textarea[aria-invalid="true"]{border-color:var(--danger);}
-  .err{color:var(--danger); font-size:.79rem; line-height:1.55;}
-  .submit{
-    background:var(--amber); color:#fff; border:0; padding:14px;
-    border-radius:var(--r); font-family:'Cairo',sans-serif;
-    font-weight:800; font-size:var(--s0); cursor:pointer; transition:background .2s;
+  /* زرّا التواصل: واتساب واتصال */
+  .act{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .act-btn{
+    display:flex; align-items:center; justify-content:center; gap:9px;
+    padding:15px 14px; border-radius:var(--r);
+    font-family:'Cairo',sans-serif; font-weight:800; font-size:var(--s0);
+    transition:background .2s,border-color .2s,color .2s;
   }
-  .submit:hover{background:var(--amber-d);}
-  .submit.sent{background:#1E7A4D;}
-  .note{font-size:.78rem; color:var(--muted); text-align:center;}
+  .act-btn svg{width:21px; height:21px; flex-shrink:0;}
+  .act-wa{background:#1FA855; color:#fff;}
+  .act-wa:hover{background:#188944;}
+  .act-call{border:1.5px solid var(--glass); color:var(--glass);}
+  .act-call:hover{background:var(--glass); color:#fff;}
+  @media (max-width:420px){ .act{grid-template-columns:1fr;} }
+  .note{font-size:.79rem; color:var(--muted); text-align:center; line-height:1.7;}
   @media (max-width:900px){ .q-grid{grid-template-columns:1fr; gap:40px;} }
 
   /* ===== زر واتساب عائم ===== */
@@ -699,7 +701,7 @@
       <div>
         <span class="tag">تواصل معنا</span>
         <h2>اطلب معاينة وعرض سعر</h2>
-        <p class="lead">املأ النموذج أو اتصل مباشرة، ونرد عليك خلال ساعات العمل.</p>
+        <p class="lead">اكتب تفاصيل عملك وأرسلها عبر واتساب، أو اتصل بنا مباشرة.</p>
 
         <div class="q-info">
           <div class="q-item">
@@ -729,24 +731,30 @@
         </div>
       </div>
 
-      <form id="qf" novalidate>
-        <p class="legend"><span class="req" aria-hidden="true">*</span> الحقول المطلوبة</p>
-
+      <div class="contact-card">
         <div class="field">
-          <label for="phone">رقم الجوال <span class="req" aria-hidden="true">*</span></label>
-          <input type="tel" id="phone" placeholder="05XXXXXXXX" dir="ltr" required aria-describedby="phone-e">
-          <p class="err" id="phone-e"></p>
+          <label for="details">تفاصيل العمل</label>
+          <textarea id="details" placeholder="نوع العمل، والحي أو المدينة، والمقاسات التقريبية…"></textarea>
         </div>
 
-        <div class="field">
-          <label for="details">تفاصيل العمل <span class="req" aria-hidden="true">*</span></label>
-          <textarea id="details" placeholder="نوع العمل، والحي أو المدينة، والمقاسات التقريبية…" required aria-describedby="details-e"></textarea>
-          <p class="err" id="details-e"></p>
+        <div class="act">
+          <a class="act-btn act-wa" id="waSend" href="https://wa.me/966536649174" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M17.5 14.4c-.3-.2-1.7-.9-2-1-.3-.1-.5-.1-.7.1-.2.3-.7 1-.9 1.2-.2.2-.3.2-.6.1-1.7-.9-2.8-1.5-4-3.4-.3-.5.3-.5.9-1.6.1-.2 0-.4 0-.5s-.7-1.6-.9-2.2c-.3-.6-.5-.5-.7-.5h-.6c-.2 0-.5.1-.8.4-.3.3-1 1-1 2.5s1.1 2.9 1.2 3.1c.1.2 2.1 3.2 5.1 4.5 1.9.8 2.6.9 3.5.7.6-.1 1.7-.7 1.9-1.4.2-.7.2-1.2.2-1.4-.1-.1-.3-.2-.6-.3z"/>
+              <path d="M12 2a10 10 0 0 0-8.6 15L2 22l5.2-1.4A10 10 0 1 0 12 2zm0 18.2a8.2 8.2 0 0 1-4.2-1.2l-.3-.2-3.1.8.8-3-.2-.3A8.2 8.2 0 1 1 12 20.2z"/>
+            </svg>
+            أرسل عبر واتساب
+          </a>
+          <a class="act-btn act-call" href="tel:+966536649174">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true">
+              <path d="M5 3h4l2 5-2.5 1.5a12 12 0 0 0 6 6L16 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 5a2 2 0 0 1 2-2z"/>
+            </svg>
+            اتصل الآن
+          </a>
         </div>
 
-        <button type="submit" class="submit">أرسل الطلب</button>
-        <p class="note">بياناتك تُستخدم للتواصل بخصوص طلبك فقط.</p>
-      </form>
+        <p class="note">اكتب طلبك ثم أرسله عبر واتساب، أو اتصل مباشرة — نرد خلال ساعات العمل.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -830,59 +838,24 @@
     });
   })();
 
-  const form = document.getElementById('qf');
+  // زر واتساب: يحمل نص الطلب الذي كتبه الزائر
+  (function () {
+    const details = document.getElementById('details');
+    const wa = document.getElementById('waSend');
+    if (!details || !wa) return;
 
-  const MSG = {
-    phone:   'اكتب رقم جوال صحيحاً، مثل 0512345678',
-    details: 'صف المطلوب باختصار — نوع العمل والحي يكفيان.'
-  };
+    const NUMBER = '966536649174';
+    const DEFAULT_MSG = 'السلام عليكم، أرغب في طلب معاينة وعرض سعر.';
 
-  function setErr(el, text){
-    document.getElementById(el.id + '-e').textContent = text;
-    el.setAttribute('aria-invalid', text ? 'true' : 'false');
-  }
-
-  function check(el){
-    const v = el.value.trim();
-    let t = '';
-    if (!v) {
-      t = MSG[el.id];
-    } else if (el.id === 'phone' && !/^(?:\+?966|0)?5\d{8}$/.test(v.replace(/[\s-]/g, ''))) {
-      t = MSG.phone;
+    function sync() {
+      const text = details.value.trim() || DEFAULT_MSG;
+      wa.href = 'https://wa.me/' + NUMBER + '?text=' + encodeURIComponent(text);
     }
-    setErr(el, t);
-    return !t;
-  }
 
-  const fields = ['phone', 'details'].map(function (id) {
-    return document.getElementById(id);
-  });
+    details.addEventListener('input', sync);
+    sync();
+  })();
 
-  // نتحقق عند مغادرة الحقل، ثم نتابع التصحيح لحظياً — لا نلاحق المستخدم أثناء الكتابة
-  fields.forEach(function (el) {
-    el.addEventListener('blur', function () { check(el); });
-    const live = el.tagName === 'SELECT' ? 'change' : 'input';
-    el.addEventListener(live, function () {
-      if (el.getAttribute('aria-invalid') === 'true') check(el);
-    });
-  });
-
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    const bad = fields.filter(function (el) { return !check(el); });
-    if (bad.length) { bad[0].focus(); return; }
-
-    const btn = form.querySelector('.submit');
-    const original = btn.textContent;
-    btn.textContent = 'تم استلام طلبك';
-    btn.classList.add('sent');
-    setTimeout(function () {
-      btn.textContent = original;
-      btn.classList.remove('sent');
-      form.reset();
-      fields.forEach(function (el) { setErr(el, ''); });
-    }, 2600);
-  });
 </script>
 
 </body>
