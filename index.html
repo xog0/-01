@@ -263,9 +263,10 @@
   }
   .ph b{font-family:'Cairo',sans-serif; font-size:.85rem; font-weight:700; color:var(--glass);}
   .ph span{font-size:.72rem;}
-  /* الصورة تغطي الموضع؛ وإن لم يوجد الملف يظهر الوصف تحتها */
+  /* الصورة تغطي الموضع؛ وإن لم يوجد الملف يظهر الوصف داخل إطار منقّط */
   .ph{position:relative; overflow:hidden;}
   .ph img{position:absolute; inset:0; width:100%; height:100%; object-fit:cover;}
+  .ph:has(img){border:0;}
 
   /* ===== المعرض ===== */
   .gallery{background:var(--surface); border-block:1px solid var(--line);}
