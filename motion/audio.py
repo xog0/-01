@@ -109,8 +109,9 @@ def place(buf, clip, at):
     buf[s:e] += clip[: e - s]
 
 
-def load_audio(path):
-    raw = subprocess.check_output(["ffmpeg", "-v", "error", "-i", path, "-f", "s16le", "-ac", "1", "-ar", str(SR), "-"])
+def load_audio(path, af=None):
+    raw = subprocess.check_output(["ffmpeg", "-v", "error", "-i", path, *(["-af", af] if af else []),
+                                   "-f", "s16le", "-ac", "1", "-ar", str(SR), "-"])
     return np.frombuffer(raw, dtype=np.int16).astype(np.float64) / 32768
 
 
@@ -119,7 +120,8 @@ async def tts_lines(cfg, build):
     paths = []
     for i, ln in enumerate(cfg["lines"]):
         p = os.path.join(build, f"vo_{i}.mp3")
-        await edge_tts.Communicate(ln["text"], cfg["voice"], rate=cfg["rate"]).save(p)
+        proxy = os.environ.get("HTTPS_PROXY") or os.environ.get("https_proxy")
+        await edge_tts.Communicate(ln["text"], cfg["voice"], rate=cfg["rate"], proxy=proxy).save(p)
         paths.append(p)
     return paths
 
@@ -129,13 +131,12 @@ def voiceover(dur, build):
     paths = asyncio.run(tts_lines(cfg, build))
     vo = np.zeros(int(dur * SR))
     for ln, p in zip(cfg["lines"], paths):
-        y = load_audio(p)
+        trim = "silenceremove=start_periods=1:start_threshold=-45dB,areverse," \
+               "silenceremove=start_periods=1:start_threshold=-45dB,areverse"
         room = ln["end"] - ln["start"]
-        if len(y) / SR > room:  # speed up to fit the scene
-            fast = p.replace(".mp3", "_fit.wav")
-            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", p, "-filter:a",
-                            f"atempo={min(2.0, len(y) / SR / room):.3f}", fast], check=True)
-            y = load_audio(fast)
+        y = load_audio(p, trim)
+        if len(y) / SR > room:  # speed up a little to fit the scene (capped so it stays natural)
+            y = load_audio(p, f"{trim},atempo={min(1.2, len(y) / SR / room):.3f}")
         place(vo, y, ln["start"])
     return vo
 
