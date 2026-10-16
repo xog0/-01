@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build the motion-graphics video.  ./build.sh            -> output/motion.mp4 (music + sfx)
 #                                   ./build.sh --voice    -> adds the Egyptian voiceover (needs edge-tts + internet)
+#                                   ./build.sh --voice --elevenlabs  -> voiceover from ElevenLabs (needs ELEVENLABS_API_KEY)
 set -euo pipefail
 cd "$(dirname "$0")"
 export NODE_PATH="${NODE_PATH:-$(npm root -g)}"

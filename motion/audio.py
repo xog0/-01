@@ -126,9 +126,33 @@ async def tts_lines(cfg, build):
     return paths
 
 
+def elevenlabs_lines(cfg, build):
+    """ElevenLabs TTS. Needs ELEVENLABS_API_KEY; voice from ELEVENLABS_VOICE_ID or voiceover.json."""
+    import urllib.request
+    key = os.environ["ELEVENLABS_API_KEY"]
+    el = cfg.get("elevenlabs", {})
+    voice = os.environ.get("ELEVENLABS_VOICE_ID") or el["voice_id"]
+    paths = []
+    for i, ln in enumerate(cfg["lines"]):
+        text = ln["variants"][el.get("variant", 0)] if "variants" in ln else ln["text"]
+        body = json.dumps({"text": text, "model_id": el.get("model", "eleven_v3"), "language_code": "ar",
+                           "voice_settings": el.get("voice_settings", {"stability": 0.5, "similarity_boost": 0.8})})
+        req = urllib.request.Request(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{voice}?output_format=mp3_44100_128",
+            data=body.encode(), headers={"xi-api-key": key, "Content-Type": "application/json"})
+        p = os.path.join(build, f"vo_{i}.mp3")
+        with urllib.request.urlopen(req, timeout=120) as r, open(p, "wb") as f:
+            f.write(r.read())
+        paths.append(p)
+    return paths
+
+
 def voiceover(dur, build):
     cfg = json.load(open(os.path.join(HERE, "voiceover.json"), encoding="utf-8"))
-    paths = asyncio.run(tts_lines(cfg, build))
+    if "--elevenlabs" in sys.argv:
+        paths = elevenlabs_lines(cfg, build)
+    else:
+        paths = asyncio.run(tts_lines(cfg, build))
     vo = np.zeros(int(dur * SR))
     for ln, p in zip(cfg["lines"], paths):
         trim = "silenceremove=start_periods=1:start_threshold=-45dB,areverse," \
