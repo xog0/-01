@@ -349,10 +349,17 @@
         "source": "github",
         "repo": "JuliusBrussee/caveman"
       }
+    },
+    "hojas": {
+      "source": {
+        "source": "github",
+        "repo": "rakaga66/hojas-studio"
+      }
     }
   },
   "enabledPlugins": {
     "claude-mem@thedotmack": true,
-    "caveman@caveman": true
+    "caveman@caveman": true,
+    "hojas-studio@hojas": true
   }
 }
