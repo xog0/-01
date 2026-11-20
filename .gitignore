@@ -1,0 +1,6 @@
+# Python bytecode — generated whenever a skill's scripts are run
+__pycache__/
+*.py[cod]
+
+# Local skill scratch output
+design-system/
