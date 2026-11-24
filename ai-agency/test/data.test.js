@@ -6,6 +6,7 @@ const oldAgency = () => {
   const s = createInitialState();
   s.employees = s.employees.filter((e) => e.name !== 'حمو');
   s.tasks = s.tasks.filter((t) => t.empId !== 'e5');
+  s.employees.find((e) => e.name === 'سارة').managerId = null;
   delete s.migrations;
   return s;
 };
@@ -15,7 +16,7 @@ test('a new agency starts with Hamo as CEO under the owner', () => {
   const hamo = s.employees.find((e) => e.name === 'حمو');
   assert.equal(titleFor(hamo), 'المدير التنفيذي');
   assert.equal(hamo.managerId, null);
-  assert.equal(s.employees.find((e) => e.name === 'سارة').managerId, null);
+  assert.equal(s.employees.find((e) => e.name === 'سارة').managerId, hamo.id);
   assert.equal(new Set(s.employees.map((e) => e.desk)).size, s.employees.length);
   assert.equal(applyMigrations(s), false);
 });
@@ -32,4 +33,26 @@ test('an older agency gets Hamo once, on a free desk, with his tasks', () => {
   s.employees = s.employees.filter((e) => e !== hamo);
   assert.equal(applyMigrations(s), false);
   assert.ok(!s.employees.some((e) => e.name === 'حمو'));
+});
+
+test('an older agency moves Sara under Hamo once, keeping her team under her', () => {
+  const s = oldAgency();
+  applyMigrations(s);
+  const hamo = s.employees.find((e) => e.name === 'حمو');
+  const sara = s.employees.find((e) => e.name === 'سارة');
+  assert.equal(sara.managerId, hamo.id);
+  assert.equal(hamo.managerId, null);
+  assert.ok(s.employees.filter((e) => ['خالد', 'ليلى', 'عمر'].includes(e.name)).every((e) => e.managerId === sara.id));
+  sara.managerId = null; // the owner moves her back: it sticks
+  assert.equal(applyMigrations(s), false);
+  assert.equal(sara.managerId, null);
+});
+
+test('an agency that already received Hamo only gets the reporting change', () => {
+  const s = oldAgency();
+  s.migrations = ['add-hamo-ceo'];
+  s.employees.push({ id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null });
+  assert.equal(applyMigrations(s), true);
+  assert.equal(s.employees.filter((e) => e.name === 'حمو').length, 1);
+  assert.equal(s.employees.find((e) => e.name === 'سارة').managerId, 'e130');
 });

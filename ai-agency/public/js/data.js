@@ -132,7 +132,7 @@ const HAMO = { id: 'e5', name: 'حمو', gender: 'm', dept: 'executive', level: 
 
 const STARTING_TEAM = [
   HAMO,
-  { id: 'e1', name: 'سارة', gender: 'f', dept: 'strategy', level: 5, xp: 420, managerId: null,
+  { id: 'e1', name: 'سارة', gender: 'f', dept: 'strategy', level: 5, xp: 420, managerId: 'e5',
     personality: 'قيادية هادئة، تفكر بالأرقام والأهداف، تحب الوضوح وتطرح أسئلة ذكية قبل البدء.' },
   { id: 'e2', managerId: 'e1', name: 'خالد', gender: 'm', dept: 'content', level: 3, xp: 195,
     personality: 'مبدع وصاحب حس لغوي عالٍ، يحب العناوين الجذابة والقصص، مرح في حديثه.' },
@@ -188,6 +188,15 @@ const MIGRATIONS = [
       for (const [, title, description, priority] of DEFAULT_TASKS.filter(([who]) => who === HAMO.id)) {
         state.tasks.push({ id: newId(state, 't'), empId: id, title, description, priority, status: 'todo', output: '', createdAt: Date.now() });
       }
+    },
+  },
+  {
+    // Sara reports to Hamo; her own team stays under her.
+    key: 'sara-under-hamo',
+    run(state) {
+      const hamo = state.employees.find((e) => e.name === HAMO.name);
+      const sara = state.employees.find((e) => e.name === 'سارة');
+      if (hamo && sara && hamo.managerId !== sara.id) sara.managerId = hamo.id;
     },
   },
 ];
