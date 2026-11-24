@@ -46,7 +46,7 @@ export async function askEmployee(payload) {
   return data.truncated ? `${data.reply}\n\n(…توقف الرد لأنه طويل جداً)` : data.reply;
 }
 
-const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default' };
+const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick' };
 
 async function askViaSample(sample, payload) {
   const req = validateChatRequest(payload);
@@ -84,6 +84,11 @@ async function demoReply({ mode, persona, messages }) {
     ]);
   }
   if (mode === 'assign') return ''; // the app falls back to each department's task library
+  if (mode === 'review') {
+    return JSON.stringify(Math.random() < 0.3
+      ? { decision: 'revise', feedback: 'بداية جيدة، لكن أضف أمثلة عملية أوضح وخطوة قياس واحدة على الأقل.' }
+      : { decision: 'approve', feedback: 'عمل واضح ومناسب. شكراً لك.' });
+  }
   if (mode === 'summary') {
     return `**القرارات:**\n- المضي في الفكرة الرئيسية مع اختبار مصغّر أولاً.\n\n**المهام:**\n- ${persona.name}: متابعة التنفيذ وإعداد تقرير.\n\n**الخطوة التالية:** اجتماع مراجعة بعد أسبوع.${note}`;
   }

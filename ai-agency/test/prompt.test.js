@@ -63,3 +63,12 @@ test('a manager is told how to issue an assignment order only in chat', () => {
   assert.doesNotMatch(buildSystemPrompt(validateChatRequest(base({ persona: boss, mode: 'task' }))), /\[\[تكليف:/);
   assert.doesNotMatch(buildSystemPrompt(validateChatRequest(base())), /\[\[تكليف:/);
 });
+
+test('review mode asks for a JSON verdict; bio and memory reach the prompt', () => {
+  const p = { ...persona, bio: 'عمرك 34 سنة', memory: 'آخر مهامك المنجزة: خطة الربع.' };
+  const sys = buildSystemPrompt(validateChatRequest(base({ mode: 'review', persona: p })));
+  assert.match(sys, /"decision"/);
+  assert.match(sys, /عمرك 34 سنة/);
+  assert.match(sys, /خطة الربع/);
+  assert.throws(() => validateChatRequest(base({ persona: { ...persona, memory: 'x'.repeat(2000) } })), ValidationError);
+});

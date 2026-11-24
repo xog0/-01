@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createInitialState, applyMigrations, titleFor, freeSeat, moveManagersToOffices } from '../public/js/data.js';
+import { createInitialState, applyMigrations, titleFor, freeSeat, moveManagersToOffices, lookFor, bioFor } from '../public/js/data.js';
 
 const oldAgency = () => {
   const s = createInitialState();
@@ -112,7 +112,7 @@ test('a new agency has one intern per department under its head, all on separate
   assert.equal(interns.length, 12);
   assert.equal(new Set(interns.map((e) => e.dept)).size, 12);
   assert.equal(new Set(s.employees.map((e) => e.desk)).size, s.employees.length);
-  assert.ok(s.employees.every((e) => e.desk < 33));
+  assert.ok(s.employees.every((e) => e.desk < 34));
   assert.ok(s.employees.filter((e) => e.desk >= 25).every((e) => e.level >= 5));
   assert.ok(interns.every((e) => e.desk < 25));
   const byName = (n) => s.employees.find((e) => e.name === n);
@@ -144,7 +144,7 @@ test('interns stop at the desk limit instead of overflowing', () => {
   for (let i = 0; s.employees.length < 22; i++) s.employees.push({ id: `x${i}`, name: `x${i}`, dept: 'seo', level: 2, desk: 100 });
   s.employees.forEach((e, i) => { e.desk = i; });
   applyMigrations(s);
-  assert.ok(s.employees.every((e) => e.desk < 33));
+  assert.ok(s.employees.every((e) => e.desk < 34));
   assert.ok(s.employees.filter((e) => e.level === 0).every((e) => e.desk < 25));
   assert.equal(new Set(s.employees.map((e) => e.desk)).size, s.employees.length);
 });
@@ -178,8 +178,45 @@ test('seats: non-managers never get offices; managers fall back to open desks wh
   const s = createInitialState();
   assert.ok(freeSeat(s, 0) < 25);
   assert.equal(freeSeat(s, 6), 27);
-  for (let k = 27; k < 33; k++) s.employees.push({ id: `o${k}`, level: 5, desk: k });
+  for (let k = 27; k < 34; k++) s.employees.push({ id: `o${k}`, level: 5, desk: k });
   assert.ok(freeSeat(s, 6) < 25);
   assert.equal(freeSeat(s, 6, { officeOnly: true }), undefined);
   assert.deepEqual(moveManagersToOffices(s), []);
+});
+
+test('the CEO suite is only for the CEO, and the top CEO is moved into it once', () => {
+  const s = createInitialState();
+  s.employees = s.employees.filter((e) => e.name !== 'حمو');
+  assert.notEqual(freeSeat(s, 7, { officeOnly: true }), 25); // a GM does not get the suite
+  assert.equal(freeSeat(s, 8, { officeOnly: true }), 25);
+  // An older agency where a manager sat in seat 25 and the CEO elsewhere: they swap.
+  const old = oldAgency();
+  old.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo', 'sales-under-hamo', 'hr-under-hamo', 'add-interns', 'manager-offices'];
+  old.employees.push({ id: 'e130', name: 'حمو', dept: 'executive', level: 8, xp: 1000, desk: 27, managerId: null });
+  old.employees.find((e) => e.name === 'سارة').desk = 25;
+  assert.equal(applyMigrations(old), true);
+  assert.equal(old.employees.find((e) => e.name === 'حمو').desk, 25);
+  assert.equal(old.employees.find((e) => e.name === 'سارة').desk, 27);
+});
+
+test('looks and bios are stable and fit the person', () => {
+  const s = createInitialState();
+  const byName = (n) => s.employees.find((e) => e.name === n);
+  assert.equal(lookFor(byName('سارة')).hair, 'hijab');
+  assert.equal(lookFor(byName('حمو')).outfit, 'suit');
+  assert.equal(lookFor(byName('سلمى')).outfit, 'casual');
+  const hire = { id: 'e777', name: 'نادر', gender: 'm', dept: 'seo', level: 3 };
+  assert.deepEqual(lookFor(hire), lookFor({ ...hire }));
+  assert.notEqual(lookFor(hire).hair, 'hijab');
+  assert.equal(bioFor(byName('عمر')).years, 5);
+  assert.match(bioFor(hire).background, /تحسين محركات البحث/);
+});
+
+test('generated looks always pick a real skin and hair colour', () => {
+  for (let i = 0; i < 400; i++) {
+    const l = lookFor({ id: `e${i}`, name: `موظف${i}`, gender: i % 2 ? 'f' : 'm', level: i % 9 });
+    assert.ok(l.skin >= 0 && l.skin < 4, `skin ${l.skin}`);
+    assert.ok(l.hairColor >= 0 && l.hairColor < 4, `hair ${l.hairColor}`);
+    assert.ok(l.height >= 0.95 && l.height < 1.06);
+  }
 });

@@ -1,19 +1,24 @@
 // Company model: career ladder, departments, starting team, default tasks,
 // and persistence in localStorage.
 
-// Seats: desks 0..24 are the open-plan area, 25..32 are private offices
-// in the executive wing, kept for managers (level "مدير" and above).
+// Seats: desks 0..24 are the open-plan area. 25 is the CEO suite at the end
+// of the executive wing, 26..33 are private offices for managers (level
+// "مدير" and above).
 export const OPEN_DESKS = 25;
-export const PRIVATE_OFFICES = 8;
+export const CEO_SUITE = OPEN_DESKS;
+export const PRIVATE_OFFICES = 9; // the suite plus 8 offices
 export const MAX_DESKS = OPEN_DESKS + PRIVATE_OFFICES;
 export const MANAGER_LEVEL = 5;
+export const CEO_LEVEL = 8;
 export const isPrivateOffice = (desk) => desk >= OPEN_DESKS;
 
-/** A free seat for someone at this level: managers get a private office when
- *  one is free, everyone else (and managers when the wing is full) an open desk. */
+/** A free seat for someone at this level: the CEO gets the suite, managers a
+ *  private office when one is free, everyone else (and managers when the wing
+ *  is full) an open desk. */
 export function freeSeat(state, level, { officeOnly = false, openOnly = false } = {}) {
   const used = new Set(state.employees.map((e) => e.desk));
-  const offices = [...Array(PRIVATE_OFFICES).keys()].map((k) => OPEN_DESKS + k).filter((d) => !used.has(d));
+  const offices = [...Array(PRIVATE_OFFICES).keys()].map((k) => OPEN_DESKS + k)
+    .filter((d) => !used.has(d) && (d !== CEO_SUITE || level >= CEO_LEVEL));
   const open = [...Array(OPEN_DESKS).keys()].filter((d) => !used.has(d));
   if (officeOnly) return offices[0];
   if (openOnly || level < MANAGER_LEVEL) return open[0];
@@ -144,7 +149,7 @@ export const ROLE_TASKS = {
 
 export const TASK_XP = { low: 10, medium: 20, high: 35 };
 export const PRIORITY_NAMES = { low: 'منخفضة', medium: 'متوسطة', high: 'عالية' };
-export const STATUS_NAMES = { todo: 'قيد الانتظار', doing: 'قيد التنفيذ', done: 'مكتملة' };
+export const STATUS_NAMES = { todo: 'قيد الانتظار', doing: 'قيد التنفيذ', review: 'بانتظار المراجعة', done: 'مكتملة' };
 
 const HAMO = { id: 'e5', name: 'حمو', gender: 'm', dept: 'executive', level: 8, xp: 1000, managerId: null,
     personality: 'قائد صاحب رؤية، حاسم وهادئ، يركّز على النمو والصورة الكبيرة ويطلب من الفريق نتائج واضحة.' };
@@ -210,6 +215,82 @@ function addInterns(state) {
   return added;
 }
 
+// ---- who people are: appearance and background ---------------------------
+// Named people have a fixed look and story; anyone else gets one derived from
+// their id, so it stays the same on every device without being stored.
+const LOOKS = {
+  'حمو': { hair: 'short', skin: 1, hairColor: 2, beard: true, height: 1.05 },
+  'سارة': { hair: 'hijab', hijab: 0x1e2a4a, skin: 0, glasses: true },
+  'خالد': { hair: 'curly', skin: 2, hairColor: 0, beard: true },
+  'ليلى': { hair: 'long', skin: 3, hairColor: 3, height: 0.96 },
+  'عمر': { hair: 'buzz', skin: 1, hairColor: 2, glasses: true },
+  'يوسف': { hair: 'short', skin: 2, hairColor: 2, beard: true },
+  'رنا': { hair: 'hijab', hijab: 0xcbb994, skin: 0, height: 0.95 },
+  'زياد': { hair: 'short', skin: 3, hairColor: 1 },
+  'مازن': { hair: 'buzz', skin: 1, hairColor: 2, beard: true, height: 1.04 },
+  'دانة': { hair: 'hijab', hijab: 0x6b1f2e, skin: 1 },
+  'سلمى': { hair: 'long', skin: 0, hairColor: 0, glasses: true },
+  'فيصل': { hair: 'curly', skin: 2, hairColor: 2 },
+  'لينا': { hair: 'bun', skin: 3, hairColor: 3, height: 0.95 },
+  'تالا': { hair: 'long', skin: 1, hairColor: 1 },
+  'كريم': { hair: 'short', skin: 0, hairColor: 0, glasses: true },
+  'جود': { hair: 'hijab', hijab: 0x15151a, skin: 3 },
+  'ماجد': { hair: 'short', skin: 1, hairColor: 2, beard: true },
+};
+
+const BIOS = {
+  'حمو': { age: 46, years: 22, background: 'بدأ في المبيعات، ثم أسس وأدار وكالتين قبل أن يقود الوكالة. يحمل ماجستير في إدارة الأعمال.',
+    style: 'يتحدث باختصار وثقة، يسأل عن الأرقام وأثر القرار على العميل، يشكر الفريق علناً وينتقد على انفراد.' },
+  'سارة': { age: 34, years: 11, background: 'عملت في التخطيط الاستراتيجي لدى وكالة إعلانية كبيرة، وتحمل بكالوريوس تسويق وشهادة في تحليل البيانات.',
+    style: 'منظمة ومباشرة، تبدأ بالهدف ثم الخطة، وتطلب مواعيد تسليم واضحة.' },
+  'خالد': { age: 29, years: 6, background: 'صحفي سابق انتقل إلى الكتابة الإعلانية، وكتب لعلامات في الأغذية والسياحة.',
+    style: 'ودود ومرح، يستخدم الأمثلة والقصص، ويحب أن يقترح أكثر من صيغة.' },
+  'ليلى': { age: 26, years: 4, background: 'بدأت صانعة محتوى على إنستغرام، ثم أدارت حسابات متاجر إلكترونية.',
+    style: 'سريعة ومتحمسة، تكتب بجمل قصيرة وتستشهد بأمثلة من المنصات.' },
+  'عمر': { age: 28, years: 5, background: 'محلل بيانات سابق في شركة اتصالات، ويدير حملات ميتا وجوجل منذ ثلاث سنوات.',
+    style: 'هادئ ودقيق، يربط كل رأي برقم أو تجربة، ويقترح طريقة للقياس.' },
+};
+
+function hashOf(text) {
+  let h = 2166136261;
+  for (const ch of text) h = Math.imul(h ^ ch.codePointAt(0), 16777619);
+  return h >>> 0;
+}
+
+/** How someone looks in the office (hair, skin, clothes by rank, height). */
+export function lookFor(emp) {
+  const h = hashOf(`${emp.id}:${emp.name}`);
+  const female = emp.gender === 'f';
+  const base = {
+    hair: female ? ['long', 'bun', 'hijab'][h % 3] : ['short', 'buzz', 'curly'][h % 3],
+    hijab: [0x1e2a4a, 0xcbb994, 0x6b1f2e, 0x15151a, 0x3d5a4a][(h >>> 3) % 5],
+    skin: (h >>> 6) % 4,
+    hairColor: (h >>> 9) % 4,
+    beard: !female && (h >>> 12) % 5 < 2,
+    glasses: (h >>> 15) % 4 === 0,
+    height: 0.95 + ((h >>> 18) % 10) / 100,
+  };
+  const outfit = emp.level >= 7 ? 'suit' : emp.level >= MANAGER_LEVEL ? 'tie' : emp.level >= 3 ? 'shirt' : 'casual';
+  const named = LOOKS[emp.name] ? { beard: false, glasses: false, height: 1, ...LOOKS[emp.name] } : {};
+  return { ...base, ...named, outfit };
+}
+
+/** Age, experience, background and communication style for the AI persona. */
+export function bioFor(emp) {
+  if (BIOS[emp.name]) return BIOS[emp.name];
+  const h = hashOf(`${emp.name}:${emp.id}`);
+  const years = [0, 1, 3, 5, 7, 9, 12, 16, 20][emp.level] ?? 3;
+  const dept = DEPARTMENTS[emp.dept]?.name || '';
+  return {
+    age: 22 + years + (h % 4),
+    years,
+    background: emp.level === 0
+      ? `خريج حديث بدأ مسيرته متدرباً في قسم ${dept}، ويتعلم من زملائه.`
+      : `عمل ${years} سنوات في ${dept} لدى شركات ووكالات مختلفة قبل الانضمام إلى الوكالة.`,
+    style: emp.level === 0 ? 'مهذب ومتحمس، يسأل عند الشك ويعرض ما تعلمه بتواضع.' : 'مهني وواضح، يقدم رأيه مع سبب مختصر.',
+  };
+}
+
 const STORE_KEY = 'ai-agency-state-v1';
 
 export function createInitialState() {
@@ -263,6 +344,7 @@ const MIGRATIONS = [
   { key: 'hr-under-hamo', run: (state) => deptHeadsUnderHamo(state, 'hr') },
   { key: 'add-interns', run: addInterns },
   { key: 'manager-offices', run: moveManagersToOffices },
+  { key: 'ceo-suite', run: ceoToSuite },
 ];
 
 // Whoever heads a department (its members whose manager is outside it)
@@ -280,6 +362,15 @@ function deptHeadsUnderHamo(state, dept) {
 
 /** Managers sitting in the open area move into free private offices,
  *  highest rank first. Returns the ids of those who moved. */
+/** The top CEO sits in the suite: swaps seats with whoever is there. */
+function ceoToSuite(state) {
+  const ceo = state.employees.filter((e) => e.level >= CEO_LEVEL).sort((a, b) => (b.xp || 0) - (a.xp || 0))[0];
+  if (!ceo || ceo.desk === CEO_SUITE) return;
+  const occupant = state.employees.find((e) => e.desk === CEO_SUITE);
+  if (occupant) occupant.desk = ceo.desk;
+  ceo.desk = CEO_SUITE;
+}
+
 export function moveManagersToOffices(state) {
   const moved = [];
   const managers = state.employees.filter((e) => e.level >= MANAGER_LEVEL && !isPrivateOffice(e.desk))
@@ -313,7 +404,7 @@ export function loadState() {
       const s = JSON.parse(raw);
       if (s && Array.isArray(s.employees) && Array.isArray(s.tasks)) {
         s.employees.forEach((e) => { e.status = 'idle'; });
-        s.tasks.forEach((t) => { if (t.status === 'doing') t.status = 'todo'; });
+        s.tasks.forEach((t) => { if (t.status === 'doing' || t.status === 'review') t.status = 'todo'; });
         return s;
       }
     }

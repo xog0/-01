@@ -88,7 +88,7 @@ export async function connectCloud() {
       tasks: c.tasks.map(({ hasOutput, ...t }) => ({
         ...t,
         output: out[t.id]?.text || '',
-        status: t.status === 'doing' ? 'todo' : t.status,
+        status: t.status === 'doing' || t.status === 'review' ? 'todo' : t.status,
       })),
       chats: Object.fromEntries(Object.entries(byId(chats)).map(([k, v]) => [k, v.messages || []])),
       meetings: Object.values(byId(meetings)).sort((a, b) => a.at - b.at),

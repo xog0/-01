@@ -8,7 +8,7 @@ export const LIMITS = Object.freeze({
   maxLongFieldChars: 1200,
 });
 
-const MODES = new Set(['chat', 'task', 'meeting', 'summary', 'assign']);
+const MODES = new Set(['chat', 'task', 'meeting', 'summary', 'assign', 'review']);
 
 export class ValidationError extends Error {}
 
@@ -41,6 +41,8 @@ export function validateChatRequest(body) {
     personality: str(p.personality, LIMITS.maxLongFieldChars, 'personality', { required: false }),
     manager: str(p.manager, LIMITS.maxFieldChars, 'manager', { required: false }),
     reports: str(p.reports, LIMITS.maxLongFieldChars, 'reports', { required: false }),
+    bio: str(p.bio, LIMITS.maxLongFieldChars, 'bio', { required: false }),
+    memory: str(p.memory, LIMITS.maxLongFieldChars, 'memory', { required: false }),
   };
 
   const c = body.company ?? {};
@@ -93,6 +95,10 @@ const MODE_INSTRUCTIONS = {
     'لا تكرر مهامه المفتوحة، واجعل كل وصف محدداً وقابلاً للتنفيذ في جلسة عمل واحدة، مع ذكر المُخرَج المطلوب بوضوح. ' +
     'أعد JSON فقط دون أي نص قبله أو بعده، بهذا الشكل: ' +
     '{"tasks":[{"empId":"معرّف العضو","title":"عنوان قصير","description":"المطلوب بالتفصيل","priority":"low أو medium أو high"}]}',
+  review:
+    'أنت مدير وصلك عمل سلّمه أحد أفراد فريقك. راجعه كما يراجع مدير حقيقي: هل نفّذ المطلوب، وهل هو واضح وصالح للاستخدام مع عميل؟ ' +
+    'كن عادلاً: اعتمد العمل الجيد حتى لو لم يكن مثالياً، واطلب التعديل فقط عند نقص حقيقي يمكن إصلاحه. ' +
+    'أعد JSON فقط دون أي نص قبله أو بعده: {"decision":"approve أو revise","feedback":"ملاحظتك للموظف بصوتك في جملة إلى ثلاث جمل"}',
   summary:
     'أنت أعلى الحاضرين رتبة وانتهى الاجتماع للتو. اكتب محضراً موجزاً: ' +
     '1) القرارات، 2) المهام المطلوبة مع اسم المسؤول عن كل مهمة، 3) الخطوة التالية. ' +
@@ -108,10 +114,14 @@ export function buildSystemPrompt({ mode, persona, company }) {
   if (persona.manager) lines.push(`مديرك المباشر: ${persona.manager}.`);
   if (persona.skills) lines.push(`مهاراتك: ${persona.skills}`);
   if (persona.personality) lines.push(`شخصيتك وأسلوبك: ${persona.personality}`);
+  if (persona.bio) lines.push(`نبذة عنك: ${persona.bio}`);
+  if (persona.memory) lines.push(`من ذاكرتك في العمل: ${persona.memory}`);
   if (company.team) lines.push(`زملاؤك في الفريق: ${company.team}`);
   lines.push(
     'تحدث بالعربية الفصحى المبسطة دائماً، بشخصيتك أنت، وبما يتناسب مع مستواك الوظيفي وصلاحياتك.',
     'إذا لم تتوفر لديك معلومة (أرقام حقيقية، بيانات عميل) فقل ذلك واقترح افتراضاً معقولاً بدلاً من اختلاق أرقام.',
+    'تصرّف كموظف حقيقي في يوم عمل: لك رأيك وخبرتك وأسلوبك، وقد تختلف مع غيرك بأدب، وتذكر أعمالك السابقة حين تفيد. ' +
+      'إذا سُئلت مباشرة هل أنت ذكاء اصطناعي فأجب بصدق أنك موظف افتراضي يعمل بالذكاء الاصطناعي.',
     MODE_INSTRUCTIONS[mode],
   );
   if (mode === 'chat' && persona.reports) {

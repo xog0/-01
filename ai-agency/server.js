@@ -16,7 +16,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '127.0.0.1';
 const MODEL = process.env.AGENCY_MODEL || 'claude-opus-5-5';
 const MAX_BODY_BYTES = 300_000;
-const RATE_LIMIT = { windowMs: 60_000, max: Number(process.env.RATE_LIMIT_PER_MIN) || 30 };
+const RATE_LIMIT = { windowMs: 60_000, max: Number(process.env.RATE_LIMIT_PER_MIN) || 120 };
 
 const hasKey = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
 const client = hasKey ? new Anthropic() : null;
@@ -105,7 +105,7 @@ async function serveFile(res, root, relPath) {
 }
 
 // --- Claude call ----------------------------------------------------------
-const MAX_TOKENS = { chat: 2000, meeting: 800, task: 8000, summary: 1500, assign: 4000 };
+const MAX_TOKENS = { chat: 2000, meeting: 800, task: 8000, summary: 1500, assign: 4000, review: 800 };
 
 async function askClaude(req) {
   const system = buildSystemPrompt(req);

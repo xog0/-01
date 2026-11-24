@@ -1,7 +1,7 @@
 import { createOffice, ROOMS } from './scene.js';
 import {
   LADDER, DEPARTMENTS, POSITIONS, OPEN_DESKS, PRIVATE_OFFICES, MANAGER_LEVEL, freeSeat, isPrivateOffice, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
-  titleFor, loadState, saveState, createInitialState, applyMigrations, newId,
+  titleFor, lookFor, bioFor, loadState, saveState, createInitialState, applyMigrations, newId,
 } from './data.js';
 import { askEmployee, backendStatus } from './api.js';
 import { connectCloud } from './cloud.js';
@@ -73,8 +73,22 @@ const emp = (id) => state.employees.find((e) => e.id === id);
 const colorOf = (e) => DEPARTMENTS[e.dept].color;
 const byRank = (a, b) => b.level - a.level || b.xp - a.xp;
 
+const actorOf = (e) => ({ ...e, color: colorOf(e), look: lookFor(e) });
+
+// What someone remembers at work: their last finished tasks and the last
+// note their manager gave them.
+function memoryOf(e) {
+  const done = state.tasks.filter((t) => t.empId === e.id && t.status === 'done').sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0));
+  const parts = [];
+  if (done.length) parts.push(`آخر مهامك المنجزة: ${done.slice(0, 4).map((t) => t.title).join('، ')}.`);
+  const note = done.find((t) => t.reviews?.length)?.reviews.at(-1);
+  if (note?.feedback) parts.push(`آخر ملاحظة من ${emp(note.by)?.name || 'مديرك'} على عملك: "${note.feedback}"`);
+  return parts.join(' ').slice(0, 1100);
+}
+
 function personaOf(e) {
   const mgr = e.managerId ? emp(e.managerId) : null;
+  const bio = bioFor(e);
   return {
     name: e.name,
     title: titleFor(e),
@@ -84,6 +98,8 @@ function personaOf(e) {
     personality: e.personality || '',
     manager: mgr ? `${mgr.name} (${titleFor(mgr)})` : 'مالك الوكالة مباشرة',
     reports: teamOf(e.id).map((m) => `${m.name} (${titleFor(m)})`).join('، '),
+    bio: `عمرك ${bio.age} سنة، وخبرتك ${bio.years} ${bio.years > 10 ? 'سنة' : 'سنوات'}. ${bio.background} أسلوبك في التواصل: ${bio.style}`.slice(0, 1100),
+    memory: memoryOf(e),
   };
 }
 function companyOf(except) {
@@ -100,11 +116,14 @@ function ask(e, mode, messages) {
 // ------------------------------------------------------------ 3D office
 const office = createOffice($('#stage'), { onSelect: (id) => selectEmployee(id) });
 
+const bubbles = new Map(); // last speech bubble per employee, to restore after an interruption
 function setStatus(e, status, bubble = '') {
   e.status = status;
+  bubbles.set(e.id, bubble);
   office.setStatus(e.id, status, bubble);
   renderRoster();
 }
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ------------------------------------------------------------ header + roster
 function renderHeader() {
@@ -190,6 +209,7 @@ $('#chat-form').addEventListener('submit', async (ev) => {
   history.push({ role: 'user', content: text });
   save();
   busy.add(`chat:${e.id}`);
+  office.recall(e.id);
   const prev = e.status;
   setStatus(e, 'talking', '💬');
   renderPanel();
@@ -229,7 +249,7 @@ $('#chat-input').addEventListener('keydown', (ev) => {
 // ---- tasks
 function taskCard(t, { showOwner = false } = {}) {
   const owner = emp(t.empId);
-  const running = t.status === 'doing';
+  const running = t.status === 'doing' || t.status === 'review';
   return h('div', { class: `task ${t.status}` },
     h('h4', {}, t.title),
     t.description ? h('p', {}, t.description) : null,
@@ -237,7 +257,8 @@ function taskCard(t, { showOwner = false } = {}) {
       showOwner && owner ? h('span', { class: 'badge' }, `👤 ${owner.name}`) : null,
       t.assignedBy && emp(t.assignedBy) ? h('span', { class: 'badge' }, `📋 من ${emp(t.assignedBy).name}`) : null,
       h('span', { class: `badge ${t.priority}` }, `أولوية ${PRIORITY_NAMES[t.priority]}`),
-      h('span', { class: `badge ${t.status}` }, running ? `${STATUS_NAMES.doing}…` : STATUS_NAMES[t.status]),
+      h('span', { class: `badge ${t.status === 'review' ? 'doing' : t.status}` }, running ? `${STATUS_NAMES[t.status]}…` : STATUS_NAMES[t.status]),
+      t.status === 'review' && emp(t.empId)?.managerId ? h('span', { class: 'badge' }, `🧐 ${emp(emp(t.empId).managerId)?.name}`) : null,
       t.status === 'done' ? h('span', { class: 'badge' }, `+${TASK_XP[t.priority]} خبرة`) : null),
     h('div', { class: 'row' },
       t.status === 'todo' ? h('button', { class: 'small primary', onclick: () => runTask(t.id) }, '▶ نفّذ الآن') : null,
@@ -248,7 +269,7 @@ function taskCard(t, { showOwner = false } = {}) {
 
 function renderEmpTasks(e) {
   const list = state.tasks.filter((t) => t.empId === e.id)
-    .sort((a, b) => ['doing', 'todo', 'done'].indexOf(a.status) - ['doing', 'todo', 'done'].indexOf(b.status));
+    .sort((a, b) => ['doing', 'review', 'todo', 'done'].indexOf(a.status) - ['doing', 'review', 'todo', 'done'].indexOf(b.status));
   $('#emp-tasks').replaceChildren(...(list.length ? list.map((t) => taskCard(t)) : [h('div', { class: 'empty' }, 'لا توجد مهام لهذا الموظف.')]));
 }
 
@@ -281,6 +302,34 @@ function redoTask(id) {
   refresh();
 }
 
+function taskPrompt(t, reviewer) {
+  let prompt = `المهمة: ${t.title}\n\nالتفاصيل: ${t.description || 'لا توجد تفاصيل إضافية، استخدم خبرتك.'}\n\nالأولوية: ${PRIORITY_NAMES[t.priority]}`;
+  if (t.feedback && t.output) {
+    prompt += `\n\nهذه نسخة معدّلة. مسودتك السابقة:\n${t.output.slice(0, 2500)}\n\nملاحظات ${reviewer?.name || 'مديرك'}: ${t.feedback}\n` +
+      'عدّل العمل بناءً على الملاحظات وقدّم النسخة النهائية كاملة.';
+  }
+  return prompt;
+}
+
+// The manager reads the delivered work and approves it or asks for changes.
+async function reviewBy(mgr, e, t) {
+  const content = `الموظف: ${e.name} (${titleFor(e)})\nالمهمة: ${t.title}\nالمطلوب: ${t.description || '—'}\n\nالعمل المسلّم:\n${t.output.slice(0, 4500)}`;
+  const reply = await ask(mgr, 'review', [{ role: 'user', content }]);
+  try {
+    const v = JSON.parse(reply.slice(reply.indexOf('{'), reply.lastIndexOf('}') + 1));
+    return {
+      decision: v.decision === 'revise' ? 'revise' : 'approve',
+      feedback: typeof v.feedback === 'string' ? v.feedback.trim().slice(0, 600) : '',
+    };
+  } catch {
+    return { decision: 'approve', feedback: '' };
+  }
+}
+
+// An employee works on a task at their desk. If they report to someone, they
+// walk over to hand it in; the manager reviews it and may ask for one round
+// of changes before signing it off. Reporting straight to the owner means the
+// work is done once delivered.
 async function runTask(id) {
   const t = state.tasks.find((x) => x.id === id);
   const e = t && emp(t.empId);
@@ -288,29 +337,71 @@ async function runTask(id) {
   if (busy.has(e.id)) return toast(`${e.name} مشغول بمهمة أخرى الآن`);
   if (meeting?.attendees.includes(e.id)) return toast(`${e.name} في اجتماع الآن`);
   busy.add(e.id);
+  await office.recall(e.id);
   t.status = 'doing';
+  t.reviews ||= [];
   setStatus(e, 'working', `⌨️ ${t.title}`);
   office.setDeskLit(e.desk, true);
   refresh();
+  const mgr = e.managerId ? emp(e.managerId) : null;
   try {
-    const prompt = `المهمة: ${t.title}\n\nالتفاصيل: ${t.description || 'لا توجد تفاصيل إضافية، استخدم خبرتك.'}\n\nالأولوية: ${PRIORITY_NAMES[t.priority]}`;
-    t.output = await ask(e, 'task', [{ role: 'user', content: prompt }]);
-    t.status = 'done';
-    t.doneAt = Date.now();
-    const before = e.xp;
-    e.xp += TASK_XP[t.priority];
-    const next = LADDER[e.level + 1];
-    if (next && before < next.xp && e.xp >= next.xp) toast(`🎉 ${e.name} أصبح مستحقاً للترقية إلى "${next.name}"`);
-    else toast(`✅ ${e.name} أنهى: ${t.title}`);
+    for (let round = 0; ; round++) {
+      t.output = await ask(e, 'task', [{ role: 'user', content: taskPrompt(t, mgr) }]);
+      if (!mgr || !emp(mgr.id)) {
+        finishTask(t, e, null);
+        break;
+      }
+      t.status = 'review';
+      setStatus(e, 'idle', '📤 يسلّم العمل');
+      refresh();
+      const walked = await office.visit(e.id, mgr.id);
+      const prevStatus = mgr.status;
+      const prevBubble = bubbles.get(mgr.id) || '';
+      setStatus(mgr, 'talking', `🧐 يراجع عمل ${e.name}`);
+      let verdict;
+      try {
+        verdict = await reviewBy(mgr, e, t);
+      } finally {
+        if (mgr.status === 'talking') setStatus(mgr, prevStatus === 'talking' ? 'idle' : prevStatus, prevBubble);
+      }
+      t.reviews.push({ by: mgr.id, decision: verdict.decision, feedback: verdict.feedback, at: Date.now() });
+      if (walked) {
+        setStatus(e, 'idle', verdict.decision === 'approve' ? '👍' : '📝 ملاحظات');
+        await sleep(1500);
+        await office.recall(e.id);
+      }
+      if (verdict.decision === 'approve' || round >= 1) {
+        finishTask(t, e, mgr, verdict);
+        break;
+      }
+      t.feedback = verdict.feedback || 'راجع العمل وحسّنه.';
+      t.status = 'doing';
+      setStatus(e, 'working', `✏️ يعدّل: ${t.title}`);
+      toast(`↩️ ${mgr.name} طلب تعديلات من ${e.name}: ${t.title}`);
+      refresh();
+    }
   } catch (err) {
     t.status = 'todo';
     toast(err.message);
+    office.recall(e.id);
   } finally {
     busy.delete(e.id);
     setStatus(e, meeting?.attendees.includes(e.id) ? 'meeting' : 'idle');
     save();
     refresh();
   }
+}
+
+function finishTask(t, e, mgr, verdict) {
+  t.status = 'done';
+  t.doneAt = Date.now();
+  t.feedback = '';
+  const before = e.xp;
+  e.xp += TASK_XP[t.priority];
+  const next = LADDER[e.level + 1];
+  if (next && before < next.xp && e.xp >= next.xp) toast(`🎉 ${e.name} أصبح مستحقاً للترقية إلى "${next.name}"`);
+  else if (mgr) toast(`✅ ${mgr.name} ${verdict?.decision === 'approve' ? 'اعتمد' : 'اعتمد مع ملاحظات'} عمل ${e.name}: ${t.title}`);
+  else toast(`✅ ${e.name} أنهى: ${t.title}`);
 }
 
 // ---- managers assign job-specific tasks to their team
@@ -440,6 +531,12 @@ function showOutput(t) {
   $('#out-title').textContent = t.title;
   $('#out-meta').textContent = `${e ? `${e.name} · ${titleFor(e)}` : ''}${t.doneAt ? ` · ${new Date(t.doneAt).toLocaleString('ar')}` : ''}`;
   $('#out-body').replaceChildren(richText(t.output || ''));
+  if (t.reviews?.length) {
+    $('#out-body').append(h('div', { class: 'reviews' },
+      h('h4', {}, 'المراجعة'),
+      ...t.reviews.map((r) => h('p', {},
+        h('b', {}, `${r.decision === 'approve' ? '✅' : '↩️'} ${emp(r.by)?.name || 'المدير'}: `), r.feedback || (r.decision === 'approve' ? 'اعتمد العمل.' : 'طلب تعديلات.')))));
+  }
   $('#out-copy').onclick = () => navigator.clipboard?.writeText(t.output).then(() => toast('تم النسخ'), () => toast('تعذّر النسخ'));
   $('#dlg-output').showModal();
 }
@@ -469,7 +566,10 @@ function renderProfile(e) {
         h('dt', {}, 'المدير'), h('dd', {}, mgr ? mgr.name : 'مالك الوكالة'),
         h('dt', {}, 'المرؤوسون'), h('dd', {}, reports.length ? reports.map((r) => r.name).join('، ') : '—'),
         h('dt', {}, 'مهام منجزة'), h('dd', {}, String(done)),
-        h('dt', {}, 'المهارات'), h('dd', {}, DEPARTMENTS[e.dept].skills))),
+        h('dt', {}, 'المهارات'), h('dd', {}, DEPARTMENTS[e.dept].skills),
+        h('dt', {}, 'العمر'), h('dd', {}, `${bioFor(e).age} سنة · خبرة ${bioFor(e).years} ${bioFor(e).years > 10 ? 'سنة' : 'سنوات'}`),
+        h('dt', {}, 'الخلفية'), h('dd', {}, bioFor(e).background),
+        h('dt', {}, 'أسلوبه'), h('dd', {}, bioFor(e).style))),
     h('div', { class: 'card' },
       h('h3', {}, 'التقدم الوظيفي'),
       h('div', { class: 'progress' }, h('i', { style: `width:${pct}%` })),
@@ -520,6 +620,8 @@ function changeLevel(e, delta) {
     if (seat !== undefined) {
       reseat(e, seat);
       moved = isPrivateOffice(seat) ? ' وانتقل إلى مكتب خاص' : ' وعاد إلى المساحة المفتوحة';
+    } else {
+      reseat(e, e.desk); // same seat, new clothes for the new rank
     }
   }
   save();
@@ -531,7 +633,7 @@ function reseat(e, desk) {
   office.removeEmployee(e.id);
   office.setDeskLit(e.desk, false);
   e.desk = desk;
-  office.addEmployee({ ...e, color: colorOf(e) }, titleFor(e));
+  office.addEmployee(actorOf(e), titleFor(e));
   if (selectedId === e.id) office.setSelected(e.id);
 }
 
@@ -629,7 +731,7 @@ $('#dlg-hire').addEventListener('close', () => {
   };
   state.employees.push(e);
   for (const x of takeover) x.managerId = e.id;
-  office.addEmployee({ ...e, color: colorOf(e) }, titleFor(e));
+  office.addEmployee(actorOf(e), titleFor(e));
   save();
   $('#hire-form').reset();
   $('#hire-takeover-row').hidden = true;
@@ -643,7 +745,7 @@ function renderBoard() {
   const filter = $('#board-filter').value;
   const tasks = state.tasks.filter((t) => !filter || t.empId === filter);
   const cols = ['todo', 'doing', 'done'].map((s) => {
-    const list = tasks.filter((t) => t.status === s);
+    const list = tasks.filter((t) => t.status === s || (s === 'doing' && t.status === 'review'));
     return h('div', { class: 'column' },
       h('h3', {}, STATUS_NAMES[s], h('span', { class: 'badge' }, String(list.length))),
       ...list.map((t) => taskCard(t, { showOwner: true })));
@@ -750,6 +852,7 @@ $('#dlg-meeting').addEventListener('close', async () => {
   attendees.forEach((id) => setStatus(emp(id), 'meeting', '🚶'));
   renderMeeting('الفريق في الطريق إلى غرفة الاجتماعات…');
   office.focusOn(room);
+  await Promise.all(attendees.map((id) => office.recall(id)));
   await office.sendToMeeting(attendees, room);
   attendees.forEach((id) => setStatus(emp(id), 'meeting'));
   meeting.busy = false;
@@ -866,7 +969,8 @@ function refresh() {
   for (const e of state.employees) office.updateEmployee(e, titleFor(e));
   for (let k = 0; k < PRIVATE_OFFICES; k++) {
     const who = state.employees.find((e) => e.desk === OPEN_DESKS + k);
-    office.setOfficeLabel(k, who ? `مكتب ${who.name}` : 'مكتب شاغر', Boolean(who));
+    const label = k === 0 ? (who ? `جناح المدير التنفيذي · ${who.name}` : 'جناح المدير التنفيذي (شاغر)') : who ? `مكتب ${who.name}` : 'مكتب شاغر';
+    office.setOfficeLabel(k, label, Boolean(who));
   }
   if (selectedId) renderPanel();
   if ($('#dlg-board').open) renderBoard();
@@ -880,11 +984,11 @@ function applyState(next) {
     office.setDeskLit(e.desk, false);
   }
   state = next;
-  state.employees.forEach((e) => office.addEmployee({ ...e, color: colorOf(e) }, titleFor(e)));
+  state.employees.forEach((e) => office.addEmployee(actorOf(e), titleFor(e)));
   refresh();
 }
 
-state.employees.forEach((e) => office.addEmployee({ ...e, color: colorOf(e) }, titleFor(e)));
+state.employees.forEach((e) => office.addEmployee(actorOf(e), titleFor(e)));
 refresh();
 saveState(state);
 
@@ -916,6 +1020,20 @@ connectCloud().then(async (c) => {
     setSync('offline', 'تعذّر الوصول إلى الحفظ السحابي. التعديلات تُحفظ في هذا المتصفح فقط الآن.');
   }
 });
+
+// Office life: now and then someone who isn't busy takes a short coffee break.
+setInterval(() => {
+  if (document.hidden || workdayRunning) return;
+  const candidates = state.employees.filter((e) => e.status === 'idle' && !busy.has(e.id) && e.id !== selectedId
+    && !meeting?.attendees.includes(e.id) && office.whereIs(e.id) === 'desk');
+  const onBreak = state.employees.filter((e) => office.whereIs(e.id) === 'break').length;
+  if (!candidates.length || onBreak >= 2 || Math.random() < 0.4) return;
+  const e = candidates[Math.floor(Math.random() * candidates.length)];
+  if (office.takeBreak(e.id, 6000 + Math.random() * 6000)) {
+    setStatus(e, 'idle', '☕');
+    setTimeout(() => { if (e.status === 'idle' && bubbles.get(e.id) === '☕') setStatus(e, 'idle'); }, 30000);
+  }
+}, 12000);
 
 backendStatus().then((s) => {
   const pill = $('#ai-mode');
