@@ -56,3 +56,21 @@ test('an agency that already received Hamo only gets the reporting change', () =
   assert.equal(s.employees.filter((e) => e.name === 'حمو').length, 1);
   assert.equal(s.employees.find((e) => e.name === 'سارة').managerId, 'e130');
 });
+
+test('whoever heads Marketing moves under Hamo once; their team stays with them', () => {
+  const s = oldAgency();
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo'];
+  s.employees.push(
+    { id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null },
+    { id: 'e131', name: 'ريم', dept: 'marketing', level: 5, desk: 10, managerId: 'e1' },
+    { id: 'e132', name: 'جود', dept: 'marketing', level: 2, desk: 11, managerId: 'e131' },
+  );
+  assert.equal(applyMigrations(s), true);
+  const byName = (n) => s.employees.find((e) => e.name === n);
+  assert.equal(byName('ريم').managerId, 'e130');
+  assert.equal(byName('جود').managerId, 'e131');
+  assert.equal(byName('خالد').managerId, 'e1');
+  byName('ريم').managerId = 'e1'; // moved back by the owner: it sticks
+  assert.equal(applyMigrations(s), false);
+  assert.equal(byName('ريم').managerId, 'e1');
+});

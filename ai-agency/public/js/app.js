@@ -563,7 +563,8 @@ $('#hire-position').addEventListener('change', () => {
   // Report to the next post up: CEO to the owner, GM to the CEO, department heads to the GM or CEO.
   const ceo = positionHolder(POSITIONS[0]);
   const gm = positionHolder(POSITIONS[1]);
-  const boss = p.key === 'ceo' ? null : p.key === 'gm' ? ceo : gm || ceo || [...state.employees].sort(byRank)[0];
+  const top = [...state.employees].sort(byRank)[0];
+  const boss = p.key === 'ceo' ? null : p.key === 'gm' || p.reportsTo === 'ceo' ? ceo || gm || top : gm || ceo || top;
   $('#hire-manager').value = boss ? boss.id : '';
   updateHirePreview();
 });
