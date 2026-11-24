@@ -1,6 +1,6 @@
 import { createOffice, MAX_DESKS, ROOMS } from './scene.js';
 import {
-  LADDER, DEPARTMENTS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
+  LADDER, DEPARTMENTS, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
   titleFor, loadState, saveState, createInitialState, newId,
 } from './data.js';
 import { askEmployee, backendStatus } from './api.js';
@@ -221,6 +221,7 @@ function taskCard(t, { showOwner = false } = {}) {
     t.description ? h('p', {}, t.description) : null,
     h('div', { class: 'meta' },
       showOwner && owner ? h('span', { class: 'badge' }, `👤 ${owner.name}`) : null,
+      t.assignedBy && emp(t.assignedBy) ? h('span', { class: 'badge' }, `📋 من ${emp(t.assignedBy).name}`) : null,
       h('span', { class: `badge ${t.priority}` }, `أولوية ${PRIORITY_NAMES[t.priority]}`),
       h('span', { class: `badge ${t.status}` }, running ? `${STATUS_NAMES.doing}…` : STATUS_NAMES[t.status]),
       t.status === 'done' ? h('span', { class: 'badge' }, `+${TASK_XP[t.priority]} خبرة`) : null),
@@ -247,8 +248,8 @@ $('#task-form').addEventListener('submit', (ev) => {
   toast('تمت إضافة المهمة');
 });
 
-function addTask(empId, title, description, priority) {
-  state.tasks.push({ id: newId(state, 't'), empId, title, description, priority, status: 'todo', output: '', createdAt: Date.now() });
+function addTask(empId, title, description, priority, assignedBy = null) {
+  state.tasks.push({ id: newId(state, 't'), empId, title, description, priority, status: 'todo', output: '', createdAt: Date.now(), assignedBy });
   save();
   refresh();
 }
@@ -298,14 +299,97 @@ async function runTask(id) {
   }
 }
 
+// ---- managers assign job-specific tasks to their team
+const teamOf = (managerId) => state.employees.filter((x) => isUnder(x.id, managerId));
+const topManager = () => [...state.employees].filter((x) => !x.managerId && teamOf(x.id).length).sort(byRank)[0];
+const openTitles = (empId) => state.tasks.filter((t) => t.empId === empId && t.status !== 'done').map((t) => t.title);
+
+function parseAssignments(reply, members) {
+  const ids = new Set(members.map((m) => m.id));
+  try {
+    const json = JSON.parse(reply.slice(reply.indexOf('{'), reply.lastIndexOf('}') + 1));
+    const perEmp = {};
+    return (Array.isArray(json.tasks) ? json.tasks : []).filter((t) => {
+      if (!t || !ids.has(t.empId) || typeof t.title !== 'string' || !t.title.trim()) return false;
+      perEmp[t.empId] = (perEmp[t.empId] || 0) + 1;
+      return perEmp[t.empId] <= 3;
+    }).map((t) => ({
+      empId: t.empId,
+      title: t.title.trim().slice(0, 200),
+      description: typeof t.description === 'string' ? t.description.trim().slice(0, 1500) : '',
+      priority: ['low', 'medium', 'high'].includes(t.priority) ? t.priority : 'medium',
+    }));
+  } catch {
+    return [];
+  }
+}
+
+// Ready-made tasks from each member's department, skipping ones they already have.
+function libraryAssignments(members, perMember) {
+  return members.flatMap((m) => {
+    const have = new Set(state.tasks.filter((t) => t.empId === m.id).map((t) => t.title));
+    return (ROLE_TASKS[m.dept] || []).filter(([title]) => !have.has(title)).slice(0, perMember)
+      .map(([title, description, priority]) => ({ empId: m.id, title, description, priority }));
+  });
+}
+
+async function assignTeamTasks(manager, onlyIds = null, perMember = 2) {
+  const members = teamOf(manager.id).filter((m) => !onlyIds || onlyIds.includes(m.id));
+  if (!members.length) return toast(`لا يوجد موظفون تحت إدارة ${manager.name}`);
+  const key = `assign:${manager.id}`;
+  if (busy.has(key)) return;
+  busy.add(key);
+  const prev = manager.status;
+  setStatus(manager, 'talking', '📋 توزّع المهام');
+  refresh();
+  const brief = members.map((m) => {
+    const open = openTitles(m.id);
+    return `- empId: ${m.id} | ${m.name} | ${titleFor(m)} | قسم ${DEPARTMENTS[m.dept].name} | المهارات: ${DEPARTMENTS[m.dept].skills}` +
+      ` | مهامه المفتوحة: ${open.length ? open.join('، ') : 'لا شيء'}`;
+  }).join('\n');
+  let tasks = [];
+  try {
+    const reply = await ask(manager, 'assign', [{ role: 'user', content:
+      `فريقك:\n${brief}\n\nكلّف كل عضو بـ${perMember === 1 ? 'مهمة واحدة' : `${perMember} مهام`} خاصة بوظيفته.` }]);
+    tasks = parseAssignments(reply, members);
+  } catch (err) {
+    toast(err.message);
+  }
+  if (!tasks.length) tasks = libraryAssignments(members, perMember);
+  for (const t of tasks) addTask(t.empId, t.title, t.description, t.priority, manager.id);
+  busy.delete(key);
+  setStatus(manager, prev === 'talking' ? 'idle' : prev);
+  const got = [...new Set(tasks.map((t) => t.empId))];
+  for (const id of got) {
+    const m = emp(id);
+    if (m && m.status === 'idle') {
+      office.setStatus(id, 'idle', '📥 مهمة جديدة');
+      setTimeout(() => emp(id)?.status === 'idle' && office.setStatus(id, 'idle'), 5000);
+    }
+  }
+  refresh();
+  toast(tasks.length ? `📋 ${manager.name} كلّفت ${got.length} من الفريق بـ${tasks.length} مهام` : 'لم تُضف مهام جديدة');
+  return tasks.length;
+}
+
 // Each employee works through their own queue; employees work in parallel.
 async function startWorkday() {
   if (workdayRunning) return;
-  const hasWork = () => state.tasks.some((t) => t.status === 'todo' && !meeting?.attendees.includes(t.empId));
-  if (!hasWork()) return toast('لا توجد مهام في الانتظار. أضف مهاماً من لوحة المهام.');
   workdayRunning = true;
   $('#btn-workday').disabled = true;
   $('#btn-workday').textContent = '⏳ الفريق يعمل…';
+  // Managers first give work to anyone in their team who has nothing queued.
+  const idle = state.employees.filter((e) => e.managerId && !meeting?.attendees.includes(e.id)
+    && !state.tasks.some((t) => t.empId === e.id && t.status === 'todo'));
+  const byManager = new Map();
+  for (const e of idle) byManager.set(e.managerId, [...(byManager.get(e.managerId) || []), e.id]);
+  for (const [mid, ids] of byManager) if (emp(mid)) await assignTeamTasks(emp(mid), ids);
+  if (!state.tasks.some((t) => t.status === 'todo' && !meeting?.attendees.includes(t.empId))) {
+    workdayRunning = false;
+    $('#btn-workday').disabled = false;
+    $('#btn-workday').textContent = '▶ ابدأ يوم العمل';
+    return toast('لا توجد مهام في الانتظار. أضف مهاماً من لوحة المهام.');
+  }
   const order = { high: 0, medium: 1, low: 2 };
   await Promise.all(state.employees.map(async (e) => {
     for (;;) {
@@ -379,6 +463,8 @@ function renderProfile(e) {
         refresh();
         toast('تم حفظ التعديلات');
       } }, 'حفظ')),
+    reports.length ? h('button', { class: 'primary', disabled: busy.has(`assign:${e.id}`), onclick: () => assignTeamTasks(e) },
+      `📋 كلّف فريقك بمهام (${teamOf(e.id).length})`) : null,
     h('button', { class: 'danger', onclick: () => fire(e) }, 'إنهاء خدمة الموظف'));
 }
 
@@ -460,6 +546,9 @@ $('#dlg-hire').addEventListener('close', () => {
   refresh();
   selectEmployee(e.id);
   toast(`👋 مرحباً بـ${e.name} في الفريق!`);
+  // The new hire's manager hands over starter tasks for their role.
+  const mgr = e.managerId ? emp(e.managerId) : null;
+  if (mgr) setTimeout(() => assignTeamTasks(mgr, [e.id]), 1200);
 });
 
 // ------------------------------------------------------------ task board
@@ -495,6 +584,11 @@ $('#btn-board').addEventListener('click', () => {
 });
 $('#board-filter').addEventListener('change', renderBoard);
 $('#board-close').addEventListener('click', () => $('#dlg-board').close());
+$('#board-assign').addEventListener('click', () => {
+  const m = topManager();
+  if (!m) return toast('لا يوجد مدير لديه فريق. حدّد المدير المباشر للموظفين من ملفاتهم.');
+  assignTeamTasks(m);
+});
 
 // ------------------------------------------------------------ org chart & ladder
 function renderOrg() {

@@ -46,7 +46,7 @@ export async function askEmployee(payload) {
   return data.truncated ? `${data.reply}\n\n(…توقف الرد لأنه طويل جداً)` : data.reply;
 }
 
-const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default' };
+const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default' };
 
 async function askViaSample(sample, payload) {
   const req = validateChatRequest(payload);
@@ -83,6 +83,7 @@ async function demoReply({ mode, persona, messages }) {
       `لدي تحفّظ بسيط: نحتاج بيانات أوضح عن الجمهور قبل أن نلتزم بالميزانية. يمكنني جمعها هذا الأسبوع.`,
     ]);
   }
+  if (mode === 'assign') return ''; // the app falls back to each department's task library
   if (mode === 'summary') {
     return `**القرارات:**\n- المضي في الفكرة الرئيسية مع اختبار مصغّر أولاً.\n\n**المهام:**\n- ${persona.name}: متابعة التنفيذ وإعداد تقرير.\n\n**الخطوة التالية:** اجتماع مراجعة بعد أسبوع.${note}`;
   }

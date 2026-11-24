@@ -50,3 +50,9 @@ test('system prompt carries persona, company and mode instructions', () => {
   assert.match(sys, /هادئة/);
   assert.match(sys, /نفّذها الآن/);
 });
+
+test('assign mode asks the manager for JSON tasks tied to each role', () => {
+  const sys = buildSystemPrompt(validateChatRequest(base({ mode: 'assign' })));
+  assert.match(sys, /"tasks"/);
+  assert.match(sys, /مسماه الوظيفي/);
+});
