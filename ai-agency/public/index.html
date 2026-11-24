@@ -206,6 +206,16 @@
     </form>
   </dialog>
 
+  <dialog id="dlg-confirm">
+    <form method="dialog" class="stack">
+      <p id="confirm-msg"></p>
+      <div class="row end">
+        <button value="cancel">إلغاء</button>
+        <button class="danger" value="ok" id="confirm-ok">تأكيد</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script type="module" src="/js/app.js"></script>

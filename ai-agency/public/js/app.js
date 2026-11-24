@@ -3,7 +3,7 @@ import {
   LADDER, DEPARTMENTS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
   titleFor, loadState, saveState, resetState, newId,
 } from './data.js';
-import { askEmployee } from './api.js';
+import { askEmployee, backendStatus } from './api.js';
 
 // ------------------------------------------------------------ DOM helpers
 const $ = (sel) => document.querySelector(sel);
@@ -34,6 +34,15 @@ function richText(text) {
     if (m) frag.append(target);
   });
   return frag;
+}
+// In-page confirmation (window.confirm is blocked in some embeds).
+function confirmBox(message, okLabel = 'تأكيد') {
+  const dlg = $('#dlg-confirm');
+  $('#confirm-msg').textContent = message;
+  $('#confirm-ok').textContent = okLabel;
+  dlg.returnValue = '';
+  dlg.showModal();
+  return new Promise((resolve) => dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok'), { once: true }));
 }
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 let toastTimer;
@@ -389,9 +398,9 @@ function changeLevel(e, delta) {
   toast(delta > 0 ? `🎉 تمت ترقية ${e.name} إلى "${titleFor(e)}"` : `تم تعديل مستوى ${e.name} إلى "${titleFor(e)}"`);
 }
 
-function fire(e) {
+async function fire(e) {
   if (busy.has(e.id) || meeting?.attendees.includes(e.id)) return toast('لا يمكن إنهاء الخدمة أثناء العمل أو الاجتماع');
-  if (!confirm(`هل تريد إنهاء خدمة ${e.name}؟ ستنتقل مهامه غير المكتملة إلى مديره.`)) return;
+  if (!(await confirmBox(`هل تريد إنهاء خدمة ${e.name}؟ ستنتقل مهامه غير المكتملة إلى مديره.`, 'إنهاء الخدمة'))) return;
   for (const t of state.tasks) {
     if (t.empId === e.id && t.status !== 'done') {
       if (e.managerId) t.empId = e.managerId;
@@ -643,8 +652,9 @@ $('#dlg-settings').addEventListener('close', () => {
   save();
   refresh();
 });
-$('#set-reset').addEventListener('click', () => {
-  if (!confirm('سيتم حذف كل الموظفين الجدد والمهام والمحادثات والعودة للفريق الأساسي. متأكد؟')) return;
+$('#set-reset').addEventListener('click', async () => {
+  $('#dlg-settings').close();
+  if (!(await confirmBox('سيتم حذف كل الموظفين الجدد والمهام والمحادثات والعودة للفريق الأساسي.', 'إعادة الوكالة'))) return;
   resetState();
   location.reload();
 });
@@ -663,8 +673,8 @@ state.employees.forEach((e) => office.addEmployee({ ...e, color: colorOf(e) }, t
 refresh();
 save();
 
-fetch('/api/status').then((r) => r.json()).then((s) => {
+backendStatus().then((s) => {
   const pill = $('#ai-mode');
-  pill.textContent = s.ai ? 'متصل بالذكاء الاصطناعي' : 'وضع تجريبي (بدون مفتاح API)';
+  pill.textContent = s.label;
   pill.className = `mode-pill ${s.ai ? 'live' : 'demo'}`;
-}).catch(() => { $('#ai-mode').textContent = 'غير متصل بالخادم'; });
+});

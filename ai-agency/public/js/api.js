@@ -1,7 +1,35 @@
-// Talks to the local server. If the server has no API key it answers
-// {demo:true} and we generate a canned reply so the office still works.
+// Chooses where employee replies come from:
+//  1. On claude.ai (published Artifact): the page's `sample` capability asks
+//     Claude with the viewer's own account. No API key involved.
+//  2. Locally: the Node server (server.js), which holds ANTHROPIC_API_KEY.
+//  3. Neither available: canned demo replies so the office still works.
+import { validateChatRequest, buildSystemPrompt } from './prompt.js';
+
+let samplePromise = null;
+function getSample() {
+  if (!window.claude?.use) return Promise.resolve(null);
+  samplePromise ||= window.claude.use('sample').catch(() => null);
+  return samplePromise;
+}
+
+export async function backendStatus() {
+  if (window.claude?.use) {
+    const sample = await getSample();
+    return sample ? { ai: true, label: 'متصل بـ Claude' } : { ai: false, label: 'وضع تجريبي (Claude غير متاح هنا)' };
+  }
+  try {
+    const s = await (await fetch('/api/status')).json();
+    return s.ai ? { ai: true, label: 'متصل بالذكاء الاصطناعي' } : { ai: false, label: 'وضع تجريبي (بدون مفتاح API)' };
+  } catch {
+    return { ai: false, label: 'وضع تجريبي (الخادم غير متصل)' };
+  }
+}
 
 export async function askEmployee(payload) {
+  const sample = await getSample();
+  if (sample) return askViaSample(sample, payload);
+  if (window.claude?.use) return demoReply(payload);
+
   let res;
   try {
     res = await fetch('/api/chat', {
@@ -18,6 +46,24 @@ export async function askEmployee(payload) {
   return data.truncated ? `${data.reply}\n\n(…توقف الرد لأنه طويل جداً)` : data.reply;
 }
 
+const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default' };
+
+async function askViaSample(sample, payload) {
+  const req = validateChatRequest(payload);
+  const messages = req.messages.map((m) => ({ ...m }));
+  // `sample` has no system field and remembers nothing, so the role brief
+  // travels at the top of the first user turn on every call.
+  messages[0].content = `تعليمات دورك (التزم بها طوال المحادثة):\n${buildSystemPrompt(req)}\n\n---\n\n${messages[0].content}`;
+  try {
+    const r = await sample(messages, { modelTier: TIERS[req.mode], cache: false });
+    return r.truncated ? `${r.text}\n\n(…توقف الرد لأنه طويل جداً)` : r.text;
+  } catch (err) {
+    if (err?.code === 'not_granted') throw new Error('لم تسمح الصفحة باستخدام Claude. اسمح بذلك من قائمة الأذونات ثم أعد المحاولة.');
+    if (err?.code === 'rate_limited') throw new Error('طلبات كثيرة في وقت قصير. انتظر قليلاً ثم أعد المحاولة.');
+    throw new Error(err?.message || 'تعذّر الحصول على رد من Claude.');
+  }
+}
+
 function pick(list) {
   return list[Math.floor(Math.random() * list.length)];
 }
@@ -25,7 +71,7 @@ function pick(list) {
 async function demoReply({ mode, persona, messages }) {
   await new Promise((r) => setTimeout(r, 700 + Math.random() * 900));
   const last = messages.at(-1).content;
-  const note = '\n\n(وضع تجريبي: أضف ANTHROPIC_API_KEY للخادم ليرد الموظف بذكاء حقيقي.)';
+  const note = '\n\n(وضع تجريبي: الردود هنا جاهزة وليست من الذكاء الاصطناعي.)';
   if (mode === 'task') {
     const title = (last.match(/المهمة:\s*(.+)/) || [])[1] || 'المهمة';
     return `سلّمت: مسودة أولى لـ"${title}".\n\n## الملخص\nهذه نسخة تجريبية من المُخرَج أعدّها ${persona.name} (${persona.title}).\n\n## المحتوى\n1. **تحديد الهدف:** ما النتيجة التي نريد قياسها؟\n2. **الجمهور:** من نخاطب تحديداً وما احتياجه؟\n3. **التنفيذ:** الخطوات والقنوات المقترحة.\n4. **القياس:** المؤشرات التي سنتابعها أسبوعياً.${note}`;

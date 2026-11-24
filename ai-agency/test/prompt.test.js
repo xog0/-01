@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { validateChatRequest, buildSystemPrompt, ValidationError, LIMITS } from '../lib/prompt.js';
+import { validateChatRequest, buildSystemPrompt, ValidationError, LIMITS } from '../public/js/prompt.js';
 
 const persona = { name: 'سارة', title: 'مدير الاستراتيجية', level: 'مدير', department: 'الاستراتيجية' };
 const base = (over = {}) => ({ mode: 'chat', persona, company: { name: 'آفاق' }, messages: [{ role: 'user', content: 'مرحبا' }], ...over });

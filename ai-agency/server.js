@@ -7,7 +7,7 @@ import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Anthropic from '@anthropic-ai/sdk';
-import { validateChatRequest, buildSystemPrompt, ValidationError } from './lib/prompt.js';
+import { validateChatRequest, buildSystemPrompt, ValidationError } from './public/js/prompt.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(here, 'public');
