@@ -59,7 +59,7 @@ test('an agency that already received Hamo only gets the reporting change', () =
 
 test('whoever heads Marketing moves under Hamo once; their team stays with them', () => {
   const s = oldAgency();
-  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'sales-under-hamo'];
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'sales-under-hamo', 'hr-under-hamo'];
   s.employees.push(
     { id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null },
     { id: 'e131', name: 'ريم', dept: 'marketing', level: 5, desk: 10, managerId: 'e1' },
@@ -77,7 +77,7 @@ test('whoever heads Marketing moves under Hamo once; their team stays with them'
 
 test('whoever heads Sales moves under Hamo once, even from under a GM', () => {
   const s = oldAgency();
-  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo'];
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo', 'hr-under-hamo'];
   s.employees.push(
     { id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null },
     { id: 'e133', name: 'منى', dept: 'executive', level: 7, desk: 12, managerId: 'e130' },
@@ -89,5 +89,18 @@ test('whoever heads Sales moves under Hamo once, even from under a GM', () => {
   assert.equal(byName('سعد').managerId, 'e130');
   assert.equal(byName('باسل').managerId, 'e134');
   assert.equal(byName('منى').managerId, 'e130');
+  assert.equal(applyMigrations(s), false);
+});
+
+test('whoever heads HR moves under Hamo once', () => {
+  const s = oldAgency();
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo', 'sales-under-hamo'];
+  s.employees.push(
+    { id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null },
+    { id: 'e133', name: 'منى', dept: 'executive', level: 7, desk: 12, managerId: 'e130' },
+    { id: 'e136', name: 'هند', dept: 'hr', level: 5, desk: 13, managerId: 'e133' },
+  );
+  assert.equal(applyMigrations(s), true);
+  assert.equal(s.employees.find((e) => e.name === 'هند').managerId, 'e130');
   assert.equal(applyMigrations(s), false);
 });

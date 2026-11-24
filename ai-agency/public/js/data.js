@@ -46,7 +46,7 @@ export const POSITIONS = [
   { key: 'gm', name: 'المدير العام', dept: 'executive', level: 7, unique: true },
   { key: 'marketing', name: 'مدير التسويق', dept: 'marketing', level: 5, unique: true, reportsTo: 'ceo' },
   { key: 'sales', name: 'مدير المبيعات', dept: 'sales', level: 5, unique: true, reportsTo: 'ceo' },
-  { key: 'hr', name: 'مدير الموارد البشرية', dept: 'hr', level: 5, unique: true },
+  { key: 'hr', name: 'مدير الموارد البشرية', dept: 'hr', level: 5, unique: true, reportsTo: 'ceo' },
 ];
 
 export function titleFor(emp) {
@@ -201,6 +201,7 @@ const MIGRATIONS = [
   },
   { key: 'marketing-under-hamo', run: (state) => deptHeadsUnderHamo(state, 'marketing') },
   { key: 'sales-under-hamo', run: (state) => deptHeadsUnderHamo(state, 'sales') },
+  { key: 'hr-under-hamo', run: (state) => deptHeadsUnderHamo(state, 'hr') },
 ];
 
 // Whoever heads a department (its members whose manager is outside it)
