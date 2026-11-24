@@ -153,7 +153,8 @@ test('a new agency seats Hamo and Sara in private offices', () => {
   const s = createInitialState();
   const byName = (n) => s.employees.find((e) => e.name === n);
   assert.equal(byName('حمو').desk, 25);
-  assert.equal(byName('سارة').desk, 26);
+  assert.equal(byName('شيكا').desk, 26);
+  assert.equal(byName('سارة').desk, 27);
   assert.ok(byName('خالد').desk < 25);
 });
 
@@ -177,8 +178,8 @@ test('current managers move into offices once, by rank, until the wing is full',
 test('seats: non-managers never get offices; managers fall back to open desks when the wing is full', () => {
   const s = createInitialState();
   assert.ok(freeSeat(s, 0) < 25);
-  assert.equal(freeSeat(s, 6), 27);
-  for (let k = 27; k < 34; k++) s.employees.push({ id: `o${k}`, level: 5, desk: k });
+  assert.equal(freeSeat(s, 6), 28);
+  for (let k = 28; k < 34; k++) s.employees.push({ id: `o${k}`, level: 5, desk: k });
   assert.ok(freeSeat(s, 6) < 25);
   assert.equal(freeSeat(s, 6, { officeOnly: true }), undefined);
   assert.deepEqual(moveManagersToOffices(s), []);

@@ -5,6 +5,10 @@ import {
 } from './data.js';
 import { askEmployee, backendStatus } from './api.js';
 import { connectCloud } from './cloud.js';
+import {
+  ADJ_TYPES, addAdjustment, addLedger, balance, defaultSalary, financeBrief, monthTotals, parseFinanceOrders,
+  payrollPreview, periodLabel, runPayroll,
+} from './finance.js';
 
 // ------------------------------------------------------------ DOM helpers
 const $ = (sel) => document.querySelector(sel);
@@ -75,6 +79,11 @@ const byRank = (a, b) => b.level - a.level || b.xp - a.xp;
 
 const actorOf = (e) => ({ ...e, color: colorOf(e), look: lookFor(e) });
 
+// Money formatting and who keeps the books (the most senior person in Finance).
+const fmt = (n) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n);
+const money = (n) => `${fmt(n)} ${state.finance?.currency || ''}`.trim();
+const cfo = () => state.employees.filter((x) => x.dept === 'finance' && x.level >= MANAGER_LEVEL).sort(byRank)[0] || null;
+
 // What someone remembers at work: their last finished tasks and the last
 // note their manager gave them.
 function memoryOf(e) {
@@ -98,8 +107,9 @@ function personaOf(e) {
     personality: e.personality || '',
     manager: mgr ? `${mgr.name} (${titleFor(mgr)})` : 'مالك الوكالة مباشرة',
     reports: teamOf(e.id).map((m) => `${m.name} (${titleFor(m)})`).join('، '),
+    duties: e.id === cfo()?.id ? 'finance' : '',
     bio: `عمرك ${bio.age} سنة، وخبرتك ${bio.years} ${bio.years > 10 ? 'سنة' : 'سنوات'}. ${bio.background} أسلوبك في التواصل: ${bio.style}`.slice(0, 1100),
-    memory: memoryOf(e),
+    memory: e.id === cfo()?.id ? `${financeBrief(state, fmt)} ${memoryOf(e)}`.slice(0, 1150) : memoryOf(e),
   };
 }
 function companyOf(except) {
@@ -214,9 +224,16 @@ $('#chat-form').addEventListener('submit', async (ev) => {
   setStatus(e, 'talking', '💬');
   renderPanel();
   try {
-    const raw = await ask(e, 'chat', history.slice(-30));
+    let raw = await ask(e, 'chat', history.slice(-30));
+    let financeNote = '';
+    if (e.id === cfo()?.id) {
+      const parsed = parseFinanceOrders(raw, state.employees);
+      raw = parsed.text;
+      financeNote = applyFinanceOrders(parsed.orders, e);
+    }
     const { text: reply, order } = extractAssignOrder(raw, e);
     history.push({ role: 'assistant', content: reply || 'حاضر.' });
+    if (financeNote) history.push({ role: 'assistant', content: financeNote });
     if (order) {
       save();
       const added = await assignTeamTasks(e, order.ids, order.perMember, order.focus);
@@ -396,6 +413,12 @@ function finishTask(t, e, mgr, verdict) {
   t.status = 'done';
   t.doneAt = Date.now();
   t.feedback = '';
+  const bonus = state.finance?.taskBonus?.[t.priority] || 0;
+  if (bonus > 0) {
+    try {
+      addAdjustment(state, { empId: e.id, type: 'taskBonus', amount: bonus, reason: `إنجاز: ${t.title}`.slice(0, 200), by: mgr ? mgr.id : 'owner' });
+    } catch { /* a missing salary record should never block finishing work */ }
+  }
   const before = e.xp;
   e.xp += TASK_XP[t.priority];
   const next = LADDER[e.level + 1];
@@ -611,6 +634,10 @@ function changeLevel(e, delta) {
   if (to < 0 || to >= LADDER.length) return;
   e.level = to;
   if (delta > 0 && e.xp < LADDER[to].xp) e.xp = LADDER[to].xp;
+  // A promotion lifts the salary to at least the new level's starting pay.
+  if (delta > 0 && state.finance && e.salary < defaultSalary(to)) {
+    addAdjustment(state, { empId: e.id, type: 'raise', amount: defaultSalary(to) - e.salary, reason: `ترقية إلى ${LADDER[to].name}`, by: 'owner' });
+  }
   // Becoming a manager moves you into a private office if one is free;
   // dropping below manager moves you back to the open area if a desk is free.
   let moved = '';
@@ -660,6 +687,7 @@ async function fire(e) {
 
 // ------------------------------------------------------------ hiring
 function fillHireForm() {
+  delete $('#hire-salary').dataset.touched;
   const used = new Set(state.employees.map((x) => x.desk));
   const freeOpen = [...Array(OPEN_DESKS).keys()].filter((d) => !used.has(d)).length;
   const freeOffices = [...Array(PRIVATE_OFFICES).keys()].filter((k) => !used.has(OPEN_DESKS + k)).length;
@@ -710,7 +738,9 @@ function updateTakeover() {
 function updateHirePreview() {
   const preview = { dept: $('#hire-dept').value, level: Number($('#hire-level').value) };
   $('#hire-preview').textContent = `المسمى الوظيفي: ${titleFor(preview)}`;
+  if (!$('#hire-salary').dataset.touched) $('#hire-salary').value = defaultSalary(preview.level);
 }
+$('#hire-salary').addEventListener('input', () => { $('#hire-salary').dataset.touched = '1'; });
 ['#hire-dept', '#hire-level'].forEach((s) => $(s).addEventListener('change', () => {
   $('#hire-position').value = '';
   updateHirePreview();
@@ -727,6 +757,7 @@ $('#dlg-hire').addEventListener('close', () => {
   const e = {
     id: newId(state, 'e'), name, gender: $('#hire-gender').value, dept: $('#hire-dept').value,
     level, xp: LADDER[level].xp, personality: $('#hire-personality').value.trim(),
+    salary: Number($('#hire-salary').value) > 0 ? Math.round(Number($('#hire-salary').value)) : defaultSalary(level),
     desk, managerId: $('#hire-manager').value || null, hiredAt: Date.now(), status: 'idle',
   };
   state.employees.push(e);
@@ -937,6 +968,255 @@ $('#m-end').addEventListener('click', async () => {
   if (summary) showOutput({ title: `محضر: ${done.topic}`, output: summary, doneAt: Date.now() });
   await office.returnToDesks(done.attendees);
   done.attendees.forEach((id) => emp(id) && setStatus(emp(id), 'idle'));
+});
+
+// ------------------------------------------------------------ finance
+let finTab = 'summary';
+const hoursLabel = (n) => `${fmt(n)} ${n >= 3 && n <= 10 && Number.isInteger(n) ? 'ساعات' : 'ساعة'}`;
+
+// Orders the finance manager wrote in a chat reply, applied as the owner asked.
+function applyFinanceOrders(orders, by) {
+  if (!orders.length) return '';
+  const done = [];
+  const failed = [];
+  for (const o of orders) {
+    for (const id of o.empIds) {
+      const e = emp(id);
+      try {
+        const a = addAdjustment(state, {
+          empId: id, type: o.type, reason: o.reason, by: by.id,
+          ...(o.type === 'overtime' ? { hours: o.value } : { amount: o.value }),
+        });
+        done.push(`- ${ADJ_TYPES[o.type].name} لـ${e.name}: ${o.type === 'overtime' ? `${hoursLabel(a.hours)} = ` : ''}${money(a.amount)}${o.type === 'raise' ? ` (الراتب الآن ${money(e.salary)})` : ''}${a.reason ? ` — ${a.reason}` : ''}`);
+      } catch (err) {
+        failed.push(`- ${e?.name || id}: ${err.message}`);
+      }
+    }
+  }
+  save();
+  if ($('#dlg-finance').open) renderFinance();
+  return [done.length ? `✅ سُجّل في الحسابات:\n${done.join('\n')}` : '', failed.length ? `⚠️ لم يُسجّل:\n${failed.join('\n')}` : ''].filter(Boolean).join('\n\n');
+}
+
+function tile(label, value, cls = '') {
+  return h('div', { class: `tile ${cls}` }, h('small', {}, label), h('b', {}, value));
+}
+
+function renderFinance() {
+  const fin = state.finance;
+  $('#fin-period').textContent = `الشهر المفتوح: ${periodLabel(fin.period)}`;
+  document.querySelectorAll('[data-fin]').forEach((b) => b.classList.toggle('active', b.dataset.fin === finTab));
+  const body = $('#fin-body');
+  const keeper = cfo();
+  if (finTab === 'summary') {
+    const m = monthTotals(state);
+    const p = payrollPreview(state);
+    const last = fin.payrolls.at(-1);
+    body.replaceChildren(
+      h('div', { class: 'tiles' },
+        tile('الرصيد الحالي', money(balance(state)), balance(state) >= 0 ? 'good' : 'bad'),
+        tile(`إيرادات ${periodLabel(fin.period)}`, money(m.income), 'good'),
+        tile(`مصروفات ${periodLabel(fin.period)}`, money(m.expense), 'bad'),
+        tile('مسير الرواتب المتوقع', money(p.total)),
+        tile('حركات مفتوحة', String(fin.adjustments.filter((a) => !a.paid && a.type !== 'raise').length))),
+      h('p', { class: 'muted' }, keeper
+        ? `${keeper.name} (${titleFor(keeper)}) مسؤول عن الرواتب والخصومات والمكافآت. اطلب منه في المحادثة، مثلاً: «اخصم 200 من خالد بسبب التأخير» أو «أضف 6 ساعات أوفرتايم لليلى».`
+        : 'لا يوجد مدير مالي حالياً. يمكنك توظيف «المدير المالي» من نموذج التوظيف.'),
+      last ? h('div', { class: 'card' },
+        h('h3', {}, `آخر مسير: ${periodLabel(last.period)} · ${money(last.total)}`),
+        h('p', { class: 'muted' }, `أعدّه ${emp(last.by)?.name || 'المالك'} · ${new Date(last.at).toLocaleDateString('ar')}`),
+        last.memo ? h('div', { class: 'memo' }, richText(last.memo)) : null) : null);
+  } else if (finTab === 'payroll') {
+    const p = payrollPreview(state);
+    const rows = p.lines.map((l) => {
+      const e = emp(l.empId);
+      return h('tr', {},
+        h('td', {}, l.name), h('td', {}, titleFor(e)),
+        h('td', { class: 'num' }, fmt(l.base)),
+        h('td', { class: 'num plus' }, l.overtime ? fmt(l.overtime) : '—'),
+        h('td', { class: 'num plus' }, l.bonuses ? fmt(l.bonuses) : '—'),
+        h('td', { class: 'num minus' }, l.deductions ? fmt(l.deductions) : '—'),
+        h('td', { class: 'num' }, h('b', {}, fmt(l.net))),
+        h('td', {}, h('button', { class: 'small', onclick: () => openAdjust(l.empId) }, '＋ حركة')));
+    });
+    body.replaceChildren(
+      h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
+        h('thead', {}, h('tr', {}, ...['الموظف', 'المسمى', 'الأساسي', 'أوفرتايم', 'مكافآت', 'خصومات', 'الصافي', ''].map((x) => h('th', {}, x)))),
+        h('tbody', {}, ...rows),
+        h('tfoot', {}, h('tr', {}, h('td', { colspan: 6 }, `الإجمالي (${fin.currency})`), h('td', { class: 'num' }, fmt(p.total)), h('td', {}))))),
+      h('div', { class: 'row' },
+        h('button', { onclick: () => openAdjust() }, '＋ حركة جديدة'),
+        h('button', { class: 'primary', id: 'run-payroll', disabled: busy.has('payroll'), onclick: payPayroll },
+          `💸 صرف رواتب ${periodLabel(fin.period)}${keeper ? ` (يُعدّها ${keeper.name})` : ''}`)));
+  } else if (finTab === 'moves') {
+    const list = [...fin.adjustments].reverse();
+    body.replaceChildren(list.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
+      h('thead', {}, h('tr', {}, ...['التاريخ', 'الموظف', 'النوع', 'المبلغ', 'السبب', 'بواسطة', 'الحالة'].map((x) => h('th', {}, x)))),
+      h('tbody', {}, ...list.map((a) => h('tr', {},
+        h('td', {}, new Date(a.at).toLocaleDateString('ar')),
+        h('td', {}, emp(a.empId)?.name || '—'),
+        h('td', {}, ADJ_TYPES[a.type].name + (a.hours ? ` (${hoursLabel(a.hours)})` : '')),
+        h('td', { class: `num ${a.type === 'deduction' ? 'minus' : 'plus'}` }, (a.type === 'deduction' ? '−' : '+') + fmt(a.amount)),
+        h('td', {}, a.reason || '—'),
+        h('td', {}, a.by === 'owner' ? 'المالك' : emp(a.by)?.name || '—'),
+        h('td', {}, a.type === 'raise' ? `${fmt(a.from)} ← ${fmt(a.to)}` : a.paid ? `صُرفت (${periodLabel(a.period)})` : 'مفتوحة'))))))
+      : h('div', { class: 'empty' }, 'لا توجد حركات بعد.'));
+  } else if (finTab === 'ledger') {
+    const type = h('select', { id: 'led-type' }, h('option', { value: 'income' }, 'إيراد'), h('option', { value: 'expense' }, 'مصروف'));
+    const cat = h('input', { id: 'led-cat', maxlength: 60, placeholder: 'البند: دفعة عميل، إعلانات، اشتراكات…' });
+    const amount = h('input', { id: 'led-amount', type: 'number', min: '0.01', step: 'any', placeholder: 'المبلغ' });
+    const note = h('input', { id: 'led-note', maxlength: 200, placeholder: 'ملاحظة' });
+    const form = h('form', { class: 'form-grid card', onsubmit: (ev) => {
+      ev.preventDefault();
+      try {
+        addLedger(state, { type: type.value, category: cat.value, amount: amount.value, note: note.value });
+        save();
+        renderFinance();
+        toast('تم تسجيل القيد');
+      } catch (err) { toast(err.message); }
+    } }, h('label', {}, 'النوع', type), h('label', {}, 'البند', cat), h('label', {}, 'المبلغ', amount), h('label', {}, 'ملاحظة', note),
+      h('button', { class: 'primary', type: 'submit' }, 'تسجيل'));
+    const rows = [...fin.ledger].reverse().map((l) => h('tr', {},
+      h('td', {}, new Date(l.at).toLocaleDateString('ar')),
+      h('td', {}, l.type === 'income' ? 'إيراد' : 'مصروف'), h('td', {}, l.category), h('td', {}, l.note || '—'),
+      h('td', { class: `num ${l.type === 'income' ? 'plus' : 'minus'}` }, (l.type === 'income' ? '+' : '−') + fmt(l.amount))));
+    body.replaceChildren(form,
+      h('p', { class: 'muted' }, `الرصيد الافتتاحي ${money(fin.openingBalance)} · الرصيد الحالي ${money(balance(state))}`),
+      rows.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
+        h('thead', {}, h('tr', {}, ...['التاريخ', 'النوع', 'البند', 'ملاحظة', 'المبلغ'].map((x) => h('th', {}, x)))),
+        h('tbody', {}, ...rows))) : h('div', { class: 'empty' }, 'لا توجد قيود بعد. سجّل دفعات العملاء والمصروفات هنا.'));
+  } else {
+    const field = (label, id, value, attrs = {}) => h('label', {}, label, h('input', { id, value: String(value), ...attrs }));
+    const form = h('form', { class: 'form-grid card', onsubmit: (ev) => {
+      ev.preventDefault();
+      const num = (id) => Number($(`#${id}`).value);
+      const vals = { ob: num('fs-ob'), ot: num('fs-ot'), hrs: num('fs-hrs'), low: num('fs-low'), med: num('fs-med'), high: num('fs-high') };
+      if (Object.values(vals).some((v) => !Number.isFinite(v) || v < 0) || vals.ot < 1 || vals.hrs < 1) return toast('تحقق من الأرقام: يجب أن تكون موجبة.');
+      fin.currency = $('#fs-cur').value.trim().slice(0, 8) || fin.currency;
+      fin.openingBalance = vals.ob;
+      fin.overtimeRate = vals.ot;
+      fin.monthlyHours = vals.hrs;
+      fin.taskBonus = { low: vals.low, medium: vals.med, high: vals.high };
+      save();
+      renderFinance();
+      toast('تم حفظ الإعدادات المالية');
+    } },
+    field('العملة', 'fs-cur', fin.currency, { maxlength: 8 }),
+    field('الرصيد الافتتاحي', 'fs-ob', fin.openingBalance, { type: 'number', min: '0', step: 'any' }),
+    field('معامل العمل الإضافي', 'fs-ot', fin.overtimeRate, { type: 'number', min: '1', step: '0.25' }),
+    field('ساعات العمل الشهرية', 'fs-hrs', fin.monthlyHours, { type: 'number', min: '1' }),
+    field('مكافأة إنجاز مهمة منخفضة', 'fs-low', fin.taskBonus.low, { type: 'number', min: '0' }),
+    field('مكافأة إنجاز مهمة متوسطة', 'fs-med', fin.taskBonus.medium, { type: 'number', min: '0' }),
+    field('مكافأة إنجاز مهمة عالية', 'fs-high', fin.taskBonus.high, { type: 'number', min: '0' }),
+    h('button', { class: 'primary', type: 'submit' }, 'حفظ'));
+    body.replaceChildren(form, h('p', { class: 'muted' },
+      'أجر ساعة العمل الإضافي = الراتب الأساسي ÷ ساعات العمل الشهرية × المعامل. مكافأة الإنجاز تُضاف تلقائياً عند اعتماد المهمة، وتُصرف مع راتب الشهر.'));
+  }
+}
+
+async function payPayroll() {
+  if (busy.has('payroll')) return;
+  const p = payrollPreview(state);
+  if (!(await confirmBox(`صرف رواتب ${periodLabel(p.period)} بإجمالي ${money(p.total)} لـ${p.lines.length} موظفاً؟`, 'صرف الرواتب'))) return;
+  busy.add('payroll');
+  renderFinance();
+  const keeper = cfo();
+  let memo = '';
+  if (keeper) {
+    const prev = keeper.status;
+    setStatus(keeper, 'working', '💰 يُعدّ مسير الرواتب');
+    const lines = p.lines.map((l) => `${l.name}: أساسي ${fmt(l.base)}، أوفرتايم ${fmt(l.overtime)}، مكافآت ${fmt(l.bonuses)}، خصومات ${fmt(l.deductions)}، صافي ${fmt(l.net)}`).join('\n');
+    try {
+      memo = await ask(keeper, 'memo', [{ role: 'user', content:
+        `مسير رواتب ${periodLabel(p.period)} (${state.finance.currency}):\n${lines}\nالإجمالي: ${fmt(p.total)}\nالرصيد قبل الصرف: ${fmt(balance(state))}`.slice(0, 5800) }]);
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      setStatus(keeper, prev === 'working' ? 'idle' : prev);
+    }
+  }
+  try {
+    const rec = runPayroll(state, { by: keeper ? keeper.id : 'owner', memo });
+    save();
+    toast(`💸 صُرفت رواتب ${periodLabel(rec.period)}: ${money(rec.total)}`);
+    finTab = 'summary';
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    busy.delete('payroll');
+    renderFinance();
+    refresh();
+  }
+}
+
+function openAdjust(empId) {
+  $('#adj-emp').replaceChildren(...[...state.employees].sort(byRank).map((e) => h('option', { value: e.id, selected: e.id === empId }, `${e.name} — ${money(e.salary)}`)));
+  $('#adjust-form').reset();
+  if (empId) $('#adj-emp').value = empId;
+  updateAdjustPreview();
+  $('#dlg-adjust').showModal();
+}
+function updateAdjustPreview() {
+  const e = emp($('#adj-emp').value);
+  const type = $('#adj-type').value;
+  $('#adj-amount-label').textContent = type === 'overtime' ? 'عدد الساعات' : 'المبلغ';
+  const v = Number($('#adj-amount').value) || 0;
+  const fin = state.finance;
+  let text = '';
+  if (e && type === 'overtime') text = `أجر الساعة الإضافية ${money(e.salary / fin.monthlyHours * fin.overtimeRate)} · الإجمالي ${money(v * e.salary / fin.monthlyHours * fin.overtimeRate)}`;
+  else if (e && type === 'raise') text = `الراتب سيصبح ${money(e.salary + v)} شهرياً`;
+  else if (e) text = `تُحتسب في رواتب ${periodLabel(fin.period)}`;
+  $('#adj-preview').textContent = text;
+}
+['#adj-emp', '#adj-type', '#adj-amount'].forEach((s) => $(s).addEventListener('input', updateAdjustPreview));
+$('#dlg-adjust').addEventListener('close', () => {
+  if ($('#dlg-adjust').returnValue !== 'ok') return;
+  const type = $('#adj-type').value;
+  const value = Number($('#adj-amount').value);
+  try {
+    const a = addAdjustment(state, { empId: $('#adj-emp').value, type, reason: $('#adj-reason').value, by: 'owner',
+      ...(type === 'overtime' ? { hours: value } : { amount: value }) });
+    save();
+    toast(`تم تسجيل ${ADJ_TYPES[type].name} لـ${emp(a.empId).name}: ${money(a.amount)}`);
+  } catch (err) {
+    toast(err.message);
+  }
+  if ($('#dlg-finance').open) renderFinance();
+});
+
+$('#btn-finance').addEventListener('click', () => { renderFinance(); $('#dlg-finance').showModal(); });
+document.querySelectorAll('[data-fin]').forEach((b) => b.addEventListener('click', () => { finTab = b.dataset.fin; renderFinance(); }));
+
+// ------------------------------------------------------------ moving the view
+function startRepeat(fn) {
+  fn();
+  const timer = setInterval(fn, 90);
+  const stop = () => { clearInterval(timer); window.removeEventListener('pointerup', stop); window.removeEventListener('pointercancel', stop); };
+  window.addEventListener('pointerup', stop);
+  window.addEventListener('pointercancel', stop);
+}
+document.querySelectorAll('#nav-pad button').forEach((b) => {
+  b.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    if (b.dataset.reset !== undefined) return office.focusOn('overview');
+    if (b.dataset.zoom) return startRepeat(() => office.zoom(Number(b.dataset.zoom)));
+    const [dx, dy] = b.dataset.pan.split(',').map(Number);
+    startRepeat(() => office.pan(dx, dy));
+  });
+  // Keyboard activation (Enter/Space) arrives as a click with no pointer: one step.
+  b.addEventListener('click', (ev) => {
+    if (ev.detail !== 0) return;
+    if (b.dataset.reset !== undefined) office.focusOn('overview');
+    else if (b.dataset.zoom) office.zoom(Number(b.dataset.zoom));
+    else office.pan(...b.dataset.pan.split(',').map(Number));
+  });
+});
+window.addEventListener('keydown', (ev) => {
+  if (ev.target.closest?.('input, textarea, select, dialog[open]') || document.querySelector('dialog[open]')) return;
+  const keys = { ArrowUp: [0, 1], ArrowDown: [0, -1], ArrowLeft: [-1, 0], ArrowRight: [1, 0] };
+  if (keys[ev.key]) { ev.preventDefault(); office.pan(...keys[ev.key]); }
+  else if (ev.key === '+' || ev.key === '=') office.zoom(0.85);
+  else if (ev.key === '-') office.zoom(1.18);
 });
 
 // ------------------------------------------------------------ settings

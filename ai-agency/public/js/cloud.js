@@ -4,6 +4,8 @@
 //   core/outputs/<task>   one task's delivered output
 //   core/chats/<emp>      one employee's chat history
 //   core/meetings/<id>    one meeting with its minutes
+//   core/finance/books    settings, payroll adjustments and payroll runs
+//   core/finance/ledger   income and expense entries
 // Writes are diffed against what was last stored, so only changed
 // documents are sent, one write at a time per document.
 
@@ -27,6 +29,11 @@ function splitState(state) {
     nextId: state.nextId,
     migrations: state.migrations || [],
   });
+  if (state.finance) {
+    const { ledger, ...books } = state.finance;
+    docs.set('finance/books', { ...books, payrolls: books.payrolls.map((p) => ({ ...p, memo: (p.memo || '').slice(0, 2000) })) });
+    docs.set('finance/ledger', { entries: ledger });
+  }
   for (const t of state.tasks) {
     if (t.output) docs.set(`outputs/${t.id}`, { text: t.output.slice(0, MAX_DOC_CHARS) });
   }
@@ -77,8 +84,8 @@ export async function connectCloud() {
       return null;
     }
     const c = snap.data();
-    const [outputs, chats, meetings] = await withTimeout(Promise.all(
-      ['outputs', 'chats', 'meetings'].map((name) => core.collection(name).get()),
+    const [outputs, chats, meetings, finance] = await withTimeout(Promise.all(
+      ['outputs', 'chats', 'meetings', 'finance'].map((name) => core.collection(name).get()),
     ), LOAD_TIMEOUT_MS);
     const byId = (qs) => Object.fromEntries(qs.docs.map((d) => [d.id, d.data()]));
     const out = byId(outputs);
@@ -95,6 +102,8 @@ export async function connectCloud() {
       nextId: c.nextId,
       migrations: c.migrations || [],
     };
+    const books = byId(finance);
+    if (books.books) state.finance = { ...books.books, ledger: books.ledger?.entries || [] };
     // Record what is stored now so the first save only sends real changes.
     for (const [key, body] of splitState(state)) written.set(key, JSON.stringify(body));
     for (const d of outputs.docs) written.set(`outputs/${d.id}`, written.get(`outputs/${d.id}`) ?? '?');

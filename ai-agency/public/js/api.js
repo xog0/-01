@@ -46,7 +46,7 @@ export async function askEmployee(payload) {
   return data.truncated ? `${data.reply}\n\n(…توقف الرد لأنه طويل جداً)` : data.reply;
 }
 
-const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick' };
+const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick' };
 
 async function askViaSample(sample, payload) {
   const req = validateChatRequest(payload);
@@ -84,6 +84,11 @@ async function demoReply({ mode, persona, messages }) {
     ]);
   }
   if (mode === 'assign') return ''; // the app falls back to each department's task library
+  if (mode === 'memo') return `مذكرة الرواتب: تم إعداد المسير وفق الأرقام المرفقة. أوصي بمراجعة بند العمل الإضافي الشهر القادم.${note}`;
+  if (persona.duties === 'finance' && /خصم|مكافأة|مكافاة|أوفرتايم|اوفرتايم|زيادة/.test(last)) {
+    const m = last.match(/(خصم|مكافأة|مكافاة|أوفرتايم|اوفرتايم|زيادة)[^\d٠-٩]*([\d٠-٩]+)/);
+    return m ? `حاضر، سأسجّلها الآن.\n[[مالية: ${m[1]} | ${(last.match(/(?:ل|من|على)\s*([\u0600-\u06FF]+)/) || [])[1] || 'الكل'} | ${m[2]} | بطلب من المالك]]` : `حدد لي الموظف والمبلغ من فضلك.${note}`;
+  }
   if (mode === 'review') {
     return JSON.stringify(Math.random() < 0.3
       ? { decision: 'revise', feedback: 'بداية جيدة، لكن أضف أمثلة عملية أوضح وخطوة قياس واحدة على الأقل.' }

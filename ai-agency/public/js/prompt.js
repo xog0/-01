@@ -8,7 +8,8 @@ export const LIMITS = Object.freeze({
   maxLongFieldChars: 1200,
 });
 
-const MODES = new Set(['chat', 'task', 'meeting', 'summary', 'assign', 'review']);
+const MODES = new Set(['chat', 'task', 'meeting', 'summary', 'assign', 'review', 'memo']);
+const DUTIES = new Set(['', 'finance']);
 
 export class ValidationError extends Error {}
 
@@ -43,7 +44,10 @@ export function validateChatRequest(body) {
     reports: str(p.reports, LIMITS.maxLongFieldChars, 'reports', { required: false }),
     bio: str(p.bio, LIMITS.maxLongFieldChars, 'bio', { required: false }),
     memory: str(p.memory, LIMITS.maxLongFieldChars, 'memory', { required: false }),
+    duties: str(p.duties, LIMITS.maxFieldChars, 'duties', { required: false }),
   };
+
+  if (!DUTIES.has(persona.duties)) throw new ValidationError('مسؤوليات غير معروفة');
 
   const c = body.company ?? {};
   const company = {
@@ -99,6 +103,9 @@ const MODE_INSTRUCTIONS = {
     'أنت مدير وصلك عمل سلّمه أحد أفراد فريقك. راجعه كما يراجع مدير حقيقي: هل نفّذ المطلوب، وهل هو واضح وصالح للاستخدام مع عميل؟ ' +
     'كن عادلاً: اعتمد العمل الجيد حتى لو لم يكن مثالياً، واطلب التعديل فقط عند نقص حقيقي يمكن إصلاحه. ' +
     'أعد JSON فقط دون أي نص قبله أو بعده: {"decision":"approve أو revise","feedback":"ملاحظتك للموظف بصوتك في جملة إلى ثلاث جمل"}',
+  memo:
+    'اكتب مذكرة داخلية موجزة ومهنية بصوتك إلى المالك والمدير التنفيذي، بناءً على الأرقام التي تصلك فقط ودون اختلاق أرقام جديدة. ' +
+    'اذكر الإجمالي وأبرز البنود والملاحظات، وتوصية واحدة عملية. لا تتجاوز 150 كلمة.',
   summary:
     'أنت أعلى الحاضرين رتبة وانتهى الاجتماع للتو. اكتب محضراً موجزاً: ' +
     '1) القرارات، 2) المهام المطلوبة مع اسم المسؤول عن كل مهمة، 3) الخطوة التالية. ' +
@@ -124,6 +131,15 @@ export function buildSystemPrompt({ mode, persona, company }) {
       'إذا سُئلت مباشرة هل أنت ذكاء اصطناعي فأجب بصدق أنك موظف افتراضي يعمل بالذكاء الاصطناعي.',
     MODE_INSTRUCTIONS[mode],
   );
+  if (mode === 'chat' && persona.duties === 'finance') {
+    lines.push(
+      'أنت المسؤول عن الرواتب والخصومات والمكافآت والعمل الإضافي (الأوفرتايم) وزيادات الرواتب في الوكالة.',
+      'إذا طلب منك المالك صراحةً تسجيل حركة مالية لموظف، فأكّد في جملة قصيرة ما ستسجّله، ثم اكتب لكل حركة سطراً بهذا الشكل بالضبط: ' +
+        '[[مالية: النوع | اسم الموظف أو الكل | المبلغ أو عدد الساعات | السبب]] ' +
+        'حيث النوع واحد من: خصم، مكافأة، أوفرتايم (الرقم عدد ساعات)، زيادة (زيادة دائمة على الراتب الشهري). ' +
+        'اكتب الأرقام كأرقام فقط دون عملة. لا تكتب هذا السطر إلا عند طلب صريح من المالك، وإذا بدا لك الطلب مخالفاً للسياسة أو مبالغاً فيه فنبّه إليه بأدب قبل التنفيذ.',
+    );
+  }
   if (mode === 'chat' && persona.reports) {
     lines.push(
       `أنت مسؤول عن تكليف فريقك بالمهام. أعضاء فريقك: ${persona.reports}.`,

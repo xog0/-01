@@ -72,3 +72,12 @@ test('review mode asks for a JSON verdict; bio and memory reach the prompt', () 
   assert.match(sys, /خطة الربع/);
   assert.throws(() => validateChatRequest(base({ persona: { ...persona, memory: 'x'.repeat(2000) } })), ValidationError);
 });
+
+test('only the finance manager is told how to record payroll orders', () => {
+  const cfo = { ...persona, duties: 'finance' };
+  assert.match(buildSystemPrompt(validateChatRequest(base({ persona: cfo }))), /\[\[مالية:/);
+  assert.doesNotMatch(buildSystemPrompt(validateChatRequest(base())), /\[\[مالية:/);
+  assert.doesNotMatch(buildSystemPrompt(validateChatRequest(base({ persona: cfo, mode: 'task' }))), /\[\[مالية:/);
+  assert.throws(() => validateChatRequest(base({ persona: { ...persona, duties: 'admin' } })), ValidationError);
+  assert.match(buildSystemPrompt(validateChatRequest(base({ mode: 'memo' }))), /مذكرة داخلية/);
+});

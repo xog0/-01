@@ -1,5 +1,6 @@
 // Company model: career ladder, departments, starting team, default tasks,
 // and persistence in localStorage.
+import { createFinance, defaultSalary } from './finance.js';
 
 // Seats: desks 0..24 are the open-plan area. 25 is the CEO suite at the end
 // of the executive wing, 26..33 are private offices for managers (level
@@ -62,6 +63,8 @@ export const DEPARTMENTS = {
     skills: 'التوظيف والمقابلات، تقييم الأداء، المسارات الوظيفية والترقيات، التدريب، سياسات العمل وثقافة الفريق' },
   executive: { name: 'الإدارة التنفيذية', role: 'الإدارة التنفيذية', color: 0xe9c46a,
     skills: 'الرؤية والاستراتيجية العامة، الإدارة المالية، قيادة المدراء، اتخاذ القرارات الكبرى، تطوير الأعمال' },
+  finance: { name: 'المالية', role: 'المحاسبة والمالية', color: 0x06d6a0,
+    skills: 'الرواتب والخصومات والعمل الإضافي، المحاسبة والقيود، الميزانيات والتدفق النقدي، التقارير المالية، ضبط المصروفات' },
 };
 
 // Named positions offered in the hire form. Unique ones can be held by one person.
@@ -71,10 +74,13 @@ export const POSITIONS = [
   { key: 'marketing', name: 'مدير التسويق', dept: 'marketing', level: 5, unique: true, reportsTo: 'ceo' },
   { key: 'sales', name: 'مدير المبيعات', dept: 'sales', level: 5, unique: true, reportsTo: 'ceo' },
   { key: 'hr', name: 'مدير الموارد البشرية', dept: 'hr', level: 5, unique: true, reportsTo: 'ceo' },
+  { key: 'cfo', name: 'المدير المالي', dept: 'finance', level: 6, unique: true, reportsTo: 'ceo' },
 ];
 
 export function titleFor(emp) {
   if (emp.customTitle) return emp.customTitle;
+  const position = POSITIONS.find((p) => p.dept === emp.dept && p.level === emp.level);
+  if (position) return position.name;
   const level = LADDER[emp.level];
   const dept = DEPARTMENTS[emp.dept];
   if (emp.level >= 7) return level.name;
@@ -135,6 +141,11 @@ export const ROLE_TASKS = {
     ['نموذج تقييم أداء', 'صمّم نموذج تقييم أداء ربع سنوي للموظفين مع معايير واضحة ومقياس لكل معيار.', 'medium'],
     ['خطة تهيئة الموظف الجديد', 'ضع خطة تهيئة لأول أسبوعين للموظف الجديد: اليوم الأول، التدريب، والأهداف الأولى.', 'medium'],
   ],
+  finance: [
+    ['إعداد ميزانية الربع القادم', 'ضع ميزانية تشغيلية للربع القادم: الرواتب، الإعلانات، الأدوات، والمصروفات العامة، مع هامش احتياطي.', 'high'],
+    ['سياسة المكافآت والخصومات', 'اكتب سياسة واضحة للمكافآت والخصومات والعمل الإضافي في الوكالة، مع أمثلة وحدود لكل بند.', 'medium'],
+    ['تقرير التدفق النقدي', 'صمّم قالب تقرير شهري للتدفق النقدي يوضح الإيرادات والمصروفات والرصيد المتوقع.', 'low'],
+  ],
   executive: [
     ['رؤية الوكالة لثلاث سنوات', 'اكتب رؤية ورسالة وقيم الوكالة مع 3 أهداف استراتيجية للسنوات الثلاث القادمة.', 'high'],
     ['مؤشرات أداء الإدارة العليا', 'حدّد أهم 6 مؤشرات تتابعها الإدارة العليا شهرياً مع المستهدف لكل مؤشر.', 'medium'],
@@ -154,8 +165,13 @@ export const STATUS_NAMES = { todo: 'قيد الانتظار', doing: 'قيد ا
 const HAMO = { id: 'e5', name: 'حمو', gender: 'm', dept: 'executive', level: 8, xp: 1000, managerId: null,
     personality: 'قائد صاحب رؤية، حاسم وهادئ، يركّز على النمو والصورة الكبيرة ويطلب من الفريق نتائج واضحة.' };
 
+// The finance manager: runs payroll and keeps the books.
+const SHEIKA = { id: 'e6', name: 'شيكا', gender: 'm', dept: 'finance', level: 6, xp: 560, managerId: 'e5',
+  personality: 'محاسب دقيق ومنظم، حازم في الأرقام لكنه منصف، يشرح الحسابات ببساطة ويحب الجداول الواضحة.' };
+
 const STARTING_TEAM = [
   HAMO,
+  SHEIKA,
   { id: 'e1', name: 'سارة', gender: 'f', dept: 'strategy', level: 5, xp: 420, managerId: 'e5',
     personality: 'قيادية هادئة، تفكر بالأرقام والأهداف، تحب الوضوح وتطرح أسئلة ذكية قبل البدء.' },
   { id: 'e2', managerId: 'e1', name: 'خالد', gender: 'm', dept: 'content', level: 3, xp: 195,
@@ -167,6 +183,8 @@ const STARTING_TEAM = [
 ];
 
 const DEFAULT_TASKS = [
+  ['e6', 'إعداد ميزانية الربع القادم', 'ضع ميزانية تشغيلية للربع القادم: الرواتب، الإعلانات، الأدوات، والمصروفات العامة، مع هامش احتياطي.', 'high'],
+  ['e6', 'سياسة المكافآت والخصومات', 'اكتب سياسة واضحة للمكافآت والخصومات والعمل الإضافي في الوكالة، مع أمثلة وحدود لكل بند.', 'medium'],
   ['e5', 'رؤية الوكالة لثلاث سنوات', 'اكتب رؤية ورسالة وقيم الوكالة مع 3 أهداف استراتيجية للسنوات الثلاث القادمة.', 'high'],
   ['e5', 'مؤشرات أداء الإدارة العليا', 'حدّد أهم 6 مؤشرات تتابعها الإدارة العليا شهرياً مع المستهدف لكل مؤشر.', 'medium'],
   ['e1', 'إعداد الخطة التسويقية للربع القادم', 'ضع خطة تسويقية لثلاثة أشهر للوكالة: الأهداف، القنوات، الميزانية التقديرية، ومؤشرات الأداء.', 'high'],
@@ -206,7 +224,7 @@ function addInterns(state) {
     if (desk === undefined) break; // open area is full
     const head = state.employees.filter((e) => e.dept === it.dept).sort(byRankDesc)[0] || hamo || null;
     const id = newId(state, 'e');
-    state.employees.push({ ...it, id, level: 0, xp: 0, desk, managerId: head ? head.id : null, hiredAt: Date.now(), status: 'idle' });
+    state.employees.push({ ...it, id, level: 0, xp: 0, desk, managerId: head ? head.id : null, salary: defaultSalary(0), hiredAt: Date.now(), status: 'idle' });
     const [title, description] = ROLE_TASKS[it.dept].at(-1);
     state.tasks.push({ id: newId(state, 't'), empId: id, title, description, priority: 'low', status: 'todo', output: '',
       createdAt: Date.now(), assignedBy: head ? head.id : null });
@@ -224,6 +242,7 @@ const LOOKS = {
   'خالد': { hair: 'curly', skin: 2, hairColor: 0, beard: true },
   'ليلى': { hair: 'long', skin: 3, hairColor: 3, height: 0.96 },
   'عمر': { hair: 'buzz', skin: 1, hairColor: 2, glasses: true },
+  'شيكا': { hair: 'short', skin: 1, hairColor: 2, glasses: true, beard: true },
   'يوسف': { hair: 'short', skin: 2, hairColor: 2, beard: true },
   'رنا': { hair: 'hijab', hijab: 0xcbb994, skin: 0, height: 0.95 },
   'زياد': { hair: 'short', skin: 3, hairColor: 1 },
@@ -241,6 +260,8 @@ const LOOKS = {
 const BIOS = {
   'حمو': { age: 46, years: 22, background: 'بدأ في المبيعات، ثم أسس وأدار وكالتين قبل أن يقود الوكالة. يحمل ماجستير في إدارة الأعمال.',
     style: 'يتحدث باختصار وثقة، يسأل عن الأرقام وأثر القرار على العميل، يشكر الفريق علناً وينتقد على انفراد.' },
+  'شيكا': { age: 39, years: 15, background: 'محاسب قانوني عمل في التدقيق لدى مكتب محاسبة، ثم أدار الحسابات والرواتب لشركات خدمات.',
+    style: 'دقيق وهادئ، يبدأ بالرقم ثم يشرحه، ويذكّر بالسياسة قبل أي استثناء.' },
   'سارة': { age: 34, years: 11, background: 'عملت في التخطيط الاستراتيجي لدى وكالة إعلانية كبيرة، وتحمل بكالوريوس تسويق وشهادة في تحليل البيانات.',
     style: 'منظمة ومباشرة، تبدأ بالهدف ثم الخطة، وتطلب مواعيد تسليم واضحة.' },
   'خالد': { age: 29, years: 6, background: 'صحفي سابق انتقل إلى الكتابة الإعلانية، وكتب لعلامات في الأغذية والسياحة.',
@@ -304,10 +325,11 @@ export function createInitialState() {
     chats: {},
     meetings: [],
     nextId: 100,
+    finance: createFinance(now),
     migrations: MIGRATIONS.map((m) => m.key), // a fresh agency already has these
   };
   for (const e of STARTING_TEAM) {
-    state.employees.push({ ...e, desk: freeSeat(state, e.level), hiredAt: now, status: 'idle' });
+    state.employees.push({ ...e, desk: freeSeat(state, e.level), salary: defaultSalary(e.level), hiredAt: now, status: 'idle' });
   }
   addInterns(state);
   return state;
@@ -324,7 +346,7 @@ const MIGRATIONS = [
       const desk = freeSeat(state, HAMO.level);
       if (desk === undefined) return; // office is full
       const id = state.employees.some((e) => e.id === HAMO.id) ? newId(state, 'e') : HAMO.id;
-      state.employees.push({ ...HAMO, id, desk, hiredAt: Date.now(), status: 'idle' });
+      state.employees.push({ ...HAMO, id, desk, salary: defaultSalary(HAMO.level), hiredAt: Date.now(), status: 'idle' });
       for (const [, title, description, priority] of DEFAULT_TASKS.filter(([who]) => who === HAMO.id)) {
         state.tasks.push({ id: newId(state, 't'), empId: id, title, description, priority, status: 'todo', output: '', createdAt: Date.now() });
       }
@@ -345,6 +367,8 @@ const MIGRATIONS = [
   { key: 'add-interns', run: addInterns },
   { key: 'manager-offices', run: moveManagersToOffices },
   { key: 'ceo-suite', run: ceoToSuite },
+  { key: 'finance-setup', run: setUpFinance },
+  { key: 'add-sheika-cfo', run: addSheika },
 ];
 
 // Whoever heads a department (its members whose manager is outside it)
@@ -362,6 +386,24 @@ function deptHeadsUnderHamo(state, dept) {
 
 /** Managers sitting in the open area move into free private offices,
  *  highest rank first. Returns the ids of those who moved. */
+/** Books for agencies saved before the finance system: salaries by level. */
+function setUpFinance(state) {
+  state.finance ||= createFinance();
+  for (const e of state.employees) if (!(e.salary > 0)) e.salary = defaultSalary(e.level);
+}
+
+function addSheika(state) {
+  if (state.employees.some((e) => e.name === SHEIKA.name)) return;
+  const desk = freeSeat(state, SHEIKA.level);
+  if (desk === undefined) return;
+  const ceo = state.employees.filter((e) => e.level >= CEO_LEVEL).sort((a, b) => (b.xp || 0) - (a.xp || 0))[0];
+  const id = state.employees.some((e) => e.id === SHEIKA.id) ? newId(state, 'e') : SHEIKA.id;
+  state.employees.push({ ...SHEIKA, id, desk, managerId: ceo ? ceo.id : null, salary: defaultSalary(SHEIKA.level), hiredAt: Date.now(), status: 'idle' });
+  for (const [, title, description, priority] of DEFAULT_TASKS.filter(([who]) => who === SHEIKA.id)) {
+    state.tasks.push({ id: newId(state, 't'), empId: id, title, description, priority, status: 'todo', output: '', createdAt: Date.now() });
+  }
+}
+
 /** The top CEO sits in the suite: swaps seats with whoever is there. */
 function ceoToSuite(state) {
   const ceo = state.employees.filter((e) => e.level >= CEO_LEVEL).sort((a, b) => (b.xp || 0) - (a.xp || 0))[0];

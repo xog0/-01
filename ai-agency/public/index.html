@@ -36,6 +36,7 @@
       <button id="btn-board">📋 المهام</button>
       <button id="btn-meeting">👥 اجتماع</button>
       <button id="btn-org">🏛️ الهيكل والسلم</button>
+      <button id="btn-finance">💰 المالية</button>
       <button id="btn-hire">➕ توظيف</button>
       <button id="btn-settings" title="الإعدادات" aria-label="الإعدادات">⚙️</button>
     </nav>
@@ -44,6 +45,16 @@
   <main id="stage" aria-label="المكتب ثلاثي الأبعاد"></main>
 
   <div id="roster" class="roster" aria-label="الفريق"></div>
+
+  <div id="nav-pad" class="nav-pad" aria-label="تحريك المكتب">
+    <button data-pan="0,1" title="للأعلى" aria-label="تحريك للأعلى">▲</button>
+    <button data-zoom="0.85" title="تقريب" aria-label="تقريب">＋</button>
+    <button data-pan="-1,0" title="لليسار" aria-label="تحريك لليسار">◀</button>
+    <button data-reset title="عرض المكتب كاملاً" aria-label="عرض المكتب كاملاً">⟲</button>
+    <button data-pan="1,0" title="لليمين" aria-label="تحريك لليمين">▶</button>
+    <button data-pan="0,-1" title="للأسفل" aria-label="تحريك للأسفل">▼</button>
+    <button data-zoom="1.18" title="تبعيد" aria-label="تبعيد">－</button>
+  </div>
 
   <aside id="panel" class="panel" hidden>
     <div class="panel-head">
@@ -120,6 +131,7 @@
         <label>المستوى الوظيفي <select id="hire-level"></select></label>
         <label>المدير المباشر <select id="hire-manager"></select></label>
       </div>
+      <label>الراتب الشهري <input id="hire-salary" type="number" min="1" step="any" required></label>
       <label>الشخصية وأسلوب العمل (اختياري)
         <textarea id="hire-personality" rows="2" maxlength="600" placeholder="مثال: دقيق ومنظم، يحب الأرقام، صريح في رأيه"></textarea>
       </label>
@@ -209,6 +221,46 @@
         <button type="button" class="danger" id="set-reset">إعادة الوكالة لبدايتها</button>
         <button value="cancel" formnovalidate>إلغاء</button>
         <button class="primary" value="ok">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-finance" class="wide">
+    <div class="dlg-head">
+      <h2>💰 المالية والرواتب</h2>
+      <div class="row">
+        <span id="fin-period" class="badge"></span>
+        <button class="icon" data-close aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <div class="tabs fin-tabs" role="tablist">
+      <button role="tab" data-fin="summary" class="active">الملخص</button>
+      <button role="tab" data-fin="payroll">الرواتب</button>
+      <button role="tab" data-fin="moves">الحركات</button>
+      <button role="tab" data-fin="ledger">الدفتر</button>
+      <button role="tab" data-fin="settings">الإعدادات</button>
+    </div>
+    <div id="fin-body" class="fin-body"></div>
+  </dialog>
+
+  <dialog id="dlg-adjust">
+    <form method="dialog" id="adjust-form" class="stack">
+      <h2>حركة على الراتب</h2>
+      <label>الموظف <select id="adj-emp"></select></label>
+      <label>النوع
+        <select id="adj-type">
+          <option value="bonus">مكافأة</option>
+          <option value="deduction">خصم</option>
+          <option value="overtime">عمل إضافي (أوفرتايم)</option>
+          <option value="raise">زيادة دائمة على الراتب</option>
+        </select>
+      </label>
+      <label><span id="adj-amount-label">المبلغ</span> <input id="adj-amount" type="number" min="0.01" step="any" required></label>
+      <label>السبب <input id="adj-reason" maxlength="200" placeholder="مثال: تأخير، حملة ناجحة، تسليم عاجل"></label>
+      <p class="muted" id="adj-preview"></p>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">تسجيل</button>
       </div>
     </form>
   </dialog>

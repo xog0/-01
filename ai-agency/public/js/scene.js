@@ -928,6 +928,32 @@ export function createOffice(container, { onSelect } = {}) {
     };
   }
 
+  // Moving the view with buttons or keys: pan along the floor in screen
+  // directions (right/left, up = away from the viewer), zoom toward the target.
+  const BOUNDS = { x0: -24, x1: 56, z0: -17, z1: 17 };
+  function pan(dx, dy) {
+    focusAnim = null;
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    forward.normalize();
+    const right = new THREE.Vector3().crossVectors(forward, camera.up).normalize();
+    const step = camera.position.distanceTo(controls.target) * 0.06;
+    const move = right.multiplyScalar(dx * step).add(forward.multiplyScalar(dy * step));
+    const next = controls.target.clone().add(move);
+    next.x = Math.min(BOUNDS.x1, Math.max(BOUNDS.x0, next.x));
+    next.z = Math.min(BOUNDS.z1, Math.max(BOUNDS.z0, next.z));
+    move.subVectors(next, controls.target);
+    controls.target.add(move);
+    camera.position.add(move);
+  }
+  function zoom(factor) {
+    focusAnim = null;
+    const offset = camera.position.clone().sub(controls.target);
+    const len = Math.min(controls.maxDistance, Math.max(controls.minDistance, offset.length() * factor));
+    camera.position.copy(controls.target).add(offset.setLength(len));
+  }
+
   // Picking
   let downAt = null;
   labelRenderer.domElement.addEventListener('pointerdown', (e) => { downAt = { x: e.clientX, y: e.clientY }; });
@@ -1043,6 +1069,6 @@ export function createOffice(container, { onSelect } = {}) {
 
   return {
     addEmployee, updateEmployee, removeEmployee, setStatus, setSelected, sendToMeeting, returnToDesks,
-    focusOn, setCompanyName, setDeskLit, setOfficeLabel, takeBreak, visit, recall, whereIs,
+    focusOn, setCompanyName, setDeskLit, setOfficeLabel, takeBreak, visit, recall, whereIs, pan, zoom,
   };
 }
