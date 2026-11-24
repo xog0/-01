@@ -82,6 +82,7 @@ function personaOf(e) {
     skills: DEPARTMENTS[e.dept].skills,
     personality: e.personality || '',
     manager: mgr ? `${mgr.name} (${titleFor(mgr)})` : 'مالك الوكالة مباشرة',
+    reports: teamOf(e.id).map((m) => `${m.name} (${titleFor(m)})`).join('، '),
   };
 }
 function companyOf(except) {
@@ -192,8 +193,20 @@ $('#chat-form').addEventListener('submit', async (ev) => {
   setStatus(e, 'talking', '💬');
   renderPanel();
   try {
-    const reply = await ask(e, 'chat', history.slice(-30));
-    history.push({ role: 'assistant', content: reply });
+    const raw = await ask(e, 'chat', history.slice(-30));
+    const { text: reply, order } = extractAssignOrder(raw, e);
+    history.push({ role: 'assistant', content: reply || 'حاضر.' });
+    if (order) {
+      save();
+      const added = await assignTeamTasks(e, order.ids, order.perMember, order.focus);
+      if (added?.length) {
+        const lines = order.ids.map((id) => {
+          const titles = added.filter((t) => t.empId === id).map((t) => t.title);
+          return titles.length ? `- ${emp(id)?.name}: ${titles.join('، ')}` : null;
+        }).filter(Boolean);
+        history.push({ role: 'assistant', content: `✅ تم التكليف:\n${lines.join('\n')}` });
+      }
+    }
     save();
   } catch (err) {
     history.pop();
@@ -333,7 +346,25 @@ function libraryAssignments(members, perMember) {
   });
 }
 
-async function assignTeamTasks(manager, onlyIds = null, perMember = 2) {
+// A manager's chat reply may end with [[تكليف: names | count | focus]] when the
+// owner asked for assignments. Strip it and resolve it to team members.
+function extractAssignOrder(reply, manager) {
+  const m = reply.match(/\[\[\s*تكليف\s*:([^\]]*)\]\]/);
+  if (!m) return { text: reply.trim(), order: null };
+  const text = reply.replace(m[0], '').trim();
+  const team = teamOf(manager.id);
+  if (!team.length) return { text, order: null };
+  const [who = '', count = '', focus = ''] = m[1].split('|').map((x) => x.trim());
+  const names = who.split(/[،,]| و/).map((x) => x.trim()).filter(Boolean);
+  const all = !names.length || names.some((n) => /^(ال)?كل|الجميع|الفريق/.test(n));
+  const ids = all ? team.map((x) => x.id) : team.filter((x) => names.some((n) => n.includes(x.name) || x.name.includes(n))).map((x) => x.id);
+  if (!ids.length) return { text, order: null };
+  const digits = count.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+  const perMember = Math.min(3, Math.max(1, parseInt(digits, 10) || 2));
+  return { text, order: { ids, perMember, focus: focus.slice(0, 300) } };
+}
+
+async function assignTeamTasks(manager, onlyIds = null, perMember = 2, focus = '') {
   const members = teamOf(manager.id).filter((m) => !onlyIds || onlyIds.includes(m.id));
   if (!members.length) return toast(`لا يوجد موظفون تحت إدارة ${manager.name}`);
   const key = `assign:${manager.id}`;
@@ -350,7 +381,8 @@ async function assignTeamTasks(manager, onlyIds = null, perMember = 2) {
   let tasks = [];
   try {
     const reply = await ask(manager, 'assign', [{ role: 'user', content:
-      `فريقك:\n${brief}\n\nكلّف كل عضو بـ${perMember === 1 ? 'مهمة واحدة' : `${perMember} مهام`} خاصة بوظيفته.` }]);
+      `فريقك:\n${brief}\n\nكلّف كل عضو بـ${perMember === 1 ? 'مهمة واحدة' : `${perMember} مهام`} خاصة بوظيفته.` +
+      (focus ? `\nطلب المالك أن تركّز المهام على: ${focus}` : '') }]);
     tasks = parseAssignments(reply, members);
   } catch (err) {
     toast(err.message);
@@ -369,7 +401,7 @@ async function assignTeamTasks(manager, onlyIds = null, perMember = 2) {
   }
   refresh();
   toast(tasks.length ? `📋 ${manager.name} كلّفت ${got.length} من الفريق بـ${tasks.length} مهام` : 'لم تُضف مهام جديدة');
-  return tasks.length;
+  return tasks;
 }
 
 // Each employee works through their own queue; employees work in parallel.
@@ -378,17 +410,11 @@ async function startWorkday() {
   workdayRunning = true;
   $('#btn-workday').disabled = true;
   $('#btn-workday').textContent = '⏳ الفريق يعمل…';
-  // Managers first give work to anyone in their team who has nothing queued.
-  const idle = state.employees.filter((e) => e.managerId && !meeting?.attendees.includes(e.id)
-    && !state.tasks.some((t) => t.empId === e.id && t.status === 'todo'));
-  const byManager = new Map();
-  for (const e of idle) byManager.set(e.managerId, [...(byManager.get(e.managerId) || []), e.id]);
-  for (const [mid, ids] of byManager) if (emp(mid)) await assignTeamTasks(emp(mid), ids);
   if (!state.tasks.some((t) => t.status === 'todo' && !meeting?.attendees.includes(t.empId))) {
     workdayRunning = false;
     $('#btn-workday').disabled = false;
     $('#btn-workday').textContent = '▶ ابدأ يوم العمل';
-    return toast('لا توجد مهام في الانتظار. أضف مهاماً من لوحة المهام.');
+    return toast('لا توجد مهام في الانتظار. اطلب من سارة تكليف الفريق، أو أضف مهاماً من لوحة المهام.');
   }
   const order = { high: 0, medium: 1, low: 2 };
   await Promise.all(state.employees.map(async (e) => {
@@ -546,9 +572,6 @@ $('#dlg-hire').addEventListener('close', () => {
   refresh();
   selectEmployee(e.id);
   toast(`👋 مرحباً بـ${e.name} في الفريق!`);
-  // The new hire's manager hands over starter tasks for their role.
-  const mgr = e.managerId ? emp(e.managerId) : null;
-  if (mgr) setTimeout(() => assignTeamTasks(mgr, [e.id]), 1200);
 });
 
 // ------------------------------------------------------------ task board

@@ -40,6 +40,7 @@ export function validateChatRequest(body) {
     skills: str(p.skills, LIMITS.maxLongFieldChars, 'skills', { required: false }),
     personality: str(p.personality, LIMITS.maxLongFieldChars, 'personality', { required: false }),
     manager: str(p.manager, LIMITS.maxFieldChars, 'manager', { required: false }),
+    reports: str(p.reports, LIMITS.maxLongFieldChars, 'reports', { required: false }),
   };
 
   const c = body.company ?? {};
@@ -113,5 +114,13 @@ export function buildSystemPrompt({ mode, persona, company }) {
     'إذا لم تتوفر لديك معلومة (أرقام حقيقية، بيانات عميل) فقل ذلك واقترح افتراضاً معقولاً بدلاً من اختلاق أرقام.',
     MODE_INSTRUCTIONS[mode],
   );
+  if (mode === 'chat' && persona.reports) {
+    lines.push(
+      `أنت مسؤول عن تكليف فريقك بالمهام. أعضاء فريقك: ${persona.reports}.`,
+      'إذا طلب منك المالك صراحةً تكليف الفريق أو أحد أعضائه بمهام، فأكّد ذلك في جملة قصيرة، ' +
+        'ثم اكتب في آخر سطر من ردك هذا الأمر بالضبط: [[تكليف: أسماء الموظفين مفصولة بفاصلة أو الكل | عدد المهام لكل موظف من 1 إلى 3 | موضوع المهام أو تركيزها كما طلب المالك، أو اتركه فارغاً]]. ' +
+        'لا تكتب المهام نفسها في ردك، فستُطلب منك بعد ذلك. ولا تكتب هذا الأمر أبداً إلا عند طلب صريح بالتكليف.',
+    );
+  }
   return lines.join('\n');
 }

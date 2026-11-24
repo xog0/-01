@@ -56,3 +56,10 @@ test('assign mode asks the manager for JSON tasks tied to each role', () => {
   assert.match(sys, /"tasks"/);
   assert.match(sys, /مسماه الوظيفي/);
 });
+
+test('a manager is told how to issue an assignment order only in chat', () => {
+  const boss = { ...persona, reports: 'خالد (أخصائي أول كتابة المحتوى)' };
+  assert.match(buildSystemPrompt(validateChatRequest(base({ persona: boss }))), /\[\[تكليف:/);
+  assert.doesNotMatch(buildSystemPrompt(validateChatRequest(base({ persona: boss, mode: 'task' }))), /\[\[تكليف:/);
+  assert.doesNotMatch(buildSystemPrompt(validateChatRequest(base())), /\[\[تكليف:/);
+});
