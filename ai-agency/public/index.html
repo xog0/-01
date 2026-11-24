@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>وكالة الذكاء الاصطناعي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/vendor/three/build/three.module.js",
+        "three/addons/": "/vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <div>
+        <h1 id="company-name">الوكالة</h1>
+        <small id="ai-mode" class="mode-pill">…</small>
+      </div>
+    </div>
+    <div class="stats">
+      <span><b id="stat-emp">0</b> موظف</span>
+      <span><b id="stat-open">0</b> مهمة مفتوحة</span>
+      <span><b id="stat-done">0</b> مكتملة</span>
+    </div>
+    <nav class="actions">
+      <button id="btn-workday" class="primary">▶ ابدأ يوم العمل</button>
+      <button id="btn-board">📋 المهام</button>
+      <button id="btn-meeting">👥 اجتماع</button>
+      <button id="btn-org">🏛️ الهيكل والسلم</button>
+      <button id="btn-hire">➕ توظيف</button>
+      <button id="btn-settings" title="الإعدادات" aria-label="الإعدادات">⚙️</button>
+    </nav>
+  </header>
+
+  <main id="stage" aria-label="المكتب ثلاثي الأبعاد"></main>
+
+  <div id="roster" class="roster" aria-label="الفريق"></div>
+
+  <aside id="panel" class="panel" hidden>
+    <div class="panel-head">
+      <div class="avatar" id="p-avatar"></div>
+      <div class="who">
+        <h2 id="p-name"></h2>
+        <p id="p-title"></p>
+      </div>
+      <button class="icon" id="p-close" aria-label="إغلاق">✕</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="chat" class="active">💬 محادثة</button>
+      <button role="tab" data-tab="tasks">✅ المهام</button>
+      <button role="tab" data-tab="profile">🪪 الملف</button>
+    </div>
+    <section data-pane="chat" class="pane active">
+      <div id="chat-log" class="chat-log"></div>
+      <form id="chat-form" class="chat-form">
+        <textarea id="chat-input" rows="2" maxlength="6000" placeholder="اكتب رسالتك للموظف…" required></textarea>
+        <button class="primary" type="submit">إرسال</button>
+      </form>
+    </section>
+    <section data-pane="tasks" class="pane">
+      <div id="emp-tasks" class="task-list"></div>
+      <form id="task-form" class="stack">
+        <h3>تكليف بمهمة جديدة</h3>
+        <input id="task-title" maxlength="200" placeholder="عنوان المهمة" required>
+        <textarea id="task-desc" rows="3" maxlength="1500" placeholder="التفاصيل والمطلوب بدقة"></textarea>
+        <div class="row">
+          <select id="task-priority">
+            <option value="low">أولوية منخفضة</option>
+            <option value="medium" selected>أولوية متوسطة</option>
+            <option value="high">أولوية عالية</option>
+          </select>
+          <button class="primary" type="submit">إضافة</button>
+        </div>
+      </form>
+    </section>
+    <section data-pane="profile" class="pane" id="profile-pane"></section>
+  </aside>
+
+  <section id="meeting-panel" class="meeting-panel" hidden>
+    <div class="panel-head">
+      <div class="who">
+        <h2 id="m-title">اجتماع</h2>
+        <p id="m-topic"></p>
+      </div>
+    </div>
+    <div id="m-log" class="chat-log"></div>
+    <form id="m-form" class="chat-form">
+      <textarea id="m-input" rows="2" maxlength="3000" placeholder="تدخّل في الاجتماع (اختياري)…"></textarea>
+      <button type="submit">قل</button>
+    </form>
+    <div class="row m-actions">
+      <button id="m-round" class="primary">🔄 جولة نقاش</button>
+      <button id="m-end" class="danger">إنهاء وكتابة المحضر</button>
+    </div>
+  </section>
+
+  <!-- Dialogs -->
+  <dialog id="dlg-hire">
+    <form method="dialog" id="hire-form" class="stack">
+      <h2>توظيف موظف جديد</h2>
+      <p class="muted" id="hire-capacity"></p>
+      <label>الاسم <input id="hire-name" maxlength="40" required></label>
+      <div class="row">
+        <label>الجنس
+          <select id="hire-gender"><option value="m">ذكر</option><option value="f">أنثى</option></select>
+        </label>
+        <label>القسم <select id="hire-dept"></select></label>
+      </div>
+      <div class="row">
+        <label>المستوى الوظيفي <select id="hire-level"></select></label>
+        <label>المدير المباشر <select id="hire-manager"></select></label>
+      </div>
+      <label>الشخصية وأسلوب العمل (اختياري)
+        <textarea id="hire-personality" rows="2" maxlength="600" placeholder="مثال: دقيق ومنظم، يحب الأرقام، صريح في رأيه"></textarea>
+      </label>
+      <p class="muted" id="hire-preview"></p>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok" id="hire-submit">توظيف</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-board" class="wide">
+    <div class="dlg-head">
+      <h2>لوحة المهام</h2>
+      <div class="row">
+        <select id="board-filter" aria-label="تصفية حسب الموظف"></select>
+        <button id="board-close" class="icon" aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <div id="board" class="board"></div>
+  </dialog>
+
+  <dialog id="dlg-org" class="wide">
+    <div class="dlg-head">
+      <h2>الهيكل التنظيمي والسلم الوظيفي</h2>
+      <button class="icon" data-close aria-label="إغلاق">✕</button>
+    </div>
+    <div class="org-grid">
+      <section>
+        <h3>الهيكل التنظيمي</h3>
+        <div id="org-tree" class="org-tree"></div>
+      </section>
+      <section>
+        <h3>السلم الوظيفي</h3>
+        <ol id="ladder" class="ladder"></ol>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-meeting">
+    <form method="dialog" id="meeting-form" class="stack">
+      <h2>بدء اجتماع</h2>
+      <label>الغرفة <select id="meet-room"></select></label>
+      <label>موضوع الاجتماع
+        <textarea id="meet-topic" rows="2" maxlength="600" required placeholder="مثال: أفكار حملة إطلاق منتج جديد لعميل في قطاع المطاعم"></textarea>
+      </label>
+      <fieldset>
+        <legend>الحاضرون</legend>
+        <div id="meet-people" class="checks"></div>
+      </fieldset>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">ابدأ الاجتماع</button>
+      </div>
+      <details id="meet-history">
+        <summary>محاضر الاجتماعات السابقة</summary>
+        <div id="meet-history-list"></div>
+      </details>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-output" class="wide">
+    <div class="dlg-head">
+      <h2 id="out-title"></h2>
+      <div class="row">
+        <button id="out-copy">نسخ</button>
+        <button class="icon" data-close aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <p class="muted" id="out-meta"></p>
+    <div id="out-body" class="rich"></div>
+  </dialog>
+
+  <dialog id="dlg-settings">
+    <form method="dialog" id="settings-form" class="stack">
+      <h2>إعدادات الوكالة</h2>
+      <label>اسم الوكالة <input id="set-name" maxlength="60" required></label>
+      <label>نبذة عن الوكالة وعملائها
+        <textarea id="set-about" rows="3" maxlength="1000"></textarea>
+      </label>
+      <div class="row end">
+        <button type="button" class="danger" id="set-reset">إعادة الوكالة لبدايتها</button>
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
