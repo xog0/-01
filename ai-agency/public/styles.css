@@ -15,6 +15,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { margin: 0; height: 100%; }
 body {
   background: var(--bg);
@@ -207,6 +208,8 @@ legend { color: var(--muted); font-size: 13px; padding: 0 6px; }
 .checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; }
 .checks label { flex-direction: row; align-items: center; gap: 6px; color: var(--text); font-size: 14px; }
 .checks input { width: auto; }
+label.check { flex-direction: row; align-items: center; gap: 8px; color: var(--text); font-size: 14px; }
+label.check input { width: auto; }
 details summary { cursor: pointer; color: var(--muted); }
 
 .board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }

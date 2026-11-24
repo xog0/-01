@@ -109,6 +109,7 @@
       <h2>توظيف موظف جديد</h2>
       <p class="muted" id="hire-capacity"></p>
       <label>الاسم <input id="hire-name" maxlength="40" required></label>
+      <label>المنصب <select id="hire-position"></select></label>
       <div class="row">
         <label>الجنس
           <select id="hire-gender"><option value="m">ذكر</option><option value="f">أنثى</option></select>
@@ -121,6 +122,10 @@
       </div>
       <label>الشخصية وأسلوب العمل (اختياري)
         <textarea id="hire-personality" rows="2" maxlength="600" placeholder="مثال: دقيق ومنظم، يحب الأرقام، صريح في رأيه"></textarea>
+      </label>
+      <label class="check" id="hire-takeover-row" hidden>
+        <input type="checkbox" id="hire-takeover" checked>
+        <span id="hire-takeover-text"></span>
       </label>
       <p class="muted" id="hire-preview"></p>
       <div class="row end">

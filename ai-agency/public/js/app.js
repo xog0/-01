@@ -1,6 +1,6 @@
 import { createOffice, MAX_DESKS, ROOMS } from './scene.js';
 import {
-  LADDER, DEPARTMENTS, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
+  LADDER, DEPARTMENTS, POSITIONS, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
   titleFor, loadState, saveState, createInitialState, newId,
 } from './data.js';
 import { askEmployee, backendStatus } from './api.js';
@@ -545,13 +545,49 @@ function fillHireForm() {
   $('#hire-level').replaceChildren(...LADDER.map((l, i) => h('option', { value: i, selected: i === 1 }, l.name)));
   $('#hire-manager').replaceChildren(h('option', { value: '' }, 'مالك الوكالة مباشرة'),
     ...[...state.employees].sort(byRank).map((x, i) => h('option', { value: x.id, selected: i === 0 }, `${x.name} — ${titleFor(x)}`)));
+  $('#hire-takeover-row').hidden = true;
+  $('#hire-position').replaceChildren(h('option', { value: '' }, 'منصب مخصص (اختر القسم والمستوى)'),
+    ...POSITIONS.map((p) => {
+      const holder = p.unique && positionHolder(p);
+      return h('option', { value: p.key, disabled: Boolean(holder) }, holder ? `${p.name} (يشغله ${holder.name})` : p.name);
+    }));
   updateHirePreview();
 }
+const positionHolder = (p) => state.employees.find((x) => x.dept === p.dept && x.level === p.level && !x.customTitle);
+$('#hire-position').addEventListener('change', () => {
+  const p = POSITIONS.find((x) => x.key === $('#hire-position').value);
+  if (!p) return;
+  $('#hire-dept').value = p.dept;
+  $('#hire-level').value = String(p.level);
+  // Report to the next post up: CEO to the owner, GM to the CEO, department heads to the GM or CEO.
+  const ceo = positionHolder(POSITIONS[0]);
+  const gm = positionHolder(POSITIONS[1]);
+  const boss = p.key === 'ceo' ? null : p.key === 'gm' ? ceo : gm || ceo || [...state.employees].sort(byRank)[0];
+  $('#hire-manager').value = boss ? boss.id : '';
+  updateHirePreview();
+});
+// Who would move under a newly hired CEO or GM: everyone currently reporting
+// to the same boss the new hire reports to (the owner, or the CEO for a GM).
+function takeoverCandidates() {
+  const pos = $('#hire-position').value;
+  if (pos !== 'ceo' && pos !== 'gm') return [];
+  const boss = $('#hire-manager').value || null;
+  return state.employees.filter((x) => (x.managerId || null) === boss);
+}
+function updateTakeover() {
+  const list = takeoverCandidates();
+  $('#hire-takeover-row').hidden = !list.length;
+  $('#hire-takeover-text').textContent = `اجعل ${list.map((x) => x.name).join('، ')} تحت إدارته`;
+}
+['#hire-position', '#hire-manager'].forEach((s) => $(s).addEventListener('change', updateTakeover));
 function updateHirePreview() {
   const preview = { dept: $('#hire-dept').value, level: Number($('#hire-level').value) };
   $('#hire-preview').textContent = `المسمى الوظيفي: ${titleFor(preview)}`;
 }
-['#hire-dept', '#hire-level'].forEach((s) => $(s).addEventListener('change', updateHirePreview));
+['#hire-dept', '#hire-level'].forEach((s) => $(s).addEventListener('change', () => {
+  $('#hire-position').value = '';
+  updateHirePreview();
+}));
 $('#btn-hire').addEventListener('click', () => { fillHireForm(); $('#dlg-hire').showModal(); });
 $('#dlg-hire').addEventListener('close', () => {
   if ($('#dlg-hire').returnValue !== 'ok') return;
@@ -560,15 +596,18 @@ $('#dlg-hire').addEventListener('close', () => {
   const desk = [...Array(MAX_DESKS).keys()].find((i) => !used.has(i));
   if (!name || desk === undefined) return;
   const level = Number($('#hire-level').value);
+  const takeover = $('#hire-takeover').checked ? takeoverCandidates() : [];
   const e = {
     id: newId(state, 'e'), name, gender: $('#hire-gender').value, dept: $('#hire-dept').value,
     level, xp: LADDER[level].xp, personality: $('#hire-personality').value.trim(),
     desk, managerId: $('#hire-manager').value || null, hiredAt: Date.now(), status: 'idle',
   };
   state.employees.push(e);
+  for (const x of takeover) x.managerId = e.id;
   office.addEmployee({ ...e, color: colorOf(e) }, titleFor(e));
   save();
   $('#hire-form').reset();
+  $('#hire-takeover-row').hidden = true;
   refresh();
   selectEmployee(e.id);
   toast(`👋 مرحباً بـ${e.name} في الفريق!`);
