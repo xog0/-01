@@ -101,11 +101,6 @@ export function saveState(state) {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch { /* ignore */ }
 }
 
-export function resetState() {
-  try { localStorage.removeItem(STORE_KEY); } catch { /* ignore */ }
-  return createInitialState();
-}
-
 export function newId(state, prefix) {
   state.nextId += 1;
   return `${prefix}${state.nextId}`;

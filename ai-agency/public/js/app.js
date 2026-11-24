@@ -1,9 +1,10 @@
 import { createOffice, MAX_DESKS, ROOMS } from './scene.js';
 import {
   LADDER, DEPARTMENTS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
-  titleFor, loadState, saveState, resetState, newId,
+  titleFor, loadState, saveState, createInitialState, newId,
 } from './data.js';
 import { askEmployee, backendStatus } from './api.js';
+import { connectCloud } from './cloud.js';
 
 // ------------------------------------------------------------ DOM helpers
 const $ = (sel) => document.querySelector(sel);
@@ -62,7 +63,11 @@ let meeting = null; // { room, topic, attendees, log, busy }
 let workdayRunning = false;
 const busy = new Set(); // employee ids currently waiting on the AI
 
-const save = () => saveState(state);
+let cloud = null; // set once the claude.ai store has loaded
+const save = () => {
+  saveState(state);
+  cloud?.save(state);
+};
 const emp = (id) => state.employees.find((e) => e.id === id);
 const colorOf = (e) => DEPARTMENTS[e.dept].color;
 const byRank = (a, b) => b.level - a.level || b.xp - a.xp;
@@ -655,8 +660,10 @@ $('#dlg-settings').addEventListener('close', () => {
 $('#set-reset').addEventListener('click', async () => {
   $('#dlg-settings').close();
   if (!(await confirmBox('سيتم حذف كل الموظفين الجدد والمهام والمحادثات والعودة للفريق الأساسي.', 'إعادة الوكالة'))) return;
-  resetState();
-  location.reload();
+  if (busy.size || meeting) return toast('انتظر حتى ينتهي العمل الجاري أو الاجتماع');
+  applyState(createInitialState());
+  save();
+  toast('عادت الوكالة إلى بدايتها');
 });
 document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => b.closest('dialog').close()));
 
@@ -669,9 +676,49 @@ function refresh() {
   if ($('#dlg-board').open) renderBoard();
 }
 
+// Swap in a whole new state (cloud load or reset) and rebuild the office.
+function applyState(next) {
+  closePanel();
+  for (const e of state.employees) {
+    office.removeEmployee(e.id);
+    office.setDeskLit(e.desk, false);
+  }
+  state = next;
+  state.employees.forEach((e) => office.addEmployee({ ...e, color: colorOf(e) }, titleFor(e)));
+  refresh();
+}
+
 state.employees.forEach((e) => office.addEmployee({ ...e, color: colorOf(e) }, titleFor(e)));
 refresh();
-save();
+saveState(state);
+
+const SYNC_LABELS = { loading: '☁️ جارٍ التحميل…', saving: '☁️ جارٍ الحفظ…', saved: '☁️ محفوظ', error: '⚠️ لم يُحفظ', offline: '⚠️ السحابة غير متاحة' };
+function setSync(status, detail) {
+  const el = $('#sync-state');
+  el.hidden = false;
+  el.textContent = SYNC_LABELS[status];
+  el.title = detail || '';
+  el.className = `mode-pill ${status === 'saved' ? 'live' : status === 'error' || status === 'offline' ? 'demo' : ''}`;
+  if (status === 'error' && detail) toast(detail);
+}
+
+connectCloud().then(async (c) => {
+  if (!c) return; // not on claude.ai, or storage unavailable: browser storage only
+  setSync('loading');
+  c.onStatus(setSync);
+  try {
+    const remote = await c.load();
+    if (remote && !busy.size && !meeting) {
+      applyState(remote);
+      saveState(state);
+    }
+    cloud = c;
+    if (!remote) cloud.save(state); // first visit: upload this agency
+    setSync('saved');
+  } catch {
+    setSync('offline', 'تعذّر الوصول إلى الحفظ السحابي. التعديلات تُحفظ في هذا المتصفح فقط الآن.');
+  }
+});
 
 backendStatus().then((s) => {
   const pill = $('#ai-mode');
