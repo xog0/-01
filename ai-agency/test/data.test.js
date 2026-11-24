@@ -59,7 +59,7 @@ test('an agency that already received Hamo only gets the reporting change', () =
 
 test('whoever heads Marketing moves under Hamo once; their team stays with them', () => {
   const s = oldAgency();
-  s.migrations = ['add-hamo-ceo', 'sara-under-hamo'];
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'sales-under-hamo'];
   s.employees.push(
     { id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null },
     { id: 'e131', name: 'ريم', dept: 'marketing', level: 5, desk: 10, managerId: 'e1' },
@@ -73,4 +73,21 @@ test('whoever heads Marketing moves under Hamo once; their team stays with them'
   byName('ريم').managerId = 'e1'; // moved back by the owner: it sticks
   assert.equal(applyMigrations(s), false);
   assert.equal(byName('ريم').managerId, 'e1');
+});
+
+test('whoever heads Sales moves under Hamo once, even from under a GM', () => {
+  const s = oldAgency();
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo'];
+  s.employees.push(
+    { id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null },
+    { id: 'e133', name: 'منى', dept: 'executive', level: 7, desk: 12, managerId: 'e130' },
+    { id: 'e134', name: 'سعد', dept: 'sales', level: 5, desk: 13, managerId: 'e133' },
+    { id: 'e135', name: 'باسل', dept: 'sales', level: 1, desk: 14, managerId: 'e134' },
+  );
+  assert.equal(applyMigrations(s), true);
+  const byName = (n) => s.employees.find((e) => e.name === n);
+  assert.equal(byName('سعد').managerId, 'e130');
+  assert.equal(byName('باسل').managerId, 'e134');
+  assert.equal(byName('منى').managerId, 'e130');
+  assert.equal(applyMigrations(s), false);
 });

@@ -45,7 +45,7 @@ export const POSITIONS = [
   { key: 'ceo', name: 'المدير التنفيذي', dept: 'executive', level: 8, unique: true },
   { key: 'gm', name: 'المدير العام', dept: 'executive', level: 7, unique: true },
   { key: 'marketing', name: 'مدير التسويق', dept: 'marketing', level: 5, unique: true, reportsTo: 'ceo' },
-  { key: 'sales', name: 'مدير المبيعات', dept: 'sales', level: 5, unique: true },
+  { key: 'sales', name: 'مدير المبيعات', dept: 'sales', level: 5, unique: true, reportsTo: 'ceo' },
   { key: 'hr', name: 'مدير الموارد البشرية', dept: 'hr', level: 5, unique: true },
 ];
 
@@ -199,21 +199,22 @@ const MIGRATIONS = [
       if (hamo && sara && hamo.managerId !== sara.id) sara.managerId = hamo.id;
     },
   },
-  {
-    // Whoever heads Marketing reports to Hamo; their own team stays under them.
-    key: 'marketing-under-hamo',
-    run(state) {
-      const hamo = state.employees.find((e) => e.name === HAMO.name);
-      if (!hamo) return;
-      const inMarketing = new Set(state.employees.filter((e) => e.dept === 'marketing').map((e) => e.id));
-      for (const e of state.employees) {
-        if (inMarketing.has(e.id) && !inMarketing.has(e.managerId) && e.id !== hamo.id && hamo.managerId !== e.id) {
-          e.managerId = hamo.id;
-        }
-      }
-    },
-  },
+  { key: 'marketing-under-hamo', run: (state) => deptHeadsUnderHamo(state, 'marketing') },
+  { key: 'sales-under-hamo', run: (state) => deptHeadsUnderHamo(state, 'sales') },
 ];
+
+// Whoever heads a department (its members whose manager is outside it)
+// reports to Hamo; their own team stays under them.
+function deptHeadsUnderHamo(state, dept) {
+  const hamo = state.employees.find((e) => e.name === HAMO.name);
+  if (!hamo) return;
+  const inDept = new Set(state.employees.filter((e) => e.dept === dept).map((e) => e.id));
+  for (const e of state.employees) {
+    if (inDept.has(e.id) && !inDept.has(e.managerId) && e.id !== hamo.id && hamo.managerId !== e.id) {
+      e.managerId = hamo.id;
+    }
+  }
+}
 
 /** Runs pending one-time updates on a loaded agency; returns true if any ran. */
 export function applyMigrations(state) {
