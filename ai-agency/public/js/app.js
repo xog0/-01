@@ -1,6 +1,6 @@
 import { createOffice, ROOMS } from './scene.js';
 import {
-  LADDER, DEPARTMENTS, POSITIONS, MAX_DESKS, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
+  LADDER, DEPARTMENTS, POSITIONS, OPEN_DESKS, PRIVATE_OFFICES, MANAGER_LEVEL, freeSeat, isPrivateOffice, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
   titleFor, loadState, saveState, createInitialState, applyMigrations, newId,
 } from './data.js';
 import { askEmployee, backendStatus } from './api.js';
@@ -511,9 +511,28 @@ function changeLevel(e, delta) {
   if (to < 0 || to >= LADDER.length) return;
   e.level = to;
   if (delta > 0 && e.xp < LADDER[to].xp) e.xp = LADDER[to].xp;
+  // Becoming a manager moves you into a private office if one is free;
+  // dropping below manager moves you back to the open area if a desk is free.
+  let moved = '';
+  if (!busy.has(e.id) && !meeting?.attendees.includes(e.id)) {
+    const seat = to >= MANAGER_LEVEL && !isPrivateOffice(e.desk) ? freeSeat(state, to, { officeOnly: true })
+      : to < MANAGER_LEVEL && isPrivateOffice(e.desk) ? freeSeat(state, to, { openOnly: true }) : undefined;
+    if (seat !== undefined) {
+      reseat(e, seat);
+      moved = isPrivateOffice(seat) ? ' وانتقل إلى مكتب خاص' : ' وعاد إلى المساحة المفتوحة';
+    }
+  }
   save();
   refresh();
-  toast(delta > 0 ? `🎉 تمت ترقية ${e.name} إلى "${titleFor(e)}"` : `تم تعديل مستوى ${e.name} إلى "${titleFor(e)}"`);
+  toast((delta > 0 ? `🎉 تمت ترقية ${e.name} إلى "${titleFor(e)}"` : `تم تعديل مستوى ${e.name} إلى "${titleFor(e)}"`) + moved);
+}
+
+function reseat(e, desk) {
+  office.removeEmployee(e.id);
+  office.setDeskLit(e.desk, false);
+  e.desk = desk;
+  office.addEmployee({ ...e, color: colorOf(e) }, titleFor(e));
+  if (selectedId === e.id) office.setSelected(e.id);
 }
 
 async function fire(e) {
@@ -539,9 +558,13 @@ async function fire(e) {
 
 // ------------------------------------------------------------ hiring
 function fillHireForm() {
-  const free = MAX_DESKS - state.employees.length;
-  $('#hire-capacity').textContent = free > 0 ? `المكاتب الشاغرة: ${free} من ${MAX_DESKS}` : 'لا توجد مكاتب شاغرة.';
-  $('#hire-submit').disabled = free <= 0;
+  const used = new Set(state.employees.map((x) => x.desk));
+  const freeOpen = [...Array(OPEN_DESKS).keys()].filter((d) => !used.has(d)).length;
+  const freeOffices = [...Array(PRIVATE_OFFICES).keys()].filter((k) => !used.has(OPEN_DESKS + k)).length;
+  $('#hire-capacity').textContent = freeOpen + freeOffices > 0
+    ? `شاغر: ${freeOpen} مكتب في المساحة المفتوحة، و${freeOffices} مكتب خاص للمدراء`
+    : 'لا توجد مكاتب شاغرة.';
+  $('#hire-submit').disabled = freeOpen + freeOffices <= 0;
   $('#hire-dept').replaceChildren(...Object.entries(DEPARTMENTS).map(([k, d]) => h('option', { value: k }, d.name)));
   $('#hire-level').replaceChildren(...LADDER.map((l, i) => h('option', { value: i, selected: i === 1 }, l.name)));
   $('#hire-manager').replaceChildren(h('option', { value: '' }, 'مالك الوكالة مباشرة'),
@@ -594,10 +617,10 @@ $('#btn-hire').addEventListener('click', () => { fillHireForm(); $('#dlg-hire').
 $('#dlg-hire').addEventListener('close', () => {
   if ($('#dlg-hire').returnValue !== 'ok') return;
   const name = $('#hire-name').value.trim();
-  const used = new Set(state.employees.map((x) => x.desk));
-  const desk = [...Array(MAX_DESKS).keys()].find((i) => !used.has(i));
-  if (!name || desk === undefined) return;
   const level = Number($('#hire-level').value);
+  const desk = freeSeat(state, level);
+  if (!name) return;
+  if (desk === undefined) return toast(level >= MANAGER_LEVEL ? 'لا يوجد مكتب شاغر.' : 'لا يوجد مكتب شاغر في المساحة المفتوحة.');
   const takeover = $('#hire-takeover').checked ? takeoverCandidates() : [];
   const e = {
     id: newId(state, 'e'), name, gender: $('#hire-gender').value, dept: $('#hire-dept').value,
@@ -841,6 +864,10 @@ function refresh() {
   renderHeader();
   renderRoster();
   for (const e of state.employees) office.updateEmployee(e, titleFor(e));
+  for (let k = 0; k < PRIVATE_OFFICES; k++) {
+    const who = state.employees.find((e) => e.desk === OPEN_DESKS + k);
+    office.setOfficeLabel(k, who ? `مكتب ${who.name}` : 'مكتب شاغر', Boolean(who));
+  }
   if (selectedId) renderPanel();
   if ($('#dlg-board').open) renderBoard();
 }

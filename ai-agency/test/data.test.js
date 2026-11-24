@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createInitialState, applyMigrations, titleFor } from '../public/js/data.js';
+import { createInitialState, applyMigrations, titleFor, freeSeat, moveManagersToOffices } from '../public/js/data.js';
 
 const oldAgency = () => {
   const s = createInitialState();
@@ -51,7 +51,7 @@ test('an older agency moves Sara under Hamo once, keeping her team under her', (
 
 test('an agency that already received Hamo only gets the reporting change', () => {
   const s = oldAgency();
-  s.migrations = ['add-hamo-ceo', 'add-interns'];
+  s.migrations = ['add-hamo-ceo', 'add-interns', 'manager-offices'];
   s.employees.push({ id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null });
   assert.equal(applyMigrations(s), true);
   assert.equal(s.employees.filter((e) => e.name === 'حمو').length, 1);
@@ -60,7 +60,7 @@ test('an agency that already received Hamo only gets the reporting change', () =
 
 test('whoever heads Marketing moves under Hamo once; their team stays with them', () => {
   const s = oldAgency();
-  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'sales-under-hamo', 'hr-under-hamo', 'add-interns'];
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'sales-under-hamo', 'hr-under-hamo', 'add-interns', 'manager-offices'];
   s.employees.push(
     { id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null },
     { id: 'e131', name: 'ريم', dept: 'marketing', level: 5, desk: 10, managerId: 'e1' },
@@ -78,7 +78,7 @@ test('whoever heads Marketing moves under Hamo once; their team stays with them'
 
 test('whoever heads Sales moves under Hamo once, even from under a GM', () => {
   const s = oldAgency();
-  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo', 'hr-under-hamo', 'add-interns'];
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo', 'hr-under-hamo', 'add-interns', 'manager-offices'];
   s.employees.push(
     { id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null },
     { id: 'e133', name: 'منى', dept: 'executive', level: 7, desk: 12, managerId: 'e130' },
@@ -95,7 +95,7 @@ test('whoever heads Sales moves under Hamo once, even from under a GM', () => {
 
 test('whoever heads HR moves under Hamo once', () => {
   const s = oldAgency();
-  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo', 'sales-under-hamo', 'add-interns'];
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo', 'sales-under-hamo', 'add-interns', 'manager-offices'];
   s.employees.push(
     { id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null },
     { id: 'e133', name: 'منى', dept: 'executive', level: 7, desk: 12, managerId: 'e130' },
@@ -112,7 +112,9 @@ test('a new agency has one intern per department under its head, all on separate
   assert.equal(interns.length, 12);
   assert.equal(new Set(interns.map((e) => e.dept)).size, 12);
   assert.equal(new Set(s.employees.map((e) => e.desk)).size, s.employees.length);
-  assert.ok(s.employees.every((e) => e.desk < 25));
+  assert.ok(s.employees.every((e) => e.desk < 33));
+  assert.ok(s.employees.filter((e) => e.desk >= 25).every((e) => e.level >= 5));
+  assert.ok(interns.every((e) => e.desk < 25));
   const byName = (n) => s.employees.find((e) => e.name === n);
   assert.equal(byName('سلمى').managerId, byName('خالد').id);   // content -> Khalid
   assert.equal(byName('رنا').managerId, byName('سارة').id);    // strategy -> Sara
@@ -142,6 +144,42 @@ test('interns stop at the desk limit instead of overflowing', () => {
   for (let i = 0; s.employees.length < 22; i++) s.employees.push({ id: `x${i}`, name: `x${i}`, dept: 'seo', level: 2, desk: 100 });
   s.employees.forEach((e, i) => { e.desk = i; });
   applyMigrations(s);
-  assert.ok(s.employees.length <= 25);
+  assert.ok(s.employees.every((e) => e.desk < 33));
+  assert.ok(s.employees.filter((e) => e.level === 0).every((e) => e.desk < 25));
   assert.equal(new Set(s.employees.map((e) => e.desk)).size, s.employees.length);
+});
+
+test('a new agency seats Hamo and Sara in private offices', () => {
+  const s = createInitialState();
+  const byName = (n) => s.employees.find((e) => e.name === n);
+  assert.equal(byName('حمو').desk, 25);
+  assert.equal(byName('سارة').desk, 26);
+  assert.ok(byName('خالد').desk < 25);
+});
+
+test('current managers move into offices once, by rank, until the wing is full', () => {
+  const s = oldAgency();
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo', 'sales-under-hamo', 'hr-under-hamo', 'add-interns'];
+  // Sara (level 5) sits at an open desk, plus nine more managers at open desks.
+  for (let i = 0; i < 9; i++) s.employees.push({ id: `m${i}`, name: `م${i}`, dept: 'sales', level: 5 + (i % 3), xp: i, desk: 10 + i });
+  s.employees.forEach((e) => { if (e.desk >= 25) e.desk = 24; });
+  const before = new Map(s.employees.map((e) => [e.id, e.desk]));
+  assert.equal(applyMigrations(s), true);
+  const inOffices = s.employees.filter((e) => e.desk >= 25);
+  assert.equal(inOffices.length, 8);
+  assert.equal(new Set(s.employees.map((e) => e.desk)).size, s.employees.length);
+  const minInOffice = Math.min(...inOffices.map((e) => e.level));
+  assert.ok(s.employees.filter((e) => e.desk < 25 && e.level >= 5).every((e) => e.level <= minInOffice));
+  assert.ok(s.employees.filter((e) => e.level < 5).every((e) => e.desk === before.get(e.id)));
+  assert.equal(applyMigrations(s), false);
+});
+
+test('seats: non-managers never get offices; managers fall back to open desks when the wing is full', () => {
+  const s = createInitialState();
+  assert.ok(freeSeat(s, 0) < 25);
+  assert.equal(freeSeat(s, 6), 27);
+  for (let k = 27; k < 33; k++) s.employees.push({ id: `o${k}`, level: 5, desk: k });
+  assert.ok(freeSeat(s, 6) < 25);
+  assert.equal(freeSeat(s, 6, { officeOnly: true }), undefined);
+  assert.deepEqual(moveManagersToOffices(s), []);
 });

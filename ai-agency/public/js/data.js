@@ -1,7 +1,24 @@
 // Company model: career ladder, departments, starting team, default tasks,
 // and persistence in localStorage.
 
-export const MAX_DESKS = 25;
+// Seats: desks 0..24 are the open-plan area, 25..32 are private offices
+// in the executive wing, kept for managers (level "مدير" and above).
+export const OPEN_DESKS = 25;
+export const PRIVATE_OFFICES = 8;
+export const MAX_DESKS = OPEN_DESKS + PRIVATE_OFFICES;
+export const MANAGER_LEVEL = 5;
+export const isPrivateOffice = (desk) => desk >= OPEN_DESKS;
+
+/** A free seat for someone at this level: managers get a private office when
+ *  one is free, everyone else (and managers when the wing is full) an open desk. */
+export function freeSeat(state, level, { officeOnly = false, openOnly = false } = {}) {
+  const used = new Set(state.employees.map((e) => e.desk));
+  const offices = [...Array(PRIVATE_OFFICES).keys()].map((k) => OPEN_DESKS + k).filter((d) => !used.has(d));
+  const open = [...Array(OPEN_DESKS).keys()].filter((d) => !used.has(d));
+  if (officeOnly) return offices[0];
+  if (openOnly || level < MANAGER_LEVEL) return open[0];
+  return offices[0] ?? open[0];
+}
 
 export const LADDER = [
   { key: 'intern', name: 'متدرب', xp: 0, desc: 'يتعلم أساسيات العمل وينفذ مهاماً بسيطة تحت إشراف.' },
@@ -180,9 +197,8 @@ function addInterns(state) {
   let added = 0;
   for (const it of INTERNS) {
     if (state.employees.some((e) => e.dept === it.dept && e.level === 0)) continue;
-    const used = new Set(state.employees.map((e) => e.desk));
-    const desk = [...Array(MAX_DESKS).keys()].find((i) => !used.has(i));
-    if (desk === undefined) break; // office is full
+    const desk = freeSeat(state, 0);
+    if (desk === undefined) break; // open area is full
     const head = state.employees.filter((e) => e.dept === it.dept).sort(byRankDesc)[0] || hamo || null;
     const id = newId(state, 'e');
     state.employees.push({ ...it, id, level: 0, xp: 0, desk, managerId: head ? head.id : null, hiredAt: Date.now(), status: 'idle' });
@@ -200,7 +216,7 @@ export function createInitialState() {
   const now = Date.now();
   const state = {
     company: { name: 'وكالة آفاق للتسويق الرقمي', about: 'وكالة تسويق رقمي ناشئة تقدم خدمات الاستراتيجية والمحتوى والتواصل الاجتماعي والإعلانات المدفوعة.' },
-    employees: STARTING_TEAM.map((e, i) => ({ ...e, desk: i, hiredAt: now, status: 'idle' })),
+    employees: [],
     tasks: DEFAULT_TASKS.map(([empId, title, description, priority], i) => ({
       id: `t${i + 1}`, empId, title, description, priority, status: 'todo', output: '', createdAt: now,
     })),
@@ -209,6 +225,9 @@ export function createInitialState() {
     nextId: 100,
     migrations: MIGRATIONS.map((m) => m.key), // a fresh agency already has these
   };
+  for (const e of STARTING_TEAM) {
+    state.employees.push({ ...e, desk: freeSeat(state, e.level), hiredAt: now, status: 'idle' });
+  }
   addInterns(state);
   return state;
 }
@@ -221,8 +240,7 @@ const MIGRATIONS = [
     key: 'add-hamo-ceo',
     run(state) {
       if (state.employees.some((e) => e.name === HAMO.name)) return;
-      const used = new Set(state.employees.map((e) => e.desk));
-      const desk = [...Array(MAX_DESKS).keys()].find((i) => !used.has(i));
+      const desk = freeSeat(state, HAMO.level);
       if (desk === undefined) return; // office is full
       const id = state.employees.some((e) => e.id === HAMO.id) ? newId(state, 'e') : HAMO.id;
       state.employees.push({ ...HAMO, id, desk, hiredAt: Date.now(), status: 'idle' });
@@ -244,6 +262,7 @@ const MIGRATIONS = [
   { key: 'sales-under-hamo', run: (state) => deptHeadsUnderHamo(state, 'sales') },
   { key: 'hr-under-hamo', run: (state) => deptHeadsUnderHamo(state, 'hr') },
   { key: 'add-interns', run: addInterns },
+  { key: 'manager-offices', run: moveManagersToOffices },
 ];
 
 // Whoever heads a department (its members whose manager is outside it)
@@ -257,6 +276,21 @@ function deptHeadsUnderHamo(state, dept) {
       e.managerId = hamo.id;
     }
   }
+}
+
+/** Managers sitting in the open area move into free private offices,
+ *  highest rank first. Returns the ids of those who moved. */
+export function moveManagersToOffices(state) {
+  const moved = [];
+  const managers = state.employees.filter((e) => e.level >= MANAGER_LEVEL && !isPrivateOffice(e.desk))
+    .sort((a, b) => b.level - a.level || (b.xp || 0) - (a.xp || 0));
+  for (const e of managers) {
+    const desk = freeSeat(state, e.level, { officeOnly: true });
+    if (desk === undefined) break;
+    e.desk = desk;
+    moved.push(e.id);
+  }
+  return moved;
 }
 
 /** Runs pending one-time updates on a loaded agency; returns true if any ran. */

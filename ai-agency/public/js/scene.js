@@ -1,13 +1,25 @@
 // 3D office built with Three.js: open workspace with desks, two glass
-// meeting rooms, decor, and animated employee characters.
+// meeting rooms, an executive wing of private offices, decor, and
+// animated employee characters.
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { MAX_DESKS } from './data.js';
+import { MAX_DESKS, OPEN_DESKS } from './data.js';
 
 const DESK_COLS = [-19.5, -15, -10.5, -6, -1.5];
 const DESK_ROWS = [-11, -6, -1, 4, 9];
-if (DESK_COLS.length * DESK_ROWS.length !== MAX_DESKS) throw new Error('desk grid does not match MAX_DESKS');
+if (DESK_COLS.length * DESK_ROWS.length !== OPEN_DESKS) throw new Error('desk grid does not match OPEN_DESKS');
+
+// Executive wing: two columns of private offices on either side of a hallway
+// at x = HALL_X. People reach it from the open area through the gap between
+// the meeting rooms (z = 0).
+const HALL_X = 31;
+const OFFICE_ROWS = [[-15, -8.5], [-7.5, -1], [1, 7.5], [8.5, 15]];
+const OFFICES = [
+  ...OFFICE_ROWS.map(([z0, z1]) => ({ x0: 22, x1: 30, z0, z1, doorX: 30, inside: -1 })),
+  ...OFFICE_ROWS.map(([z0, z1]) => ({ x0: 32, x1: 40, z0, z1, doorX: 32, inside: 1 })),
+].map((o) => ({ ...o, cx: (o.x0 + o.x1) / 2, cz: (o.z0 + o.z1) / 2, doorZ: (o.z0 + o.z1) / 2 }));
+if (OPEN_DESKS + OFFICES.length !== MAX_DESKS) throw new Error('office count does not match MAX_DESKS');
 
 export const ROOMS = {
   a: { name: 'قاعة الإبداع', x0: 7, x1: 20, z0: -14, z1: -2, doorZ: -5, seats: 8 },
@@ -19,6 +31,10 @@ const SKIN = [0xf1c27d, 0xe0ac69, 0xc68642, 0xffdbac];
 const HAIR = [0x2b1b12, 0x3b2314, 0x111111, 0x5a3825];
 
 function deskPos(i) {
+  if (i >= OPEN_DESKS) {
+    const o = OFFICES[i - OPEN_DESKS];
+    return { x: o.cx, z: o.cz - 0.8 };
+  }
   const col = i % DESK_COLS.length;
   const row = Math.floor(i / DESK_COLS.length);
   return { x: DESK_COLS[col], z: DESK_ROWS[row] };
@@ -55,7 +71,7 @@ function seatPositions(room) {
 export function createOffice(container, { onSelect } = {}) {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0f1220);
-  scene.fog = new THREE.Fog(0x0f1220, 60, 110);
+  scene.fog = new THREE.Fog(0x0f1220, 70, 140);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -70,38 +86,40 @@ export function createOffice(container, { onSelect } = {}) {
   container.appendChild(labelRenderer.domElement);
 
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
-  camera.position.set(-6, 30, 32);
+  camera.position.set(2, 38, 44);
   const controls = new OrbitControls(camera, labelRenderer.domElement);
-  controls.target.set(-1, 0, 0);
+  controls.target.set(8, 0, 0);
   controls.enableDamping = true;
   controls.maxPolarAngle = Math.PI * 0.44;
   controls.minDistance = 8;
-  controls.maxDistance = 70;
+  controls.maxDistance = 95;
 
   // Lights
   scene.add(new THREE.HemisphereLight(0xcfd8ff, 0x2a2340, 0.9));
   const sun = new THREE.DirectionalLight(0xffffff, 1.6);
-  sun.position.set(-18, 34, 18);
+  sun.position.set(-9, 34, 18);
+  sun.target.position.set(9, 0, 0);
+  scene.add(sun.target);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 25, bottom: -25, near: 1, far: 90 });
+  Object.assign(sun.shadow.camera, { left: -38, right: 38, top: 28, bottom: -28, near: 1, far: 100 });
   scene.add(sun);
-  [[-9, -1], [13, -8], [13, 8]].forEach(([x, z]) => {
+  [[-9, -1], [13, -8], [13, 8], [26, -6], [36, 6]].forEach(([x, z]) => {
     const p = new THREE.PointLight(0xffe2b8, 18, 18, 1.6);
     p.position.set(x, 6, z);
     scene.add(p);
   });
 
   // Floor & walls
-  const floor = box(46, 0.2, 32, std(0xe8e3da, { roughness: 0.9 }));
-  floor.position.y = -0.1;
+  const floor = box(64, 0.2, 32, std(0xe8e3da, { roughness: 0.9 }));
+  floor.position.set(9, -0.1, 0);
   scene.add(floor);
   const carpet = box(23.5, 0.02, 26, std(0x3d4a6b, { roughness: 1 }));
   carpet.position.set(-10.5, 0.01, -0.5);
   scene.add(carpet);
   const wallMat = std(0xf6f2ec);
-  const backWall = box(46, 4, 0.3, wallMat);
-  backWall.position.set(0, 2, -16);
+  const backWall = box(64, 4, 0.3, wallMat);
+  backWall.position.set(9, 2, -16);
   scene.add(backWall);
   const sideWall = box(0.3, 4, 32, wallMat);
   sideWall.position.set(-23, 2, 0);
@@ -138,7 +156,7 @@ export function createOffice(container, { onSelect } = {}) {
   const screenMat = std(0x0b1020, { emissive: 0x2a5cff, emissiveIntensity: 0.6 });
   const chairMat = std(0x22263a);
   const deskScreens = [];
-  for (let i = 0; i < MAX_DESKS; i++) {
+  for (let i = 0; i < OPEN_DESKS; i++) {
     const { x, z } = deskPos(i);
     const g = new THREE.Group();
     const top = box(2.6, 0.1, 1.3, deskTop);
@@ -243,6 +261,80 @@ export function createOffice(container, { onSelect } = {}) {
     scene.add(tagObj);
   }
 
+  // Executive wing: hallway runner, then one glass office per entry in OFFICES.
+  const runner = box(2, 0.02, 30, std(0x6b5b4b, { roughness: 1 }));
+  runner.position.set(HALL_X, 0.01, 0);
+  scene.add(runner);
+  const entry = box(11, 0.02, 2, std(0x6b5b4b, { roughness: 1 }));
+  entry.position.set(25.5, 0.01, 0);
+  scene.add(entry);
+  const execWood = std(0x4a2f22, { roughness: 0.45 });
+  const leather = std(0x1b1b22, { roughness: 0.5 });
+  const officeTags = [];
+  OFFICES.forEach((o, k) => {
+    const w = o.x1 - o.x0;
+    const d = o.z1 - o.z0;
+    const rug = box(w - 0.6, 0.03, d - 0.6, std(k % 2 ? 0x3b4f6b : 0x4b3b6b, { roughness: 1 }));
+    rug.position.set(o.cx, 0.02, o.cz);
+    scene.add(rug);
+    const pane = (len, horizontal, px, pz) => {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(horizontal ? len : 0.06, 3, horizontal ? 0.06 : len), glass);
+      p.position.set(px, 1.5, pz);
+      scene.add(p);
+      const rail = box(horizontal ? len : 0.1, 0.1, horizontal ? 0.1 : len, frame);
+      rail.position.set(px, 3, pz);
+      scene.add(rail);
+    };
+    pane(w, true, o.cx, o.z0);
+    pane(w, true, o.cx, o.z1);
+    const farX = o.doorX === o.x1 ? o.x0 : o.x1;
+    pane(d, false, farX, o.cz);
+    const gap = 1.8;
+    const sideLen = (d - gap) / 2;
+    pane(sideLen, false, o.doorX, o.z0 + sideLen / 2);
+    pane(sideLen, false, o.doorX, o.z1 - sideLen / 2);
+    // Executive desk, monitor and high-back chair (same facing as open desks).
+    const g = new THREE.Group();
+    const top = box(3.2, 0.12, 1.5, execWood);
+    top.position.y = 1.0;
+    const body = box(3.0, 0.9, 1.3, execWood);
+    body.position.set(0, 0.48, -0.05);
+    const mon = box(1.2, 0.7, 0.06, metal);
+    mon.position.set(0, 1.5, -0.4);
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 0.6), screenMat.clone());
+    scr.position.set(0, 1.5, -0.365);
+    deskScreens.push(scr);
+    const chair = new THREE.Group();
+    const seat = box(0.8, 0.12, 0.8, leather);
+    seat.position.y = 0.6;
+    const back = box(0.8, 1.2, 0.12, leather);
+    back.position.set(0, 1.25, 0.38);
+    chair.add(seat, back);
+    chair.position.set(0, 0, 1.3);
+    g.add(top, body, mon, scr, chair);
+    g.position.set(o.cx, 0, o.cz - 0.8);
+    scene.add(g);
+    const pot = box(0.5, 0.5, 0.5, std(0xf4f4f4));
+    const px = farX + (farX > o.cx ? -0.7 : 0.7);
+    pot.position.set(px, 0.25, o.z0 + 0.7);
+    const leaves = new THREE.Mesh(new THREE.IcosahedronGeometry(0.6, 0), std(0x3f9b4f, { flatShading: true }));
+    leaves.position.set(px, 1.0, o.z0 + 0.7);
+    scene.add(pot, leaves);
+    const tag = document.createElement('div');
+    tag.className = 'room-tag office-tag';
+    tag.textContent = 'مكتب شاغر';
+    const tagObj = new CSS2DObject(tag);
+    tagObj.position.set(o.cx, 3.3, o.z0 + 0.4); // on the back wall, above the desk
+    scene.add(tagObj);
+    officeTags.push(tag);
+  });
+  function setOfficeLabel(k, text, occupied) {
+    const tag = officeTags[k];
+    if (!tag) return;
+    tag.textContent = text;
+    tag.classList.toggle('vacant', !occupied);
+  }
+
   // Decor: plants, lounge, water cooler
   const plant = (x, z) => {
     const pot = box(0.6, 0.6, 0.6, std(0xf4f4f4));
@@ -252,7 +344,7 @@ export function createOffice(container, { onSelect } = {}) {
     leaves.castShadow = true;
     scene.add(pot, leaves);
   };
-  [[-22, -15], [5, -15], [-22, 14], [5, 14], [21, -1], [21, 1.2]].forEach(([x, z]) => plant(x + (x < 0 ? 0.8 : -0.8), z + (z < 0 ? 0.8 : -0.8)));
+  [[-22, -15], [5, -15], [-22, 14], [5, 14]].forEach(([x, z]) => plant(x + (x < 0 ? 0.8 : -0.8), z + (z < 0 ? 0.8 : -0.8)));
   const sofa = box(4, 0.8, 1.2, std(0x8b5cf6));
   sofa.position.set(-10.5, 0.4, 14.6);
   const sofaBack = box(4, 1, 0.3, std(0x7c3aed));
@@ -331,6 +423,7 @@ export function createOffice(container, { onSelect } = {}) {
     a.group.rotation.y = 0;
     a.path = [];
     a.seat = seat;
+    a.deskIndex = emp.desk;
     a.facing = new THREE.Vector3(seat.x, 0, seat.z - 5);
     a.status = 'idle';
     a.phase = Math.random() * Math.PI * 2;
@@ -374,14 +467,28 @@ export function createOffice(container, { onSelect } = {}) {
     for (const [eid, a] of actors) a.label.classList.toggle('selected', eid === id);
   }
 
-  // Waypoints between a desk and a meeting room seat via the corridor at x=4.
+  // From someone's own seat to the corridor at x=4: along the aisle behind an
+  // open desk, or out of a private office, down the hallway and through the
+  // gap between the meeting rooms.
+  function exitPath(a) {
+    if (a.deskIndex >= OPEN_DESKS) {
+      const o = OFFICES[a.deskIndex - OPEN_DESKS];
+      return [
+        new THREE.Vector3(o.doorX + o.inside, 0, o.doorZ),
+        new THREE.Vector3(HALL_X, 0, o.doorZ),
+        new THREE.Vector3(HALL_X, 0, 0),
+        new THREE.Vector3(4, 0, 0),
+      ];
+    }
+    const aisleZ = a.seat.z + 1.4;
+    return [new THREE.Vector3(a.seat.x, 0, aisleZ), new THREE.Vector3(4, 0, aisleZ)];
+  }
+
+  // Waypoints between a seat and a meeting room seat via the corridor at x=4.
   function routeToRoom(a, roomKey, seat) {
     const room = ROOMS[roomKey];
-    const p = a.group.position;
-    const aisleZ = p.z + 1.4;
     return [
-      new THREE.Vector3(p.x, 0, aisleZ),
-      new THREE.Vector3(4, 0, aisleZ),
+      ...exitPath(a),
       new THREE.Vector3(4, 0, room.doorZ),
       new THREE.Vector3(room.x0 + 1.5, 0, room.doorZ),
       new THREE.Vector3(seat.pos.x, 0, room.doorZ + (seat.pos.z > room.doorZ ? 0.5 : -0.5)),
@@ -428,14 +535,12 @@ export function createOffice(container, { onSelect } = {}) {
       if (!a || a.location === 'desk') return Promise.resolve();
       const room = ROOMS[a.location];
       const p = a.group.position;
-      const aisleZ = a.seat.z + 1.4;
       a.location = 'desk';
       return walk(a, [
         new THREE.Vector3(p.x, 0, room.doorZ + (p.z > room.doorZ ? 0.5 : -0.5)),
         new THREE.Vector3(room.x0 + 1.5, 0, room.doorZ),
         new THREE.Vector3(4, 0, room.doorZ),
-        new THREE.Vector3(4, 0, aisleZ),
-        new THREE.Vector3(a.seat.x, 0, aisleZ),
+        ...exitPath(a).reverse(),
         a.seat.clone(),
       ], new THREE.Vector3(a.seat.x, 0, a.seat.z - 5));
     }));
@@ -451,9 +556,9 @@ export function createOffice(container, { onSelect } = {}) {
     } else if (actors.has(target)) {
       point = actors.get(target).group.position.clone();
     } else {
-      point = new THREE.Vector3(-1, 0, 0);
+      point = new THREE.Vector3(8, 0, 0);
     }
-    const dist = target === 'overview' ? 44 : ROOMS[target] ? 20 : 13;
+    const dist = target === 'overview' ? 56 : ROOMS[target] ? 20 : 13;
     const dir = camera.position.clone().sub(controls.target).normalize();
     focusAnim = {
       fromT: controls.target.clone(), toT: point,
@@ -533,5 +638,5 @@ export function createOffice(container, { onSelect } = {}) {
     labelRenderer.render(scene, camera);
   });
 
-  return { addEmployee, updateEmployee, removeEmployee, setStatus, setSelected, sendToMeeting, returnToDesks, focusOn, setCompanyName, setDeskLit };
+  return { addEmployee, updateEmployee, removeEmployee, setStatus, setSelected, sendToMeeting, returnToDesks, focusOn, setCompanyName, setDeskLit, setOfficeLabel };
 }

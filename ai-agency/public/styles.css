@@ -107,6 +107,8 @@ h3 { font-size: 15px; color: var(--muted); }
   padding: 3px 12px; border-radius: 99px; font-size: 12px; font-weight: 700;
   background: rgba(124, 92, 255, 0.85); pointer-events: none;
 }
+.office-tag { background: rgba(233, 196, 106, 0.92); color: #1a1d2e; font-size: 11px; }
+.office-tag.vacant { background: rgba(154, 163, 199, 0.55); color: #fff; }
 
 /* Roster */
 .roster {
