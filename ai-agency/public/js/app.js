@@ -1,7 +1,7 @@
 import { createOffice, MAX_DESKS, ROOMS } from './scene.js';
 import {
   LADDER, DEPARTMENTS, POSITIONS, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
-  titleFor, loadState, saveState, createInitialState, newId,
+  titleFor, loadState, saveState, createInitialState, applyMigrations, newId,
 } from './data.js';
 import { askEmployee, backendStatus } from './api.js';
 import { connectCloud } from './cloud.js';
@@ -57,6 +57,7 @@ function toast(msg) {
 
 // ------------------------------------------------------------ state
 let state = loadState();
+applyMigrations(state);
 let selectedId = null;
 let activeTab = 'chat';
 let meeting = null; // { room, topic, attendees, log, busy }
@@ -864,12 +865,13 @@ connectCloud().then(async (c) => {
   c.onStatus(setSync);
   try {
     const remote = await c.load();
+    const migrated = remote ? applyMigrations(remote) : false;
     if (remote && !busy.size && !meeting) {
       applyState(remote);
       saveState(state);
     }
     cloud = c;
-    if (!remote) cloud.save(state); // first visit: upload this agency
+    if (!remote || migrated) cloud.save(state); // first visit uploads; a one-time update is stored
     setSync('saved');
   } catch {
     setSync('offline', 'تعذّر الوصول إلى الحفظ السحابي. التعديلات تُحفظ في هذا المتصفح فقط الآن.');

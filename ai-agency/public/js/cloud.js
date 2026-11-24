@@ -25,6 +25,7 @@ function splitState(state) {
     employees: state.employees.map(({ status, ...e }) => e),
     tasks: state.tasks.map(({ output, ...t }) => ({ ...t, hasOutput: Boolean(output) })),
     nextId: state.nextId,
+    migrations: state.migrations || [],
   });
   for (const t of state.tasks) {
     if (t.output) docs.set(`outputs/${t.id}`, { text: t.output.slice(0, MAX_DOC_CHARS) });
@@ -92,6 +93,7 @@ export async function connectCloud() {
       chats: Object.fromEntries(Object.entries(byId(chats)).map(([k, v]) => [k, v.messages || []])),
       meetings: Object.values(byId(meetings)).sort((a, b) => a.at - b.at),
       nextId: c.nextId,
+      migrations: c.migrations || [],
     };
     // Record what is stored now so the first save only sends real changes.
     for (const [key, body] of splitState(state)) written.set(key, JSON.stringify(body));

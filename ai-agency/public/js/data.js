@@ -127,18 +127,24 @@ export const TASK_XP = { low: 10, medium: 20, high: 35 };
 export const PRIORITY_NAMES = { low: 'منخفضة', medium: 'متوسطة', high: 'عالية' };
 export const STATUS_NAMES = { todo: 'قيد الانتظار', doing: 'قيد التنفيذ', done: 'مكتملة' };
 
+const HAMO = { id: 'e5', name: 'حمو', gender: 'm', dept: 'executive', level: 8, xp: 1000, managerId: null,
+    personality: 'قائد صاحب رؤية، حاسم وهادئ، يركّز على النمو والصورة الكبيرة ويطلب من الفريق نتائج واضحة.' };
+
 const STARTING_TEAM = [
-  { id: 'e1', name: 'سارة', gender: 'f', dept: 'strategy', level: 5, xp: 420,
+  HAMO,
+  { id: 'e1', name: 'سارة', gender: 'f', dept: 'strategy', level: 5, xp: 420, managerId: null,
     personality: 'قيادية هادئة، تفكر بالأرقام والأهداف، تحب الوضوح وتطرح أسئلة ذكية قبل البدء.' },
-  { id: 'e2', name: 'خالد', gender: 'm', dept: 'content', level: 3, xp: 195,
+  { id: 'e2', managerId: 'e1', name: 'خالد', gender: 'm', dept: 'content', level: 3, xp: 195,
     personality: 'مبدع وصاحب حس لغوي عالٍ، يحب العناوين الجذابة والقصص، مرح في حديثه.' },
-  { id: 'e3', name: 'ليلى', gender: 'f', dept: 'social', level: 2, xp: 120,
+  { id: 'e3', managerId: 'e1', name: 'ليلى', gender: 'f', dept: 'social', level: 2, xp: 120,
     personality: 'نشيطة وتتابع الترندات لحظة بلحظة، عملية وسريعة، تحب الأفكار القابلة للانتشار.' },
-  { id: 'e4', name: 'عمر', gender: 'm', dept: 'ads', level: 2, xp: 105,
+  { id: 'e4', managerId: 'e1', name: 'عمر', gender: 'm', dept: 'ads', level: 2, xp: 105,
     personality: 'تحليلي ودقيق، لا يقتنع إلا بالبيانات، يقترح دائماً طريقة لقياس النتائج.' },
 ];
 
 const DEFAULT_TASKS = [
+  ['e5', 'رؤية الوكالة لثلاث سنوات', 'اكتب رؤية ورسالة وقيم الوكالة مع 3 أهداف استراتيجية للسنوات الثلاث القادمة.', 'high'],
+  ['e5', 'مؤشرات أداء الإدارة العليا', 'حدّد أهم 6 مؤشرات تتابعها الإدارة العليا شهرياً مع المستهدف لكل مؤشر.', 'medium'],
   ['e1', 'إعداد الخطة التسويقية للربع القادم', 'ضع خطة تسويقية لثلاثة أشهر للوكالة: الأهداف، القنوات، الميزانية التقديرية، ومؤشرات الأداء.', 'high'],
   ['e1', 'تحليل المنافسين الرئيسيين', 'حدد أهم 3 أنواع من المنافسين لوكالة تسويق رقمي ناشئة، ونقاط قوتهم وضعفهم، وكيف نتميز عنهم.', 'medium'],
   ['e2', 'كتابة نص صفحة "من نحن"', 'اكتب نصاً جذاباً لصفحة "من نحن" في موقع الوكالة، لا يتجاوز 200 كلمة.', 'medium'],
@@ -155,14 +161,48 @@ export function createInitialState() {
   const now = Date.now();
   return {
     company: { name: 'وكالة آفاق للتسويق الرقمي', about: 'وكالة تسويق رقمي ناشئة تقدم خدمات الاستراتيجية والمحتوى والتواصل الاجتماعي والإعلانات المدفوعة.' },
-    employees: STARTING_TEAM.map((e, i) => ({ ...e, desk: i, managerId: e.id === 'e1' ? null : 'e1', hiredAt: now, status: 'idle' })),
+    employees: STARTING_TEAM.map((e, i) => ({ ...e, desk: i, hiredAt: now, status: 'idle' })),
     tasks: DEFAULT_TASKS.map(([empId, title, description, priority], i) => ({
       id: `t${i + 1}`, empId, title, description, priority, status: 'todo', output: '', createdAt: now,
     })),
     chats: {},
     meetings: [],
     nextId: 100,
+    migrations: MIGRATIONS.map((m) => m.key), // a fresh agency already has these
   };
+}
+
+// One-time updates to agencies saved before a change to the starting team.
+// Each runs once per agency and is recorded, so undoing it (for example
+// letting Hamo go) sticks.
+const MIGRATIONS = [
+  {
+    key: 'add-hamo-ceo',
+    run(state) {
+      if (state.employees.some((e) => e.name === HAMO.name)) return;
+      const used = new Set(state.employees.map((e) => e.desk));
+      const desk = [...Array(16).keys()].find((i) => !used.has(i));
+      if (desk === undefined) return; // office is full
+      const id = state.employees.some((e) => e.id === HAMO.id) ? newId(state, 'e') : HAMO.id;
+      state.employees.push({ ...HAMO, id, desk, hiredAt: Date.now(), status: 'idle' });
+      for (const [, title, description, priority] of DEFAULT_TASKS.filter(([who]) => who === HAMO.id)) {
+        state.tasks.push({ id: newId(state, 't'), empId: id, title, description, priority, status: 'todo', output: '', createdAt: Date.now() });
+      }
+    },
+  },
+];
+
+/** Runs pending one-time updates on a loaded agency; returns true if any ran. */
+export function applyMigrations(state) {
+  state.migrations ||= [];
+  let changed = false;
+  for (const m of MIGRATIONS) {
+    if (state.migrations.includes(m.key)) continue;
+    m.run(state);
+    state.migrations.push(m.key);
+    changed = true;
+  }
+  return changed;
 }
 
 export function loadState() {
