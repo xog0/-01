@@ -12,7 +12,7 @@ const THREE_VERSION = JSON.parse(read('package.json')).dependencies.three;
 const MODULES = ['prompt.js', 'data.js', 'scene.js', 'api.js', 'cloud.js', 'app.js'];
 const code = MODULES.map((name) => {
   const src = read(`public/js/${name}`)
-    .replace(/^import\s[\s\S]*?from\s+'\.\/[^']+';\n/gm, '') // local imports become shared scope
+    .replace(/^import\s[^;]*?from\s+'\.\/[^']+';\n/gm, '') // local imports become shared scope (never spans statements)
     .replace(/^export (?=(const|function|class|async|let)\b)/gm, '');
   return `// ---- ${name}\n${src}`;
 }).join('\n');
@@ -24,6 +24,10 @@ for (const name of MODULES) {
     if (names.has(m[1])) throw new Error(`"${m[1]}" is declared in both ${names.get(m[1])} and ${name}`);
     names.set(m[1], name);
   }
+}
+
+for (const lib of ["from 'three'", "from 'three/addons/controls/OrbitControls.js'", "from 'three/addons/renderers/CSS2DRenderer.js'"]) {
+  if (!code.includes(lib)) throw new Error(`build dropped the import ${lib}`);
 }
 
 const html = read('public/index.html');

@@ -4,8 +4,9 @@ import { createInitialState, applyMigrations, titleFor } from '../public/js/data
 
 const oldAgency = () => {
   const s = createInitialState();
-  s.employees = s.employees.filter((e) => e.name !== 'حمو');
-  s.tasks = s.tasks.filter((t) => t.empId !== 'e5');
+  s.employees = s.employees.filter((e) => e.name !== 'حمو' && e.level > 0); // before Hamo and the interns
+  const ids = new Set(s.employees.map((e) => e.id));
+  s.tasks = s.tasks.filter((t) => ids.has(t.empId));
   s.employees.find((e) => e.name === 'سارة').managerId = null;
   delete s.migrations;
   return s;
@@ -50,7 +51,7 @@ test('an older agency moves Sara under Hamo once, keeping her team under her', (
 
 test('an agency that already received Hamo only gets the reporting change', () => {
   const s = oldAgency();
-  s.migrations = ['add-hamo-ceo'];
+  s.migrations = ['add-hamo-ceo', 'add-interns'];
   s.employees.push({ id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null });
   assert.equal(applyMigrations(s), true);
   assert.equal(s.employees.filter((e) => e.name === 'حمو').length, 1);
@@ -59,7 +60,7 @@ test('an agency that already received Hamo only gets the reporting change', () =
 
 test('whoever heads Marketing moves under Hamo once; their team stays with them', () => {
   const s = oldAgency();
-  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'sales-under-hamo', 'hr-under-hamo'];
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'sales-under-hamo', 'hr-under-hamo', 'add-interns'];
   s.employees.push(
     { id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null },
     { id: 'e131', name: 'ريم', dept: 'marketing', level: 5, desk: 10, managerId: 'e1' },
@@ -77,7 +78,7 @@ test('whoever heads Marketing moves under Hamo once; their team stays with them'
 
 test('whoever heads Sales moves under Hamo once, even from under a GM', () => {
   const s = oldAgency();
-  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo', 'hr-under-hamo'];
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo', 'hr-under-hamo', 'add-interns'];
   s.employees.push(
     { id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null },
     { id: 'e133', name: 'منى', dept: 'executive', level: 7, desk: 12, managerId: 'e130' },
@@ -94,7 +95,7 @@ test('whoever heads Sales moves under Hamo once, even from under a GM', () => {
 
 test('whoever heads HR moves under Hamo once', () => {
   const s = oldAgency();
-  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo', 'sales-under-hamo'];
+  s.migrations = ['add-hamo-ceo', 'sara-under-hamo', 'marketing-under-hamo', 'sales-under-hamo', 'add-interns'];
   s.employees.push(
     { id: 'e130', name: 'حمو', dept: 'executive', level: 8, desk: 9, managerId: null },
     { id: 'e133', name: 'منى', dept: 'executive', level: 7, desk: 12, managerId: 'e130' },
@@ -103,4 +104,44 @@ test('whoever heads HR moves under Hamo once', () => {
   assert.equal(applyMigrations(s), true);
   assert.equal(s.employees.find((e) => e.name === 'هند').managerId, 'e130');
   assert.equal(applyMigrations(s), false);
+});
+
+test('a new agency has one intern per department under its head, all on separate desks', () => {
+  const s = createInitialState();
+  const interns = s.employees.filter((e) => e.level === 0);
+  assert.equal(interns.length, 12);
+  assert.equal(new Set(interns.map((e) => e.dept)).size, 12);
+  assert.equal(new Set(s.employees.map((e) => e.desk)).size, s.employees.length);
+  assert.ok(s.employees.every((e) => e.desk < 25));
+  const byName = (n) => s.employees.find((e) => e.name === n);
+  assert.equal(byName('سلمى').managerId, byName('خالد').id);   // content -> Khalid
+  assert.equal(byName('رنا').managerId, byName('سارة').id);    // strategy -> Sara
+  assert.equal(byName('مازن').managerId, byName('حمو').id);    // sales has no head -> Hamo
+  assert.ok(interns.every((e) => s.tasks.some((t) => t.empId === e.id && t.status === 'todo')));
+  assert.equal(titleFor(byName('سلمى')), 'متدرب كتابة المحتوى');
+});
+
+test('an older agency gets interns once, reporting to the heads it hired', () => {
+  const s = oldAgency();
+  applyMigrations(s); // Hamo, reporting changes, then interns
+  const reem = { id: 'e300', name: 'ريم', dept: 'marketing', level: 5, desk: 24, managerId: null };
+  // Re-run on a copy that already had a marketing manager before the interns arrived.
+  const t = oldAgency();
+  t.employees.push(reem);
+  applyMigrations(t);
+  assert.equal(t.employees.find((e) => e.name === 'زياد').managerId, 'e300');
+  assert.equal(s.employees.filter((e) => e.level === 0).length, 12);
+  const n = s.employees.length;
+  s.employees = s.employees.filter((e) => e.name !== 'زياد'); // let one go: not re-added
+  assert.equal(applyMigrations(s), false);
+  assert.equal(s.employees.length, n - 1);
+});
+
+test('interns stop at the desk limit instead of overflowing', () => {
+  const s = oldAgency();
+  for (let i = 0; s.employees.length < 22; i++) s.employees.push({ id: `x${i}`, name: `x${i}`, dept: 'seo', level: 2, desk: 100 });
+  s.employees.forEach((e, i) => { e.desk = i; });
+  applyMigrations(s);
+  assert.ok(s.employees.length <= 25);
+  assert.equal(new Set(s.employees.map((e) => e.desk)).size, s.employees.length);
 });

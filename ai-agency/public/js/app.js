@@ -1,6 +1,6 @@
-import { createOffice, MAX_DESKS, ROOMS } from './scene.js';
+import { createOffice, ROOMS } from './scene.js';
 import {
-  LADDER, DEPARTMENTS, POSITIONS, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
+  LADDER, DEPARTMENTS, POSITIONS, MAX_DESKS, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
   titleFor, loadState, saveState, createInitialState, applyMigrations, newId,
 } from './data.js';
 import { askEmployee, backendStatus } from './api.js';
@@ -680,8 +680,11 @@ $('#btn-org').addEventListener('click', () => { renderOrg(); $('#dlg-org').showM
 // ------------------------------------------------------------ meetings
 function fillMeetingForm() {
   $('#meet-room').replaceChildren(...Object.entries(ROOMS).map(([k, r]) => h('option', { value: k }, `${r.name} (${r.seats} مقاعد)`)));
-  $('#meet-people').replaceChildren(...[...state.employees].sort(byRank).map((e) =>
-    h('label', {}, h('input', { type: 'checkbox', value: e.id, checked: true }), `${e.name}`)));
+  // Preselect the most senior people, few enough to fit the smaller room.
+  const fits = Math.min(...Object.values(ROOMS).map((r) => r.seats));
+  $('#meet-people').replaceChildren(...[...state.employees].sort(byRank).map((e, i) =>
+    h('label', { title: titleFor(e) }, h('input', { type: 'checkbox', value: e.id, checked: i < fits, onchange: updateSeatCount }), `${e.name}`)));
+  updateSeatCount();
   const hist = state.meetings.slice().reverse();
   $('#meet-history').hidden = !hist.length;
   $('#meet-history-list').replaceChildren(...hist.map((m) => h('div', { class: 'task' },
@@ -692,6 +695,14 @@ function fillMeetingForm() {
       showOutput({ title: `محضر: ${m.topic}`, output: `${m.summary}\n\n— — —\n\n${m.log.map((l) => `${l.who}: ${l.text}`).join('\n\n')}`, doneAt: m.at });
     } }, '📄 المحضر')))));
 }
+function updateSeatCount() {
+  const picked = document.querySelectorAll('#meet-people input:checked').length;
+  const seats = ROOMS[$('#meet-room').value]?.seats ?? 0;
+  const el = $('#meet-count');
+  el.textContent = `${picked} من ${seats} مقاعد`;
+  el.classList.toggle('over', picked > seats);
+}
+$('#meet-room').addEventListener('change', updateSeatCount);
 $('#btn-meeting').addEventListener('click', () => {
   if (meeting) return toast('هناك اجتماع جارٍ بالفعل');
   fillMeetingForm();

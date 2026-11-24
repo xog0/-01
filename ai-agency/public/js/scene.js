@@ -3,10 +3,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { MAX_DESKS } from './data.js';
 
-const DESK_COLS = [-18, -12, -6, 0];
-const DESK_ROWS = [-10, -4, 2, 8];
-export const MAX_DESKS = DESK_COLS.length * DESK_ROWS.length;
+const DESK_COLS = [-19.5, -15, -10.5, -6, -1.5];
+const DESK_ROWS = [-11, -6, -1, 4, 9];
+if (DESK_COLS.length * DESK_ROWS.length !== MAX_DESKS) throw new Error('desk grid does not match MAX_DESKS');
 
 export const ROOMS = {
   a: { name: 'قاعة الإبداع', x0: 7, x1: 20, z0: -14, z1: -2, doorZ: -5, seats: 8 },
@@ -95,8 +96,8 @@ export function createOffice(container, { onSelect } = {}) {
   const floor = box(46, 0.2, 32, std(0xe8e3da, { roughness: 0.9 }));
   floor.position.y = -0.1;
   scene.add(floor);
-  const carpet = box(25, 0.02, 25, std(0x3d4a6b, { roughness: 1 }));
-  carpet.position.set(-9, 0.01, -0.5);
+  const carpet = box(23.5, 0.02, 26, std(0x3d4a6b, { roughness: 1 }));
+  carpet.position.set(-10.5, 0.01, -0.5);
   scene.add(carpet);
   const wallMat = std(0xf6f2ec);
   const backWall = box(46, 4, 0.3, wallMat);
@@ -253,11 +254,11 @@ export function createOffice(container, { onSelect } = {}) {
   };
   [[-22, -15], [5, -15], [-22, 14], [5, 14], [21, -1], [21, 1.2]].forEach(([x, z]) => plant(x + (x < 0 ? 0.8 : -0.8), z + (z < 0 ? 0.8 : -0.8)));
   const sofa = box(4, 0.8, 1.2, std(0x8b5cf6));
-  sofa.position.set(-8, 0.4, 14.2);
+  sofa.position.set(-10.5, 0.4, 14.6);
   const sofaBack = box(4, 1, 0.3, std(0x7c3aed));
-  sofaBack.position.set(-8, 1.1, 14.7);
+  sofaBack.position.set(-10.5, 1.1, 15.1);
   const coffee = box(2, 0.5, 1, std(0xb98a5b));
-  coffee.position.set(-8, 0.25, 12.6);
+  coffee.position.set(-10.5, 0.25, 13.3);
   scene.add(sofa, sofaBack, coffee);
 
   // ------------------------------------------------------------------ actors

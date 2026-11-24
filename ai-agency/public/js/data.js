@@ -1,6 +1,8 @@
 // Company model: career ladder, departments, starting team, default tasks,
 // and persistence in localStorage.
 
+export const MAX_DESKS = 25;
+
 export const LADDER = [
   { key: 'intern', name: 'متدرب', xp: 0, desc: 'يتعلم أساسيات العمل وينفذ مهاماً بسيطة تحت إشراف.' },
   { key: 'junior', name: 'أخصائي مبتدئ', xp: 40, desc: 'ينفذ مهام محددة بشكل مستقل مع مراجعة.' },
@@ -155,11 +157,48 @@ const DEFAULT_TASKS = [
   ['e4', 'لوحة مؤشرات الأداء', 'حدد أهم 8 مؤشرات أداء يجب أن نتابعها أسبوعياً مع طريقة حساب كل مؤشر.', 'medium'],
 ];
 
+// One intern per department; each reports to the head of their department.
+const INTERNS = [
+  { dept: 'executive', name: 'يوسف', gender: 'm', personality: 'منظم ودقيق في المتابعة، يحب فهم الصورة الكاملة قبل التنفيذ.' },
+  { dept: 'strategy', name: 'رنا', gender: 'f', personality: 'فضولية وتحب البحث وجمع البيانات، تسأل كثيراً لتتعلم.' },
+  { dept: 'marketing', name: 'زياد', gender: 'm', personality: 'متحمس ومليء بالأفكار، يتعلم بسرعة من الملاحظات.' },
+  { dept: 'sales', name: 'مازن', gender: 'm', personality: 'اجتماعي ولبق في الحديث، صبور مع العملاء.' },
+  { dept: 'hr', name: 'دانة', gender: 'f', personality: 'ودودة ومنظمة، تهتم براحة الفريق وتحب الترتيب.' },
+  { dept: 'content', name: 'سلمى', gender: 'f', personality: 'تحب القراءة والكتابة، أسلوبها بسيط وواضح.' },
+  { dept: 'social', name: 'فيصل', gender: 'm', personality: 'يعيش على المنصات ويلتقط الترندات بسرعة.' },
+  { dept: 'ads', name: 'لينا', gender: 'f', personality: 'تحب الأرقام والجداول وتتعلم أدوات الإعلانات بشغف.' },
+  { dept: 'design', name: 'تالا', gender: 'f', personality: 'ذوقها بصري عالٍ، تجرب الألوان والأفكار الجديدة.' },
+  { dept: 'seo', name: 'كريم', gender: 'm', personality: 'صبور ومنهجي، يحب التفاصيل التقنية.' },
+  { dept: 'pr', name: 'جود', gender: 'f', personality: 'لبقة وهادئة، تختار كلماتها بعناية.' },
+  { dept: 'email', name: 'ماجد', gender: 'm', personality: 'عملي ويحب الأتمتة وتوفير الوقت.' },
+];
+
+/** Adds the interns a department doesn't have yet; returns how many joined. */
+function addInterns(state) {
+  const byRankDesc = (a, b) => b.level - a.level || (b.xp || 0) - (a.xp || 0);
+  const hamo = state.employees.find((e) => e.name === HAMO.name);
+  let added = 0;
+  for (const it of INTERNS) {
+    if (state.employees.some((e) => e.dept === it.dept && e.level === 0)) continue;
+    const used = new Set(state.employees.map((e) => e.desk));
+    const desk = [...Array(MAX_DESKS).keys()].find((i) => !used.has(i));
+    if (desk === undefined) break; // office is full
+    const head = state.employees.filter((e) => e.dept === it.dept).sort(byRankDesc)[0] || hamo || null;
+    const id = newId(state, 'e');
+    state.employees.push({ ...it, id, level: 0, xp: 0, desk, managerId: head ? head.id : null, hiredAt: Date.now(), status: 'idle' });
+    const [title, description] = ROLE_TASKS[it.dept].at(-1);
+    state.tasks.push({ id: newId(state, 't'), empId: id, title, description, priority: 'low', status: 'todo', output: '',
+      createdAt: Date.now(), assignedBy: head ? head.id : null });
+    added += 1;
+  }
+  return added;
+}
+
 const STORE_KEY = 'ai-agency-state-v1';
 
 export function createInitialState() {
   const now = Date.now();
-  return {
+  const state = {
     company: { name: 'وكالة آفاق للتسويق الرقمي', about: 'وكالة تسويق رقمي ناشئة تقدم خدمات الاستراتيجية والمحتوى والتواصل الاجتماعي والإعلانات المدفوعة.' },
     employees: STARTING_TEAM.map((e, i) => ({ ...e, desk: i, hiredAt: now, status: 'idle' })),
     tasks: DEFAULT_TASKS.map(([empId, title, description, priority], i) => ({
@@ -170,6 +209,8 @@ export function createInitialState() {
     nextId: 100,
     migrations: MIGRATIONS.map((m) => m.key), // a fresh agency already has these
   };
+  addInterns(state);
+  return state;
 }
 
 // One-time updates to agencies saved before a change to the starting team.
@@ -181,7 +222,7 @@ const MIGRATIONS = [
     run(state) {
       if (state.employees.some((e) => e.name === HAMO.name)) return;
       const used = new Set(state.employees.map((e) => e.desk));
-      const desk = [...Array(16).keys()].find((i) => !used.has(i));
+      const desk = [...Array(MAX_DESKS).keys()].find((i) => !used.has(i));
       if (desk === undefined) return; // office is full
       const id = state.employees.some((e) => e.id === HAMO.id) ? newId(state, 'e') : HAMO.id;
       state.employees.push({ ...HAMO, id, desk, hiredAt: Date.now(), status: 'idle' });
@@ -202,6 +243,7 @@ const MIGRATIONS = [
   { key: 'marketing-under-hamo', run: (state) => deptHeadsUnderHamo(state, 'marketing') },
   { key: 'sales-under-hamo', run: (state) => deptHeadsUnderHamo(state, 'sales') },
   { key: 'hr-under-hamo', run: (state) => deptHeadsUnderHamo(state, 'hr') },
+  { key: 'add-interns', run: addInterns },
 ];
 
 // Whoever heads a department (its members whose manager is outside it)
