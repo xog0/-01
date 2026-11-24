@@ -9,6 +9,10 @@ import {
   ADJ_TYPES, addAdjustment, addLedger, balance, defaultSalary, financeBrief, monthTotals, parseFinanceOrders,
   payrollPreview, periodLabel, runPayroll,
 } from './finance.js';
+import {
+  CLIENT_STATUS, PROJECT_STATUS, PROJECT_TYPES, clientTotals, deleteClient, deleteProject, isLate, outstanding,
+  portfolioBrief, projectContext, projectProgress, receivables, recordPayment, saveClient, saveProject,
+} from './crm.js';
 
 // ------------------------------------------------------------ DOM helpers
 const $ = (sel) => document.querySelector(sel);
@@ -83,6 +87,17 @@ const actorOf = (e) => ({ ...e, color: colorOf(e), look: lookFor(e) });
 const fmt = (n) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n);
 const money = (n) => `${fmt(n)} ${state.finance?.currency || ''}`.trim();
 const cfo = () => state.employees.filter((x) => x.dept === 'finance' && x.level >= MANAGER_LEVEL).sort(byRank)[0] || null;
+// Arabic number agreement: 1 مشروع واحد، 2 مشروعان، 3-10 مشاريع، 11+ مشروعاً.
+function countOf(n, [one, two, few, many]) {
+  if (n === 0) return `لا ${few}`;
+  if (n === 1) return one;
+  if (n === 2) return two;
+  return `${n} ${n <= 10 ? few : many}`;
+}
+const PROJECTS_WORD = ['مشروع واحد', 'مشروعان', 'مشاريع', 'مشروعاً'];
+const TASKS_WORD = ['مهمة واحدة', 'مهمتان', 'مهام', 'مهمة'];
+const project = (id) => state.projects?.find((p) => p.id === id) || null;
+const clientOf = (p) => state.clients?.find((c) => c.id === p?.clientId) || null;
 
 // What someone remembers at work: their last finished tasks and the last
 // note their manager gave them.
@@ -92,6 +107,10 @@ function memoryOf(e) {
   if (done.length) parts.push(`آخر مهامك المنجزة: ${done.slice(0, 4).map((t) => t.title).join('، ')}.`);
   const note = done.find((t) => t.reviews?.length)?.reviews.at(-1);
   if (note?.feedback) parts.push(`آخر ملاحظة من ${emp(note.by)?.name || 'مديرك'} على عملك: "${note.feedback}"`);
+  const live = (state.projects || []).filter((p) => (p.status === 'active' || p.status === 'proposal') && (p.leadId === e.id || p.team.includes(e.id)));
+  if (live.length) {
+    parts.push(`مشاريعك: ${live.map((p) => `${p.name} لـ${clientOf(p)?.name || 'عميل'} (${p.leadId === e.id ? 'أنت قائده' : 'عضو في الفريق'})`).join('، ')}.`);
+  }
   return parts.join(' ').slice(0, 1100);
 }
 
@@ -109,14 +128,17 @@ function personaOf(e) {
     reports: teamOf(e.id).map((m) => `${m.name} (${titleFor(m)})`).join('، '),
     duties: e.id === cfo()?.id ? 'finance' : '',
     bio: `عمرك ${bio.age} سنة، وخبرتك ${bio.years} ${bio.years > 10 ? 'سنة' : 'سنوات'}. ${bio.background} أسلوبك في التواصل: ${bio.style}`.slice(0, 1100),
-    memory: e.id === cfo()?.id ? `${financeBrief(state, fmt)} ${memoryOf(e)}`.slice(0, 1150) : memoryOf(e),
+    memory: e.id === cfo()?.id
+      ? `${financeBrief(state, fmt)} مستحقات العملاء غير المحصّلة: ${fmt(receivables(state))} ${state.finance.currency}. ${memoryOf(e)}`.slice(0, 1150)
+      : memoryOf(e),
   };
 }
 function companyOf(except) {
   return {
     name: state.company.name,
     about: state.company.about || '',
-    team: state.employees.filter((x) => x.id !== except).map((x) => `${x.name} (${titleFor(x)})`).join('، '),
+    team: state.employees.filter((x) => x.id !== except).map((x) => `${x.name} (${titleFor(x)})`).join('، ').slice(0, 1150),
+    portfolio: portfolioBrief(state, (id) => emp(id)?.name || '—'),
   };
 }
 function ask(e, mode, messages) {
@@ -273,6 +295,8 @@ function taskCard(t, { showOwner = false } = {}) {
     h('div', { class: 'meta' },
       showOwner && owner ? h('span', { class: 'badge' }, `👤 ${owner.name}`) : null,
       t.assignedBy && emp(t.assignedBy) ? h('span', { class: 'badge' }, `📋 من ${emp(t.assignedBy).name}`) : null,
+      project(t.projectId) ? h('span', { class: 'badge project', title: 'فتح المشروع', onclick: () => openClients('projects') },
+        `📁 ${clientOf(project(t.projectId))?.name || ''} · ${project(t.projectId).name}`) : null,
       h('span', { class: `badge ${t.priority}` }, `أولوية ${PRIORITY_NAMES[t.priority]}`),
       h('span', { class: `badge ${t.status === 'review' ? 'doing' : t.status}` }, running ? `${STATUS_NAMES[t.status]}…` : STATUS_NAMES[t.status]),
       t.status === 'review' && emp(t.empId)?.managerId ? h('span', { class: 'badge' }, `🧐 ${emp(emp(t.empId).managerId)?.name}`) : null,
@@ -288,20 +312,35 @@ function renderEmpTasks(e) {
   const list = state.tasks.filter((t) => t.empId === e.id)
     .sort((a, b) => ['doing', 'review', 'todo', 'done'].indexOf(a.status) - ['doing', 'review', 'todo', 'done'].indexOf(b.status));
   $('#emp-tasks').replaceChildren(...(list.length ? list.map((t) => taskCard(t)) : [h('div', { class: 'empty' }, 'لا توجد مهام لهذا الموظف.')]));
+  const keep = $('#task-project').value;
+  const mine = liveProjects().filter((p) => p.leadId === e.id || p.team.includes(e.id));
+  const others = liveProjects().filter((p) => !mine.includes(p));
+  $('#task-project').replaceChildren(h('option', { value: '' }, 'بدون مشروع'),
+    ...[...mine, ...others].map((p) => h('option', { value: p.id }, `📁 ${clientOf(p)?.name} · ${p.name}`)));
+  $('#task-project').value = project(keep) ? keep : '';
+}
+
+const liveProjects = () => (state.projects || []).filter((p) => p.status === 'active' || p.status === 'proposal');
+function projectSelect(value = '') {
+  const sel = h('select', { 'aria-label': 'المشروع' }, h('option', { value: '' }, 'بدون مشروع'),
+    ...liveProjects().map((p) => h('option', { value: p.id }, `📁 ${clientOf(p)?.name} · ${p.name}`)));
+  sel.value = project(value) ? value : '';
+  return sel;
 }
 
 $('#task-form').addEventListener('submit', (ev) => {
   ev.preventDefault();
   const title = $('#task-title').value.trim();
   if (!title || !selectedId) return;
-  addTask(selectedId, title, $('#task-desc').value.trim(), $('#task-priority').value);
+  addTask(selectedId, title, $('#task-desc').value.trim(), $('#task-priority').value, null, $('#task-project').value || null);
   ev.target.reset();
   $('#task-priority').value = 'medium';
   toast('تمت إضافة المهمة');
 });
 
-function addTask(empId, title, description, priority, assignedBy = null) {
-  state.tasks.push({ id: newId(state, 't'), empId, title, description, priority, status: 'todo', output: '', createdAt: Date.now(), assignedBy });
+function addTask(empId, title, description, priority, assignedBy = null, projectId = null) {
+  state.tasks.push({ id: newId(state, 't'), empId, title, description, priority, status: 'todo', output: '', createdAt: Date.now(), assignedBy,
+    ...(project(projectId) ? { projectId } : {}) });
   save();
   refresh();
 }
@@ -320,7 +359,8 @@ function redoTask(id) {
 }
 
 function taskPrompt(t, reviewer) {
-  let prompt = `المهمة: ${t.title}\n\nالتفاصيل: ${t.description || 'لا توجد تفاصيل إضافية، استخدم خبرتك.'}\n\nالأولوية: ${PRIORITY_NAMES[t.priority]}`;
+  const ctx = projectContext(state, t.projectId);
+  let prompt = `${ctx ? `${ctx}\n\n` : ''}المهمة: ${t.title}\n\nالتفاصيل: ${t.description || 'لا توجد تفاصيل إضافية، استخدم خبرتك.'}\n\nالأولوية: ${PRIORITY_NAMES[t.priority]}`;
   if (t.feedback && t.output) {
     prompt += `\n\nهذه نسخة معدّلة. مسودتك السابقة:\n${t.output.slice(0, 2500)}\n\nملاحظات ${reviewer?.name || 'مديرك'}: ${t.feedback}\n` +
       'عدّل العمل بناءً على الملاحظات وقدّم النسخة النهائية كاملة.';
@@ -330,7 +370,8 @@ function taskPrompt(t, reviewer) {
 
 // The manager reads the delivered work and approves it or asks for changes.
 async function reviewBy(mgr, e, t) {
-  const content = `الموظف: ${e.name} (${titleFor(e)})\nالمهمة: ${t.title}\nالمطلوب: ${t.description || '—'}\n\nالعمل المسلّم:\n${t.output.slice(0, 4500)}`;
+  const ctx = projectContext(state, t.projectId);
+  const content = `${ctx ? `${ctx}\n` : ''}الموظف: ${e.name} (${titleFor(e)})\nالمهمة: ${t.title}\nالمطلوب: ${t.description || '—'}\n\nالعمل المسلّم:\n${t.output.slice(0, 4500)}`;
   const reply = await ask(mgr, 'review', [{ role: 'user', content }]);
   try {
     const v = JSON.parse(reply.slice(reply.indexOf('{'), reply.lastIndexOf('}') + 1));
@@ -482,6 +523,19 @@ function extractAssignOrder(reply, manager) {
 async function assignTeamTasks(manager, onlyIds = null, perMember = 2, focus = '') {
   const members = teamOf(manager.id).filter((m) => !onlyIds || onlyIds.includes(m.id));
   if (!members.length) return toast(`لا يوجد موظفون تحت إدارة ${manager.name}`);
+  return assignTasks(manager, members, perMember, focus, null);
+}
+
+// A project lead splits the project into tasks for the project team.
+async function assignProjectTasks(p) {
+  const lead = emp(p.leadId);
+  if (!lead) return toast('حدد قائداً للمشروع أولاً');
+  const members = p.team.map(emp).filter(Boolean);
+  if (!members.length) return toast('أضف أعضاء إلى فريق المشروع أولاً');
+  return assignTasks(lead, members, 2, '', p);
+}
+
+async function assignTasks(manager, members, perMember, focus, proj) {
   const key = `assign:${manager.id}`;
   if (busy.has(key)) return;
   busy.add(key);
@@ -495,15 +549,18 @@ async function assignTeamTasks(manager, onlyIds = null, perMember = 2, focus = '
   }).join('\n');
   let tasks = [];
   try {
+    const ctx = proj ? projectContext(state, proj.id) : '';
     const reply = await ask(manager, 'assign', [{ role: 'user', content:
-      `فريقك:\n${brief}\n\nكلّف كل عضو بـ${perMember === 1 ? 'مهمة واحدة' : `${perMember} مهام`} خاصة بوظيفته.` +
+      `${ctx ? `أنت قائد هذا المشروع، والمطلوب تقسيمه إلى مهام لفريقه.\n${ctx}\n\n` : ''}فريقك:\n${brief}\n\n` +
+      `كلّف كل عضو بـ${perMember === 1 ? 'مهمة واحدة' : `${perMember} مهام`} خاصة بوظيفته${proj ? ' تخدم هذا المشروع مباشرة' : ''}.` +
       (focus ? `\nطلب المالك أن تركّز المهام على: ${focus}` : '') }]);
     tasks = parseAssignments(reply, members);
   } catch (err) {
     toast(err.message);
   }
-  if (!tasks.length) tasks = libraryAssignments(members, perMember);
-  for (const t of tasks) addTask(t.empId, t.title, t.description, t.priority, manager.id);
+  if (!tasks.length && !proj) tasks = libraryAssignments(members, perMember);
+  if (!tasks.length && proj) toast('تعذّر الحصول على مهام للمشروع. حاول مرة أخرى.');
+  for (const t of tasks) addTask(t.empId, t.title, t.description, t.priority, manager.id, proj ? proj.id : null);
   busy.delete(key);
   setStatus(manager, prev === 'talking' ? 'idle' : prev);
   const got = [...new Set(tasks.map((t) => t.empId))];
@@ -675,6 +732,10 @@ async function fire(e) {
   }
   state.tasks = state.tasks.filter((t) => !t.deleted);
   for (const x of state.employees) if (x.managerId === e.id) x.managerId = e.managerId;
+  for (const p of state.projects || []) {
+    p.team = p.team.filter((id) => id !== e.id);
+    if (p.leadId === e.id) p.leadId = e.managerId || null;
+  }
   state.employees = state.employees.filter((x) => x.id !== e.id);
   delete state.chats[e.id];
   office.removeEmployee(e.id);
@@ -774,7 +835,8 @@ $('#dlg-hire').addEventListener('close', () => {
 // ------------------------------------------------------------ task board
 function renderBoard() {
   const filter = $('#board-filter').value;
-  const tasks = state.tasks.filter((t) => !filter || t.empId === filter);
+  const pf = $('#board-project').value;
+  const tasks = state.tasks.filter((t) => (!filter || t.empId === filter) && (!pf || t.projectId === pf));
   const cols = ['todo', 'doing', 'done'].map((s) => {
     const list = tasks.filter((t) => t.status === s || (s === 'doing' && t.status === 'review'));
     return h('div', { class: 'column' },
@@ -785,12 +847,13 @@ function renderBoard() {
   const title = h('input', { maxlength: 200, placeholder: 'عنوان المهمة', required: true });
   const desc = h('textarea', { rows: 2, maxlength: 1500, placeholder: 'التفاصيل' });
   const prio = h('select', {}, ...Object.entries(PRIORITY_NAMES).map(([k, v]) => h('option', { value: k, selected: k === 'medium' }, `أولوية ${v}`)));
+  const proj = projectSelect(pf);
   const form = h('form', { class: 'column stack', onsubmit: (ev) => {
     ev.preventDefault();
     if (!title.value.trim() || !assign.value) return;
-    addTask(assign.value, title.value.trim(), desc.value.trim(), prio.value);
+    addTask(assign.value, title.value.trim(), desc.value.trim(), prio.value, null, proj.value || null);
     toast('تمت إضافة المهمة');
-  } }, h('h3', {}, 'تكليف جديد'), h('label', {}, 'الموظف', assign), title, desc, prio, h('button', { class: 'primary', type: 'submit' }, 'إضافة'));
+  } }, h('h3', {}, 'تكليف جديد'), h('label', {}, 'الموظف', assign), title, desc, prio, proj, h('button', { class: 'primary', type: 'submit' }, 'إضافة'));
   cols[0].firstChild.after(form);
   $('#board').replaceChildren(...cols);
 }
@@ -799,10 +862,15 @@ $('#btn-board').addEventListener('click', () => {
   const keep = f.value;
   f.replaceChildren(h('option', { value: '' }, 'كل الموظفين'), ...state.employees.map((x) => h('option', { value: x.id }, x.name)));
   f.value = state.employees.some((x) => x.id === keep) ? keep : '';
+  const pf = $('#board-project');
+  const keepP = pf.value;
+  pf.replaceChildren(h('option', { value: '' }, 'كل المشاريع'), ...liveProjects().map((p) => h('option', { value: p.id }, `${clientOf(p)?.name} · ${p.name}`)));
+  pf.value = project(keepP) ? keepP : '';
   renderBoard();
   $('#dlg-board').showModal();
 });
 $('#board-filter').addEventListener('change', renderBoard);
+$('#board-project').addEventListener('change', renderBoard);
 $('#board-close').addEventListener('click', () => $('#dlg-board').close());
 $('#board-assign').addEventListener('click', () => {
   const m = topManager();
@@ -970,6 +1038,226 @@ $('#m-end').addEventListener('click', async () => {
   done.attendees.forEach((id) => emp(id) && setStatus(emp(id), 'idle'));
 });
 
+// ------------------------------------------------------------ clients & projects
+let crmTab = 'projects';
+let projectFilter = 'live';
+
+function openClients(tab = crmTab) {
+  crmTab = tab;
+  renderClients();
+  if (!$('#dlg-clients').open) $('#dlg-clients').showModal();
+}
+
+function personChip(e, lead = false) {
+  return Object.assign(avatar(e), { title: `${e.name} — ${titleFor(e)}${lead ? ' (قائد المشروع)' : ''}`, className: `avatar${lead ? ' lead' : ''}` });
+}
+
+function projectCard(p) {
+  const c = clientOf(p);
+  const prog = projectProgress(state, p);
+  const lead = emp(p.leadId);
+  const late = isLate(p);
+  return h('div', { class: 'project' },
+    h('div', { class: 'row', style: 'justify-content: space-between' },
+      h('h4', {}, p.name),
+      h('span', { class: `badge ${p.status}` }, PROJECT_STATUS[p.status])),
+    h('div', { class: 'client' }, `${c?.name || '—'} · ${p.type}`),
+    p.brief ? h('p', { class: 'brief' }, p.brief) : null,
+    h('div', { class: 'people' },
+      lead ? personChip(lead, true) : h('span', { class: 'muted' }, 'بلا قائد'),
+      ...p.team.map(emp).filter(Boolean).map((e) => personChip(e))),
+    h('div', {},
+      h('div', { class: 'progress' }, h('i', { style: `width:${prog.pct}%` })),
+      h('div', { class: 'money muted' },
+        h('span', {}, prog.total ? `أُنجز ${prog.done} من ${countOf(prog.total, TASKS_WORD)}` : 'لا توجد مهام بعد'),
+        p.due ? h('span', { class: late ? 'badge late' : '' }, `${late ? 'متأخر · ' : 'التسليم '}${p.due}`) : null)),
+    h('div', { class: 'money' },
+      h('span', {}, `القيمة ${money(p.fee)}`),
+      h('span', { class: 'muted' }, `محصّل ${fmt(p.paid || 0)} · متبقٍ ${fmt(outstanding(p))}`)),
+    h('div', { class: 'actions' },
+      p.status === 'active' || p.status === 'proposal'
+        ? h('button', { class: 'small primary', disabled: !lead || busy.has(`assign:${p.leadId}`), onclick: () => assignProjectTasks(p).then(() => renderClients()) },
+          `📋 ${lead ? `${lead.name} يوزّع المهام` : 'توزيع المهام'}`) : null,
+      p.status === 'proposal' && lead
+        ? h('button', { class: 'small', onclick: () => requestProposal(p) }, '📝 كتابة العرض') : null,
+      outstanding(p) > 0 && p.status !== 'cancelled' ? h('button', { class: 'small', onclick: () => openPay(p) }, '💵 تحصيل دفعة') : null,
+      h('button', { class: 'small', onclick: () => openMeetingFor(p) }, '👥 اجتماع'),
+      h('button', { class: 'small', onclick: () => showProjectTasks(p) }, '📋 المهام'),
+      h('button', { class: 'small', onclick: () => openProjectForm(p) }, '✏️ تعديل')));
+}
+
+function renderClients() {
+  document.querySelectorAll('[data-crm]').forEach((b) => b.classList.toggle('active', b.dataset.crm === crmTab));
+  const body = $('#crm-body');
+  if (crmTab === 'projects') {
+    const groups = { live: ['active', 'proposal'], done: ['done'], cancelled: ['cancelled'], all: Object.keys(PROJECT_STATUS) };
+    const list = (state.projects || []).filter((p) => groups[projectFilter].includes(p.status))
+      .sort((a, b) => ['active', 'proposal', 'done', 'cancelled'].indexOf(a.status) - ['active', 'proposal', 'done', 'cancelled'].indexOf(b.status));
+    const active = (state.projects || []).filter((p) => p.status === 'active');
+    body.replaceChildren(
+      h('div', { class: 'tiles' },
+        tile('مشاريع قيد التنفيذ', String(active.length)),
+        tile('عروض أسعار', String((state.projects || []).filter((p) => p.status === 'proposal').length)),
+        tile('قيمة المشاريع الجارية', money(active.reduce((s, p) => s + p.fee, 0))),
+        tile('مستحقات غير محصّلة', money(receivables(state)), receivables(state) ? 'bad' : 'good')),
+      h('div', { class: 'crm-filters' }, ...[['live', 'الجارية'], ['done', 'المكتملة'], ['cancelled', 'الملغاة'], ['all', 'الكل']].map(([k, label]) =>
+        h('button', { class: `small${projectFilter === k ? ' active' : ''}`, onclick: () => { projectFilter = k; renderClients(); } }, label))),
+      list.length ? h('div', { class: 'projects' }, ...list.map(projectCard))
+        : h('div', { class: 'empty' }, state.clients?.length ? 'لا توجد مشاريع هنا. أضف مشروعاً جديداً لأحد العملاء.' : 'أضف عميلاً أولاً، ثم أنشئ له مشروعاً.'));
+  } else {
+    const clients = [...(state.clients || [])].sort((a, b) => ['active', 'prospect', 'past'].indexOf(a.status) - ['active', 'prospect', 'past'].indexOf(b.status));
+    body.replaceChildren(clients.length ? h('div', { class: 'clients-list' }, ...clients.map((c) => {
+      const tot = clientTotals(state, c.id);
+      return h('div', { class: 'project' },
+        h('div', { class: 'row', style: 'justify-content: space-between' },
+          h('h4', {}, c.name), h('span', { class: `badge ${c.status === 'active' ? 'active' : c.status === 'prospect' ? 'proposal' : 'cancelled'}` }, CLIENT_STATUS[c.status])),
+        h('div', { class: 'client' }, [c.industry, c.city].filter(Boolean).join(' · ') || '—'),
+        c.contact ? h('div', { class: 'client' }, `👤 ${c.contact}`) : null,
+        c.notes ? h('p', { class: 'brief' }, c.notes) : null,
+        h('div', { class: 'money' }, h('span', {}, `${countOf(tot.projects, PROJECTS_WORD)} · ${money(tot.fee)}`), h('span', { class: 'muted' }, `متبقٍ ${fmt(tot.owed)}`)),
+        h('div', { class: 'actions' },
+          h('button', { class: 'small primary', onclick: () => openProjectForm(null, c.id) }, '＋ مشروع'),
+          h('button', { class: 'small', onclick: () => openClientForm(c) }, '✏️ تعديل')));
+    })) : h('div', { class: 'empty' }, 'لا يوجد عملاء بعد.'));
+  }
+}
+
+function openClientForm(c = null) {
+  $('#client-form').reset();
+  $('#client-form-title').textContent = c ? `تعديل ${c.name}` : 'عميل جديد';
+  $('#cl-status').replaceChildren(...Object.entries(CLIENT_STATUS).map(([k, v]) => h('option', { value: k }, v)));
+  $('#cl-id').value = c?.id || '';
+  for (const f of ['name', 'industry', 'city', 'contact', 'notes']) $(`#cl-${f}`).value = c?.[f] || '';
+  $('#cl-status').value = c?.status || 'active';
+  $('#cl-delete').hidden = !c;
+  $('#dlg-client').showModal();
+}
+$('#dlg-client').addEventListener('close', () => {
+  if ($('#dlg-client').returnValue !== 'ok') return;
+  try {
+    const c = saveClient(state, {
+      id: $('#cl-id').value || undefined, name: $('#cl-name').value, industry: $('#cl-industry').value, city: $('#cl-city').value,
+      contact: $('#cl-contact').value, status: $('#cl-status').value, notes: $('#cl-notes').value,
+    }, { newId });
+    save();
+    toast(`تم حفظ العميل ${c.name}`);
+  } catch (err) { toast(err.message); }
+  renderClients();
+});
+$('#cl-delete').addEventListener('click', async () => {
+  const c = state.clients.find((x) => x.id === $('#cl-id').value);
+  $('#dlg-client').close();
+  if (!c || !(await confirmBox(`حذف العميل ${c.name}؟`, 'حذف'))) return;
+  try { deleteClient(state, c.id); save(); toast('تم حذف العميل'); } catch (err) { toast(err.message); }
+  renderClients();
+});
+
+function openProjectForm(p = null, clientId = '') {
+  if (!state.clients?.length) return toast('أضف عميلاً أولاً');
+  $('#project-form').reset();
+  $('#project-form-title').textContent = p ? `تعديل ${p.name}` : 'مشروع جديد';
+  $('#pj-client').replaceChildren(...state.clients.map((c) => h('option', { value: c.id }, c.name)));
+  $('#pj-type').replaceChildren(...PROJECT_TYPES.map((t) => h('option', { value: t }, t)));
+  $('#pj-status').replaceChildren(...Object.entries(PROJECT_STATUS).map(([k, v]) => h('option', { value: k }, v)));
+  const people = [...state.employees].sort(byRank);
+  $('#pj-lead').replaceChildren(h('option', { value: '' }, 'بدون قائد'), ...people.map((e) => h('option', { value: e.id }, `${e.name} — ${titleFor(e)}`)));
+  $('#pj-team').replaceChildren(...people.map((e) => h('label', { title: titleFor(e) },
+    h('input', { type: 'checkbox', value: e.id, checked: Boolean(p?.team.includes(e.id)) }), e.name)));
+  $('#pj-id').value = p?.id || '';
+  $('#pj-client').value = p?.clientId || clientId || state.clients[0].id;
+  $('#pj-name').value = p?.name || '';
+  $('#pj-type').value = p?.type || PROJECT_TYPES[0];
+  $('#pj-brief').value = p?.brief || '';
+  $('#pj-fee').value = p ? String(p.fee) : '0';
+  $('#pj-due').value = p?.due || '';
+  $('#pj-status').value = p?.status || 'proposal';
+  $('#pj-lead').value = p?.leadId || '';
+  $('#pj-delete').hidden = !p;
+  $('#dlg-project').showModal();
+}
+$('#dlg-project').addEventListener('close', () => {
+  if ($('#dlg-project').returnValue !== 'ok') return;
+  try {
+    const p = saveProject(state, {
+      id: $('#pj-id').value || undefined, clientId: $('#pj-client').value, name: $('#pj-name').value, type: $('#pj-type').value,
+      brief: $('#pj-brief').value, fee: $('#pj-fee').value, due: $('#pj-due').value, status: $('#pj-status').value,
+      leadId: $('#pj-lead').value || null, team: [...document.querySelectorAll('#pj-team input:checked')].map((i) => i.value),
+    }, { newId });
+    save();
+    refresh();
+    toast(`تم حفظ المشروع ${p.name}`);
+  } catch (err) { toast(err.message); }
+  renderClients();
+});
+$('#pj-delete').addEventListener('click', async () => {
+  const p = project($('#pj-id').value);
+  $('#dlg-project').close();
+  if (!p || !(await confirmBox(`حذف مشروع ${p.name}؟ تبقى مهامه ودفعاته المسجلة، لكن دون ربط بالمشروع.`, 'حذف'))) return;
+  deleteProject(state, p.id);
+  save();
+  refresh();
+  renderClients();
+  toast('تم حذف المشروع');
+});
+
+let payingProject = null;
+function openPay(p) {
+  payingProject = p.id;
+  $('#pay-form').reset();
+  $('#pay-info').textContent = `${clientOf(p)?.name} · ${p.name} — المتبقي ${money(outstanding(p))}`;
+  $('#pay-amount').max = String(outstanding(p));
+  $('#pay-amount').value = String(outstanding(p));
+  $('#dlg-pay').showModal();
+}
+$('#dlg-pay').addEventListener('close', () => {
+  if ($('#dlg-pay').returnValue !== 'ok' || !payingProject) return;
+  try {
+    const entry = recordPayment(state, payingProject, Number($('#pay-amount').value), { note: $('#pay-note').value.trim() });
+    save();
+    toast(`💵 سُجّلت دفعة ${money(entry.amount)} في الدفتر`);
+  } catch (err) { toast(err.message); }
+  payingProject = null;
+  renderClients();
+  if ($('#dlg-finance').open) renderFinance();
+});
+
+// The lead gets a task to write the proposal for a project still at the quote stage.
+function requestProposal(p) {
+  const lead = emp(p.leadId);
+  if (!lead) return toast('حدد قائداً للمشروع أولاً');
+  if (state.tasks.some((t) => t.projectId === p.id && t.status !== 'done' && t.title.startsWith('عرض فني ومالي'))) return toast(`${lead.name} يعمل على العرض بالفعل`);
+  addTask(lead.id, `عرض فني ومالي: ${p.name}`.slice(0, 200),
+    `اكتب عرضاً للعميل يتضمن: فهمنا لاحتياجه، الأهداف، نطاق العمل والمخرجات، الجدول الزمني، الفريق، والتكلفة (${fmt(p.fee)} ${state.finance?.currency || ''})، ثم الخطوات التالية.`,
+    'high', null, p.id);
+  toast(`📝 كُلّف ${lead.name} بكتابة عرض ${p.name}`);
+  renderClients();
+}
+
+function showProjectTasks(p) {
+  $('#dlg-clients').close();
+  $('#btn-board').click();
+  $('#board-filter').value = '';
+  $('#board-project').value = p.id;
+  renderBoard();
+}
+
+function openMeetingFor(p) {
+  if (meeting) return toast('هناك اجتماع جارٍ بالفعل');
+  $('#dlg-clients').close();
+  fillMeetingForm();
+  const people = [p.leadId, ...p.team].filter((id) => emp(id)).slice(0, Math.max(...Object.values(ROOMS).map((r) => r.seats)));
+  document.querySelectorAll('#meet-people input').forEach((i) => { i.checked = people.includes(i.value); });
+  if (people.length > ROOMS.b.seats) $('#meet-room').value = 'a';
+  updateSeatCount();
+  $('#meet-topic').value = `مشروع «${p.name}» لـ${clientOf(p)?.name}: ${p.brief || p.type}`.slice(0, 600);
+  $('#dlg-meeting').showModal();
+}
+
+$('#btn-clients').addEventListener('click', () => openClients());
+$('#btn-new-project').addEventListener('click', () => openProjectForm());
+$('#btn-new-client').addEventListener('click', () => openClientForm());
+document.querySelectorAll('[data-crm]').forEach((b) => b.addEventListener('click', () => openClients(b.dataset.crm)));
+
 // ------------------------------------------------------------ finance
 let finTab = 'summary';
 const hoursLabel = (n) => `${fmt(n)} ${n >= 3 && n <= 10 && Number.isInteger(n) ? 'ساعات' : 'ساعة'}`;
@@ -1018,7 +1306,8 @@ function renderFinance() {
         tile(`إيرادات ${periodLabel(fin.period)}`, money(m.income), 'good'),
         tile(`مصروفات ${periodLabel(fin.period)}`, money(m.expense), 'bad'),
         tile('مسير الرواتب المتوقع', money(p.total)),
-        tile('حركات مفتوحة', String(fin.adjustments.filter((a) => !a.paid && a.type !== 'raise').length))),
+        tile('حركات مفتوحة', String(fin.adjustments.filter((a) => !a.paid && a.type !== 'raise').length)),
+        tile('مستحقات العملاء', money(receivables(state)))),
       h('p', { class: 'muted' }, keeper
         ? `${keeper.name} (${titleFor(keeper)}) مسؤول عن الرواتب والخصومات والمكافآت. اطلب منه في المحادثة، مثلاً: «اخصم 200 من خالد بسبب التأخير» أو «أضف 6 ساعات أوفرتايم لليلى».`
         : 'لا يوجد مدير مالي حالياً. يمكنك توظيف «المدير المالي» من نموذج التوظيف.'),
@@ -1186,6 +1475,11 @@ $('#dlg-adjust').addEventListener('close', () => {
 
 $('#btn-finance').addEventListener('click', () => { renderFinance(); $('#dlg-finance').showModal(); });
 document.querySelectorAll('[data-fin]').forEach((b) => b.addEventListener('click', () => { finTab = b.dataset.fin; renderFinance(); }));
+
+// The top bar can wrap onto two rows on narrower screens; panels sit below it.
+new ResizeObserver(([entry]) => {
+  document.documentElement.style.setProperty('--topbar-h', `${Math.ceil(entry.target.getBoundingClientRect().height)}px`);
+}).observe($('.topbar'));
 
 // ------------------------------------------------------------ moving the view
 function startRepeat(fn) {

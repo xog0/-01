@@ -6,6 +6,7 @@
 //   core/meetings/<id>    one meeting with its minutes
 //   core/finance/books    settings, payroll adjustments and payroll runs
 //   core/finance/ledger   income and expense entries
+//   core/crm/book         clients and projects
 // Writes are diffed against what was last stored, so only changed
 // documents are sent, one write at a time per document.
 
@@ -34,6 +35,7 @@ function splitState(state) {
     docs.set('finance/books', { ...books, payrolls: books.payrolls.map((p) => ({ ...p, memo: (p.memo || '').slice(0, 2000) })) });
     docs.set('finance/ledger', { entries: ledger });
   }
+  if (state.clients || state.projects) docs.set('crm/book', { clients: state.clients || [], projects: state.projects || [] });
   for (const t of state.tasks) {
     if (t.output) docs.set(`outputs/${t.id}`, { text: t.output.slice(0, MAX_DOC_CHARS) });
   }
@@ -84,8 +86,8 @@ export async function connectCloud() {
       return null;
     }
     const c = snap.data();
-    const [outputs, chats, meetings, finance] = await withTimeout(Promise.all(
-      ['outputs', 'chats', 'meetings', 'finance'].map((name) => core.collection(name).get()),
+    const [outputs, chats, meetings, finance, crm] = await withTimeout(Promise.all(
+      ['outputs', 'chats', 'meetings', 'finance', 'crm'].map((name) => core.collection(name).get()),
     ), LOAD_TIMEOUT_MS);
     const byId = (qs) => Object.fromEntries(qs.docs.map((d) => [d.id, d.data()]));
     const out = byId(outputs);
@@ -104,6 +106,8 @@ export async function connectCloud() {
     };
     const books = byId(finance);
     if (books.books) state.finance = { ...books.books, ledger: books.ledger?.entries || [] };
+    const book = byId(crm).book;
+    if (book) Object.assign(state, { clients: book.clients || [], projects: book.projects || [] });
     // Record what is stored now so the first save only sends real changes.
     for (const [key, body] of splitState(state)) written.set(key, JSON.stringify(body));
     for (const d of outputs.docs) written.set(`outputs/${d.id}`, written.get(`outputs/${d.id}`) ?? '?');

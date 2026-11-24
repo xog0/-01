@@ -36,6 +36,7 @@
       <button id="btn-board">📋 المهام</button>
       <button id="btn-meeting">👥 اجتماع</button>
       <button id="btn-org">🏛️ الهيكل والسلم</button>
+      <button id="btn-clients">🤝 العملاء</button>
       <button id="btn-finance">💰 المالية</button>
       <button id="btn-hire">➕ توظيف</button>
       <button id="btn-settings" title="الإعدادات" aria-label="الإعدادات">⚙️</button>
@@ -83,6 +84,7 @@
         <h3>تكليف بمهمة جديدة</h3>
         <input id="task-title" maxlength="200" placeholder="عنوان المهمة" required>
         <textarea id="task-desc" rows="3" maxlength="1500" placeholder="التفاصيل والمطلوب بدقة"></textarea>
+        <select id="task-project" aria-label="المشروع"></select>
         <div class="row">
           <select id="task-priority">
             <option value="low">أولوية منخفضة</option>
@@ -152,6 +154,7 @@
       <h2>لوحة المهام</h2>
       <div class="row">
         <button id="board-assign" class="primary">📋 المدير يوزّع المهام</button>
+        <select id="board-project" aria-label="تصفية حسب المشروع"></select>
         <select id="board-filter" aria-label="تصفية حسب الموظف"></select>
         <button id="board-close" class="icon" aria-label="إغلاق">✕</button>
       </div>
@@ -221,6 +224,89 @@
         <button type="button" class="danger" id="set-reset">إعادة الوكالة لبدايتها</button>
         <button value="cancel" formnovalidate>إلغاء</button>
         <button class="primary" value="ok">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-clients" class="wide">
+    <div class="dlg-head">
+      <h2>🤝 العملاء والمشاريع</h2>
+      <div class="row">
+        <button class="primary" id="btn-new-project">＋ مشروع جديد</button>
+        <button id="btn-new-client">＋ عميل جديد</button>
+        <button class="icon" data-close aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <div class="tabs crm-tabs" role="tablist">
+      <button role="tab" data-crm="projects" class="active">المشاريع</button>
+      <button role="tab" data-crm="clients">العملاء</button>
+    </div>
+    <div id="crm-body" class="fin-body"></div>
+  </dialog>
+
+  <dialog id="dlg-project">
+    <form method="dialog" id="project-form" class="stack">
+      <h2 id="project-form-title">مشروع جديد</h2>
+      <input type="hidden" id="pj-id">
+      <div class="row">
+        <label>العميل <select id="pj-client" required></select></label>
+        <label>النوع <select id="pj-type"></select></label>
+      </div>
+      <label>اسم المشروع <input id="pj-name" maxlength="80" required placeholder="مثال: حملة إطلاق المنيو الجديد"></label>
+      <label>الموجز: ما المطلوب، والهدف، والجمهور
+        <textarea id="pj-brief" rows="3" maxlength="1500" placeholder="مثال: زيادة الطلبات عبر التطبيق 30% خلال شهرين، الجمهور عائلات في شمال المدينة"></textarea>
+      </label>
+      <div class="row">
+        <label>القيمة <input id="pj-fee" type="number" min="0" step="any" value="0"></label>
+        <label>تاريخ التسليم <input id="pj-due" type="date"></label>
+        <label>الحالة <select id="pj-status"></select></label>
+      </div>
+      <label>قائد المشروع <select id="pj-lead"></select></label>
+      <fieldset>
+        <legend>فريق المشروع</legend>
+        <div id="pj-team" class="checks"></div>
+      </fieldset>
+      <div class="row end">
+        <button type="button" class="danger" id="pj-delete" hidden>حذف المشروع</button>
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-client">
+    <form method="dialog" id="client-form" class="stack">
+      <h2 id="client-form-title">عميل جديد</h2>
+      <input type="hidden" id="cl-id">
+      <label>اسم العميل <input id="cl-name" maxlength="80" required></label>
+      <div class="row">
+        <label>القطاع <input id="cl-industry" maxlength="80" placeholder="مطاعم، عقارات، تجزئة…"></label>
+        <label>المدينة <input id="cl-city" maxlength="80"></label>
+      </div>
+      <div class="row">
+        <label>جهة التواصل <input id="cl-contact" maxlength="80" placeholder="الاسم والمنصب"></label>
+        <label>الحالة <select id="cl-status"></select></label>
+      </div>
+      <label>ملاحظات عن العميل (تصل للموظفين مع مهام مشاريعه)
+        <textarea id="cl-notes" rows="3" maxlength="600" placeholder="أسلوبه، جمهوره، ميزانيته، ما يحبه وما يرفضه"></textarea>
+      </label>
+      <div class="row end">
+        <button type="button" class="danger" id="cl-delete" hidden>حذف العميل</button>
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-pay">
+    <form method="dialog" id="pay-form" class="stack">
+      <h2>تحصيل دفعة</h2>
+      <p class="muted" id="pay-info"></p>
+      <label>المبلغ <input id="pay-amount" type="number" min="0.01" step="any" required></label>
+      <label>ملاحظة <input id="pay-note" maxlength="100" placeholder="مثال: الدفعة الأولى 40%"></label>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">تسجيل الدفعة</button>
       </div>
     </form>
   </dialog>

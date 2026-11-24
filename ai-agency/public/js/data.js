@@ -312,6 +312,69 @@ export function bioFor(emp) {
   };
 }
 
+// ---- sample clients and projects (fictional businesses) ---------------------
+const SAMPLE_CLIENTS = [
+  { key: 'zaatar', name: 'مطعم بيت الزعتر', industry: 'مطاعم ومقاهٍ', contact: 'أبو فادي (المالك)', city: 'الرياض', status: 'active',
+    notes: 'مطعم شامي عائلي يفتتح فرعاً ثانياً الشهر القادم. ميزانيته محدودة ويحب المحتوى الدافئ القريب من الناس.' },
+  { key: 'lamsa', name: 'لمسة للعطور', industry: 'تجارة إلكترونية (عطور)', contact: 'نوف (مديرة التسويق)', city: 'جدة', status: 'active',
+    notes: 'متجر إلكتروني للعطور الشرقية، جمهوره نساء بين 22 و40 سنة، ويبيع أغلب طلباته عبر إنستغرام وتيك توك.' },
+  { key: 'ibtisama', name: 'عيادات ابتسامة لطب الأسنان', industry: 'رعاية صحية', contact: 'د. ماهر (المدير الطبي)', city: 'الدمام', status: 'prospect',
+    notes: 'ثلاث عيادات تريد زيادة حجوزات التقويم والتبييض. يهتم بالأرقام ويريد تقارير واضحة.' },
+  { key: 'durub', name: 'دروب للسفر والسياحة', industry: 'سفر وسياحة', contact: 'سلطان (المدير التجاري)', city: 'الرياض', status: 'prospect',
+    notes: 'وكالة سفر تبحث عن شريك تسويقي لموسم الصيف. لم يُتفق على مشروع بعد.' },
+];
+const SAMPLE_PROJECTS = [
+  { client: 'zaatar', name: 'حملة افتتاح الفرع الثاني', type: 'حملة إعلانية', fee: 25000, status: 'active', days: 30,
+    lead: 'سارة', team: ['خالد', 'ليلى', 'عمر'],
+    brief: 'حملة متكاملة لافتتاح فرع بيت الزعتر الجديد: محتوى تشويقي قبل الافتتاح بأسبوعين، وعرض خاص للافتتاح، وإعلانات ممولة في نطاق 5 كم حول الفرع، وتغطية يوم الافتتاح. الهدف 1500 زيارة في الشهر الأول.',
+    tasks: [
+      ['خالد', 'نصوص المحتوى التشويقي لافتتاح بيت الزعتر', 'اكتب 6 منشورات تشويقية تُنشر خلال الأسبوعين قبل افتتاح الفرع الثاني، بأسلوب دافئ وعائلي، مع نص عرض الافتتاح.', 'high'],
+      ['عمر', 'خطة الإعلانات المحلية لافتتاح الفرع', 'صمّم حملة إعلانات ممولة في نطاق 5 كم حول الفرع الجديد: الجمهور، الميزانية اليومية، الإعلانات، ومؤشرات النجاح.', 'high'],
+    ] },
+  { client: 'lamsa', name: 'إدارة حسابات التواصل لثلاثة أشهر', type: 'إدارة التواصل الاجتماعي', fee: 36000, status: 'active', days: 90,
+    lead: 'ليلى', team: ['خالد', 'فيصل'],
+    brief: 'إدارة إنستغرام وتيك توك لمتجر لمسة: 12 منشوراً و8 مقاطع ريلز شهرياً، والرد على التعليقات والرسائل، وتقرير أداء شهري. الهدف رفع المبيعات القادمة من المنصات 20%.',
+    tasks: [
+      ['ليلى', 'تقويم محتوى الشهر الأول لمتجر لمسة', 'جهّز تقويم محتوى للشهر الأول: 12 منشوراً و8 ريلز، لكل منها الفكرة والنص والوسوم وموعد النشر.', 'high'],
+    ] },
+  { client: 'ibtisama', name: 'عرض حملة جوجل والظهور المحلي', type: 'تحسين محركات البحث', fee: 18000, status: 'proposal', days: 14,
+    lead: 'عمر', team: ['كريم'],
+    brief: 'عرض فني ومالي لحملة إعلانات بحث على جوجل وتحسين ظهور العيادات في نتائج البحث المحلية والخرائط، بهدف 120 حجزاً شهرياً للتقويم والتبييض.',
+    tasks: [
+      ['عمر', 'كتابة عرض حملة جوجل لعيادات ابتسامة', 'اكتب عرضاً فنياً ومالياً للعميل: الأهداف، الكلمات المفتاحية الرئيسية، هيكل الحملة، الميزانية المقترحة، والنتائج المتوقعة خلال 3 أشهر.', 'medium'],
+    ] },
+];
+
+/** Adds the sample clients, projects and their tasks to an agency that has none. */
+function seedClients(state, now = Date.now()) {
+  state.clients ||= [];
+  state.projects ||= [];
+  if (state.clients.length || state.projects.length) return;
+  const byName = (n) => state.employees.find((e) => e.name === n);
+  const dateIn = (days) => new Date(now + days * 86400000).toISOString().slice(0, 10);
+  const ids = {};
+  for (const { key, ...c } of SAMPLE_CLIENTS) {
+    const id = newId(state, 'c');
+    ids[key] = id;
+    state.clients.push({ id, ...c, since: now });
+  }
+  for (const sp of SAMPLE_PROJECTS) {
+    const lead = byName(sp.lead) || state.employees.filter((e) => e.level >= MANAGER_LEVEL).sort((a, b) => a.level - b.level)[0] || null;
+    const id = newId(state, 'p');
+    state.projects.push({
+      id, clientId: ids[sp.client], name: sp.name, type: sp.type, brief: sp.brief, fee: sp.fee, status: sp.status,
+      leadId: lead ? lead.id : null, team: sp.team.map(byName).filter((e) => e && e !== lead).map((e) => e.id),
+      due: dateIn(sp.days), paid: 0, createdAt: now,
+    });
+    for (const [who, title, description, priority] of sp.tasks) {
+      const e = byName(who) || lead;
+      if (!e) continue;
+      state.tasks.push({ id: newId(state, 't'), empId: e.id, title, description, priority, status: 'todo', output: '',
+        createdAt: now, projectId: id, assignedBy: lead && lead.id !== e.id ? lead.id : null });
+    }
+  }
+}
+
 const STORE_KEY = 'ai-agency-state-v1';
 
 export function createInitialState() {
@@ -326,12 +389,15 @@ export function createInitialState() {
     meetings: [],
     nextId: 100,
     finance: createFinance(now),
+    clients: [],
+    projects: [],
     migrations: MIGRATIONS.map((m) => m.key), // a fresh agency already has these
   };
   for (const e of STARTING_TEAM) {
     state.employees.push({ ...e, desk: freeSeat(state, e.level), salary: defaultSalary(e.level), hiredAt: now, status: 'idle' });
   }
   addInterns(state);
+  seedClients(state, now);
   return state;
 }
 
@@ -369,6 +435,7 @@ const MIGRATIONS = [
   { key: 'ceo-suite', run: ceoToSuite },
   { key: 'finance-setup', run: setUpFinance },
   { key: 'add-sheika-cfo', run: addSheika },
+  { key: 'add-clients', run: (state) => seedClients(state) },
 ];
 
 // Whoever heads a department (its members whose manager is outside it)

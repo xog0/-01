@@ -54,6 +54,7 @@ export function validateChatRequest(body) {
     name: str(c.name, LIMITS.maxFieldChars, 'company.name', { required: false }) || 'الوكالة',
     about: str(c.about, LIMITS.maxLongFieldChars, 'company.about', { required: false }),
     team: str(c.team, LIMITS.maxLongFieldChars, 'company.team', { required: false }),
+    portfolio: str(c.portfolio, LIMITS.maxLongFieldChars, 'company.portfolio', { required: false }),
   };
 
   if (!Array.isArray(body.messages) || body.messages.length === 0) {
@@ -124,6 +125,7 @@ export function buildSystemPrompt({ mode, persona, company }) {
   if (persona.bio) lines.push(`نبذة عنك: ${persona.bio}`);
   if (persona.memory) lines.push(`من ذاكرتك في العمل: ${persona.memory}`);
   if (company.team) lines.push(`زملاؤك في الفريق: ${company.team}`);
+  if (company.portfolio) lines.push(`مشاريع الوكالة الجارية مع العملاء: ${company.portfolio}`);
   lines.push(
     'تحدث بالعربية الفصحى المبسطة دائماً، بشخصيتك أنت، وبما يتناسب مع مستواك الوظيفي وصلاحياتك.',
     'إذا لم تتوفر لديك معلومة (أرقام حقيقية، بيانات عميل) فقل ذلك واقترح افتراضاً معقولاً بدلاً من اختلاق أرقام.',

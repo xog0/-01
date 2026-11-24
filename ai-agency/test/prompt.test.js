@@ -81,3 +81,9 @@ test('only the finance manager is told how to record payroll orders', () => {
   assert.throws(() => validateChatRequest(base({ persona: { ...persona, duties: 'admin' } })), ValidationError);
   assert.match(buildSystemPrompt(validateChatRequest(base({ mode: 'memo' }))), /مذكرة داخلية/);
 });
+
+test('the agency portfolio reaches the prompt and is length-checked', () => {
+  const req = validateChatRequest(base({ company: { name: 'آفاق', portfolio: 'بيت الزعتر: حملة افتتاح (قيد التنفيذ)' } }));
+  assert.match(buildSystemPrompt(req), /مشاريع الوكالة الجارية مع العملاء: بيت الزعتر/);
+  assert.throws(() => validateChatRequest(base({ company: { name: 'آفاق', portfolio: 'x'.repeat(1300) } })), ValidationError);
+});
