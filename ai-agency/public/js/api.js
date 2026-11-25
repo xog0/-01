@@ -46,7 +46,7 @@ export async function askEmployee(payload) {
   return data.truncated ? `${data.reply}\n\n(…توقف الرد لأنه طويل جداً)` : data.reply;
 }
 
-const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick', bonus: 'quick' };
+const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick', bonus: 'quick', evaluation: 'quick' };
 
 async function askViaSample(sample, payload) {
   const req = validateChatRequest(payload);
@@ -95,6 +95,10 @@ async function demoReply({ mode, persona, messages }) {
       : Math.random() < 0.5
         ? { decision: 'approve', feedback: 'عمل متميز وجاهز للعميل.', bonus: true, bonusReason: 'سلّم عملاً متميزاً جاهزاً للعميل من أول مرة.' }
         : { decision: 'approve', feedback: 'عمل واضح ومناسب. شكراً لك.', bonus: false });
+  }
+  if (mode === 'evaluation') {
+    const rec = ['none', 'none', 'bonus', 'improve', 'promote'][Math.floor(Math.random() * 5)];
+    return JSON.stringify({ summary: `أداء ${persona.name} مستقر ويلتزم بالمطلوب.`, strengths: 'الالتزام ووضوح العمل', improve: 'سرعة التسليم', recommendation: rec, reason: 'بناءً على الأرقام المرفقة' });
   }
   if (mode === 'bonus') {
     return JSON.stringify(Math.random() < 0.15

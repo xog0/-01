@@ -16,6 +16,9 @@ import {
 import {
   REQUEST_STATUS, ROLE_NAMES, createBonusRequest, currentStage, decideStage, inReview, ownerDecision, pendingForOwner, skipStage,
 } from './approvals.js';
+import {
+  RECOMMENDATIONS, employeeOfMonth, evaluatorOf, lastEvaluation, metricsOf, parseEvaluation, recordEvaluation, teamPerformance,
+} from './performance.js';
 
 // ------------------------------------------------------------ DOM helpers
 const $ = (sel) => document.querySelector(sel);
@@ -114,6 +117,8 @@ function memoryOf(e) {
   if (done.length) parts.push(`آخر مهامك المنجزة: ${done.slice(0, 4).map((t) => t.title).join('، ')}.`);
   const note = done.find((t) => t.reviews?.length)?.reviews.at(-1);
   if (note?.feedback) parts.push(`آخر ملاحظة من ${emp(note.by)?.name || 'مديرك'} على عملك: "${note.feedback}"`);
+  const ev = lastEvaluation(state, e.id);
+  if (ev) parts.push(`آخر تقييم أداء لك من ${emp(ev.by)?.name || 'مديرك'}: ${ev.grade || ''}. ${ev.improve ? `المطلوب تحسينه: ${ev.improve}` : ''}`);
   const live = (state.projects || []).filter((p) => (p.status === 'active' || p.status === 'proposal') && (p.leadId === e.id || p.team.includes(e.id)));
   if (live.length) {
     parts.push(`مشاريعك: ${live.map((p) => `${p.name} لـ${clientOf(p)?.name || 'عميل'} (${p.leadId === e.id ? 'أنت قائده' : 'عضو في الفريق'})`).join('، ')}.`);
@@ -205,7 +210,7 @@ function closePanel() {
   renderRoster();
 }
 $('#p-close').addEventListener('click', closePanel);
-document.querySelectorAll('.tabs button').forEach((b) => b.addEventListener('click', () => {
+document.querySelectorAll('#panel .tabs button').forEach((b) => b.addEventListener('click', () => {
   activeTab = b.dataset.tab;
   renderPanel();
 }));
@@ -216,8 +221,8 @@ function renderPanel() {
   $('#p-avatar').replaceWith(Object.assign(avatar(e), { id: 'p-avatar' }));
   $('#p-name').textContent = e.name;
   $('#p-title').textContent = `${titleFor(e)} · ${DEPARTMENTS[e.dept].name}`;
-  document.querySelectorAll('.tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === activeTab));
-  document.querySelectorAll('.pane').forEach((p) => p.classList.toggle('active', p.dataset.pane === activeTab));
+  document.querySelectorAll('#panel .tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === activeTab));
+  document.querySelectorAll('#panel .pane').forEach((p) => p.classList.toggle('active', p.dataset.pane === activeTab));
   if (activeTab === 'chat') renderChat(e);
   if (activeTab === 'tasks') renderEmpTasks(e);
   if (activeTab === 'profile') renderProfile(e);
@@ -260,18 +265,18 @@ $('#chat-form').addEventListener('submit', async (ev) => {
       raw = parsed.text;
       financeNote = applyFinanceOrders(parsed.orders, e);
     }
-    const { text: reply, order } = extractAssignOrder(raw, e);
+    const { text: reply, order } = extractAssignOrder(raw, e, text);
     history.push({ role: 'assistant', content: reply || 'حاضر.' });
     if (financeNote) history.push({ role: 'assistant', content: financeNote });
     if (order) {
       save();
-      const added = await assignTeamTasks(e, order.ids, order.perMember, order.focus);
+      const added = await assignTeamTasks(e, order.ids, order.perMember, order.focus, { urgent: order.urgent });
       if (added?.length) {
         const lines = order.ids.map((id) => {
           const titles = added.filter((t) => t.empId === id).map((t) => t.title);
           return titles.length ? `- ${emp(id)?.name}: ${titles.join('، ')}` : null;
         }).filter(Boolean);
-        history.push({ role: 'assistant', content: `✅ تم التكليف:\n${lines.join('\n')}` });
+        history.push({ role: 'assistant', content: `✅ تم التكليف${order.urgent ? ' بأولوية عالية، وبدأ التنفيذ فوراً' : ''}:\n${lines.join('\n')}` });
       }
     }
     save();
@@ -339,18 +344,35 @@ $('#task-form').addEventListener('submit', (ev) => {
   ev.preventDefault();
   const title = $('#task-title').value.trim();
   if (!title || !selectedId) return;
-  addTask(selectedId, title, $('#task-desc').value.trim(), $('#task-priority').value, null, $('#task-project').value || null);
+  const t = addTask(selectedId, title, $('#task-desc').value.trim(), $('#task-priority').value, null, $('#task-project').value || null);
+  if (t.priority === 'high') runWhenFree(t.id);
   ev.target.reset();
   $('#task-priority').value = 'medium';
-  toast('تمت إضافة المهمة');
+  if (t.priority !== 'high') toast('تمت إضافة المهمة');
 });
 
 function addTask(empId, title, description, priority, assignedBy = null, projectId = null) {
-  state.tasks.push({ id: newId(state, 't'), empId, title, description, priority, status: 'todo', output: '', createdAt: Date.now(), assignedBy,
-    ...(project(projectId) ? { projectId } : {}) });
+  const t = { id: newId(state, 't'), empId, title, description, priority, status: 'todo', output: '', createdAt: Date.now(), assignedBy,
+    ...(project(projectId) ? { projectId } : {}) };
+  state.tasks.push(t);
   save();
   refresh();
+  return t;
 }
+// High priority set by the owner means "now": the employee starts as soon as
+// they are free (right away, or straight after their current task).
+function runWhenFree(taskId, tries = 0) {
+  const t = state.tasks.find((x) => x.id === taskId);
+  const e = t && emp(t.empId);
+  if (!t || !e || t.status !== 'todo') return;
+  if (busy.has(e.id) || meeting?.attendees.includes(e.id)) {
+    if (tries < 400) setTimeout(() => runWhenFree(taskId, tries + 1), 3000);
+    return;
+  }
+  if (tries === 0) toast(`⚡ أولوية عالية: ${e.name} بدأ «${t.title}» فوراً`);
+  runTask(taskId);
+}
+
 function deleteTask(id) {
   state.tasks = state.tasks.filter((t) => t.id !== id);
   save();
@@ -520,26 +542,29 @@ function libraryAssignments(members, perMember) {
 
 // A manager's chat reply may end with [[تكليف: names | count | focus]] when the
 // owner asked for assignments. Strip it and resolve it to team members.
-function extractAssignOrder(reply, manager) {
+function extractAssignOrder(reply, manager, ownerAsk = '') {
   const m = reply.match(/\[\[\s*تكليف\s*:([^\]]*)\]\]/);
   if (!m) return { text: reply.trim(), order: null };
   const text = reply.replace(m[0], '').trim();
   const team = teamOf(manager.id);
   if (!team.length) return { text, order: null };
-  const [who = '', count = '', focus = ''] = m[1].split('|').map((x) => x.trim());
+  const [who = '', count = '', focus = '', priority = ''] = m[1].split('|').map((x) => x.trim());
   const names = who.split(/[،,]| و/).map((x) => x.trim()).filter(Boolean);
   const all = !names.length || names.some((n) => /^(ال)?كل|الجميع|الفريق/.test(n));
   const ids = all ? team.map((x) => x.id) : team.filter((x) => names.some((n) => n.includes(x.name) || x.name.includes(n))).map((x) => x.id);
   if (!ids.length) return { text, order: null };
   const digits = count.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
   const perMember = Math.min(3, Math.max(1, parseInt(digits, 10) || 2));
-  return { text, order: { ids, perMember, focus: focus.slice(0, 300) } };
+  // Urgent if the manager marked it so, or if the owner's own words said so.
+  const urgent = /عال|عاجل|فور/.test(priority) || URGENT_WORDS.test(ownerAsk);
+  return { text, order: { ids, perMember, focus: focus.slice(0, 300), urgent } };
 }
+const URGENT_WORDS = /عاجل|فور[اًا]?|حالاً|حالا|أولوية عالية|اولوية عالية|بأسرع وقت|الآن/;
 
-async function assignTeamTasks(manager, onlyIds = null, perMember = 2, focus = '') {
+async function assignTeamTasks(manager, onlyIds = null, perMember = 2, focus = '', { urgent = false } = {}) {
   const members = teamOf(manager.id).filter((m) => !onlyIds || onlyIds.includes(m.id));
   if (!members.length) return toast(`لا يوجد موظفون تحت إدارة ${manager.name}`);
-  return assignTasks(manager, members, perMember, focus, null);
+  return assignTasks(manager, members, perMember, focus, null, { urgent });
 }
 
 // A project lead splits the project into tasks for the project team.
@@ -551,7 +576,7 @@ async function assignProjectTasks(p) {
   return assignTasks(lead, members, 2, '', p);
 }
 
-async function assignTasks(manager, members, perMember, focus, proj) {
+async function assignTasks(manager, members, perMember, focus, proj, { urgent = false } = {}) {
   const key = `assign:${manager.id}`;
   if (busy.has(key)) return;
   busy.add(key);
@@ -569,14 +594,16 @@ async function assignTasks(manager, members, perMember, focus, proj) {
     const reply = await ask(manager, 'assign', [{ role: 'user', content:
       `${ctx ? `أنت قائد هذا المشروع، والمطلوب تقسيمه إلى مهام لفريقه.\n${ctx}\n\n` : ''}فريقك:\n${brief}\n\n` +
       `كلّف كل عضو بـ${perMember === 1 ? 'مهمة واحدة' : `${perMember} مهام`} خاصة بوظيفته${proj ? ' تخدم هذا المشروع مباشرة' : ''}.` +
-      (focus ? `\nطلب المالك أن تركّز المهام على: ${focus}` : '') }]);
+      (focus ? `\nطلب المالك أن تركّز المهام على: ${focus}` : '') +
+      (urgent ? '\nالمالك طلبها بأولوية عالية: اجعلها مهاماً عاجلة قابلة للتنفيذ فوراً.' : '') }]);
     tasks = parseAssignments(reply, members);
   } catch (err) {
     toast(err.message);
   }
   if (!tasks.length && !proj) tasks = libraryAssignments(members, perMember);
   if (!tasks.length && proj) toast('تعذّر الحصول على مهام للمشروع. حاول مرة أخرى.');
-  for (const t of tasks) addTask(t.empId, t.title, t.description, t.priority, manager.id, proj ? proj.id : null);
+  const created = tasks.map((t) => addTask(t.empId, t.title, t.description, urgent ? 'high' : t.priority, manager.id, proj ? proj.id : null));
+  if (urgent) created.forEach((t) => runWhenFree(t.id));
   busy.delete(key);
   setStatus(manager, prev === 'talking' ? 'idle' : prev);
   const got = [...new Set(tasks.map((t) => t.empId))];
@@ -633,6 +660,15 @@ function showOutput(t) {
       ...t.reviews.map((r) => h('p', {},
         h('b', {}, `${r.decision === 'approve' ? '✅' : '↩️'} ${emp(r.by)?.name || 'المدير'}: `), r.feedback || (r.decision === 'approve' ? 'اعتمد العمل.' : 'طلب تعديلات.')))));
   }
+  if (t.status === 'done' && emp(t.empId)) {
+    const stars = h('div', { class: 'stars', role: 'radiogroup', 'aria-label': 'تقييمك لهذا العمل' },
+      h('span', { class: 'muted' }, 'تقييمك لهذا العمل: '),
+      ...[1, 2, 3, 4, 5].map((n) => h('button', {
+        class: `star${(t.rating || 0) >= n ? ' on' : ''}`, role: 'radio', 'aria-checked': String(t.rating === n), title: `${n} من 5`,
+        onclick: () => { t.rating = n; save(); showOutput(t); refresh(); toast(`قيّمت عمل ${emp(t.empId).name}: ${n} من 5`); },
+      }, '★')));
+    $('#out-body').prepend(stars);
+  }
   $('#out-copy').onclick = () => navigator.clipboard?.writeText(t.output).then(() => toast('تم النسخ'), () => toast('تعذّر النسخ'));
   $('#dlg-output').showModal();
 }
@@ -666,6 +702,7 @@ function renderProfile(e) {
         h('dt', {}, 'العمر'), h('dd', {}, `${bioFor(e).age} سنة · خبرة ${bioFor(e).years} ${bioFor(e).years > 10 ? 'سنة' : 'سنوات'}`),
         h('dt', {}, 'الخلفية'), h('dd', {}, bioFor(e).background),
         h('dt', {}, 'أسلوبه'), h('dd', {}, bioFor(e).style))),
+    performanceCard(e),
     h('div', { class: 'card' },
       h('h3', {}, 'التقدم الوظيفي'),
       h('div', { class: 'progress' }, h('i', { style: `width:${pct}%` })),
@@ -867,8 +904,9 @@ function renderBoard() {
   const form = h('form', { class: 'column stack', onsubmit: (ev) => {
     ev.preventDefault();
     if (!title.value.trim() || !assign.value) return;
-    addTask(assign.value, title.value.trim(), desc.value.trim(), prio.value, null, proj.value || null);
-    toast('تمت إضافة المهمة');
+    const t = addTask(assign.value, title.value.trim(), desc.value.trim(), prio.value, null, proj.value || null);
+    if (t.priority === 'high') runWhenFree(t.id);
+    else toast('تمت إضافة المهمة');
   } }, h('h3', {}, 'تكليف جديد'), h('label', {}, 'الموظف', assign), title, desc, prio, proj, h('button', { class: 'primary', type: 'submit' }, 'إضافة'));
   cols[0].firstChild.after(form);
   fill($('#board'), ...cols);
@@ -1054,6 +1092,139 @@ $('#m-end').addEventListener('click', async () => {
   done.attendees.forEach((id) => emp(id) && setStatus(emp(id), 'idle'));
 });
 
+// ------------------------------------------------------------ performance
+const PART_NAMES = { quality: 'الجودة (اعتماد من أول مراجعة)', rating: 'تقييمك بالنجوم', output: 'الإنتاجية', punctuality: 'الالتزام بمواعيد المشاريع' };
+
+function scoreBar(score, cls = '') {
+  return h('div', { class: `progress ${cls}` }, h('i', { style: `width:${score ?? 0}%` }));
+}
+
+function performanceCard(e) {
+  const row = teamPerformance(state).find((r) => r.emp.id === e.id);
+  const ev = lastEvaluation(state, e.id);
+  const evaluator = evaluatorOf(state, e);
+  const m = row.m;
+  return h('div', { class: 'card' },
+    h('h3', {}, 'الأداء (آخر 90 يوماً)'),
+    row.score === null
+      ? h('p', { class: 'muted' }, 'لا توجد أعمال منجزة بعد لحساب الأداء.')
+      : h('div', { class: 'stack' },
+        h('div', { class: 'row', style: 'justify-content: space-between' },
+          h('b', { class: `grade ${row.grade.cls}` }, `${row.score} من 100 · ${row.grade.name}`),
+          employeeOfMonth(state)?.emp.id === e.id ? h('span', { class: 'badge flag-badge' }, '⭐ موظف الشهر') : null),
+        scoreBar(row.score, row.grade.cls),
+        h('dl', { class: 'kv' }, ...Object.entries(row.parts).flatMap(([k, v]) => [h('dt', {}, PART_NAMES[k]), h('dd', {}, `${v}%`)])),
+        h('p', { class: 'muted' }, `أنجز ${m.done} · اعتُمد من أول مرة ${m.firstPass} من ${m.reviewed} · تعديلات ${m.revisions}` +
+          `${m.rated ? ` · متوسط تقييمك ${m.ratingAvg.toFixed(1)} من 5` : ''}${m.projectDone ? ` · في موعد المشروع ${m.onTime} من ${m.projectDone}` : ''}`)),
+    ev ? h('div', { class: 'evaluation' },
+      h('b', {}, `آخر تقييم من ${emp(ev.by)?.name || '—'} · ${new Date(ev.at).toLocaleDateString('ar')}`),
+      h('p', {}, ev.summary),
+      ev.strengths ? h('p', {}, h('b', {}, 'نقاط القوة: '), ev.strengths) : null,
+      ev.improve ? h('p', {}, h('b', {}, 'للتحسين: '), ev.improve) : null,
+      h('p', {}, h('b', {}, 'التوصية: '), `${RECOMMENDATIONS[ev.recommendation]}${ev.reason ? ` — ${ev.reason}` : ''}`)) : null,
+    evaluator
+      ? h('button', { class: 'small', disabled: busy.has(`eval:${e.id}`) || row.score === null, onclick: () => evaluate(e).then(() => selectedId === e.id && renderPanel()) },
+        `📝 اطلب تقييمه من ${evaluator.name}`)
+      : h('p', { class: 'muted' }, 'يتبعك مباشرة: تقييمه بيدك من هذه الأرقام.'));
+}
+
+// The evaluator writes an assessment from the numbers and recent manager notes,
+// with a recommendation the agency then acts on.
+async function evaluate(e, { quiet = false } = {}) {
+  const evaluator = evaluatorOf(state, e);
+  if (!evaluator) { if (!quiet) toast(`${e.name} يتبعك مباشرة، فلا يوجد مدير يقيّمه`); return null; }
+  const row = teamPerformance(state).find((r) => r.emp.id === e.id);
+  if (row.score === null) { if (!quiet) toast(`لا توجد أعمال منجزة لـ${e.name} لتقييمها بعد`); return null; }
+  const key = `eval:${e.id}`;
+  if (busy.has(key)) return null;
+  busy.add(key);
+  const prev = evaluator.status;
+  const prevBubble = bubbles.get(evaluator.id) || '';
+  setStatus(evaluator, 'talking', `📝 يقيّم ${e.name}`);
+  const m = row.m;
+  const notes = state.tasks.filter((t) => t.empId === e.id && t.status === 'done' && t.reviews?.length)
+    .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)).slice(0, 5)
+    .map((t) => `- ${t.title}: ${t.reviews.map((r) => `${r.decision === 'approve' ? 'اعتماد' : 'تعديل'}${r.feedback ? ` («${r.feedback}»)` : ''}`).join(' ثم ')}${t.rating ? ` · تقييم المالك ${t.rating}/5` : ''}`);
+  const next = LADDER[e.level + 1];
+  const content = [
+    `تقييم أداء ${e.name} (${titleFor(e)})، آخر 90 يوماً.`,
+    `الدرجة المحسوبة: ${row.score} من 100 (${row.grade.name}). التفصيل: ${Object.entries(row.parts).map(([k, v]) => `${PART_NAMES[k]} ${v}%`).join('، ')}.`,
+    `مهام منجزة ${m.done}، اعتُمد منها من أول مراجعة ${m.firstPass} من ${m.reviewed}، وطلبات تعديل ${m.revisions}، ومهام مفتوحة ${m.open}.`,
+    m.projectDone ? `مهام المشاريع: ${m.onTime} من ${m.projectDone} أُنجزت قبل موعد تسليم المشروع.` : '',
+    m.rated ? `متوسط تقييم المالك لأعماله: ${m.ratingAvg.toFixed(1)} من 5 (${m.rated} تقييمات).` : '',
+    next ? `المستوى الحالي ${LADDER[e.level].name}، والترقية التالية إلى ${next.name}${e.xp >= next.xp ? ' وهو مستوفٍ لنقاطها' : ''}.` : 'في أعلى السلم الوظيفي.',
+    notes.length ? `ملاحظات المراجعة الأخيرة:\n${notes.join('\n')}` : '',
+  ].filter(Boolean).join('\n');
+  let ev = null;
+  try {
+    const parsed = parseEvaluation(await ask(evaluator, 'evaluation', [{ role: 'user', content: content.slice(0, 5800) }]));
+    if (!parsed) throw new Error(`تعذّر قراءة تقييم ${evaluator.name}، حاول مرة أخرى`);
+    ev = recordEvaluation(state, { empId: e.id, by: evaluator.id, row, parsed, newId });
+    actOnRecommendation(e, evaluator, ev);
+    save();
+    if (!quiet) toast(`📝 ${evaluator.name} قيّم ${e.name}: ${ev.grade} — التوصية: ${RECOMMENDATIONS[ev.recommendation]}`);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    busy.delete(key);
+    if (evaluator.status === 'talking') setStatus(evaluator, prev === 'talking' ? 'idle' : prev, prevBubble);
+    refresh();
+  }
+  return ev;
+}
+
+// A bonus recommendation enters the approval chain; a promotion waits in the
+// owner's approvals box; the rest stays on record in the profile.
+function actOnRecommendation(e, evaluator, ev) {
+  if (ev.recommendation === 'bonus') {
+    try {
+      createBonusRequest(state, { empId: e.id, recommenderId: evaluator.id, amount: state.finance?.taskBonus?.high || 200, newId,
+        reason: `تقييم الأداء: ${ev.reason || ev.summary}`.slice(0, 300) });
+      processBonusQueue();
+    } catch { /* e.g. evaluating oneself: no request */ }
+  }
+  if (ev.recommendation === 'promote' && LADDER[e.level + 1]) ev.pendingPromotion = true;
+}
+
+async function evaluateAll() {
+  const people = state.employees.filter((e) => evaluatorOf(state, e) && metricsOf(state, e.id).done > 0);
+  if (!people.length) return toast('لا يوجد من لديه أعمال منجزة لتقييمه بعد');
+  toast(`📝 بدأ المدراء تقييم ${people.length} من الموظفين`);
+  let n = 0;
+  for (const e of people) {
+    if (await evaluate(e, { quiet: true })) n++;
+    if ($('#dlg-performance').open) renderPerformance();
+  }
+  toast(`✅ اكتملت ${n} تقييمات. التوصيات بالمكافآت دخلت سلسلة الموافقات، والترقيات في صندوق موافقاتك`);
+  if ($('#dlg-performance').open) renderPerformance();
+}
+
+function renderPerformance() {
+  const rows = teamPerformance(state);
+  const eom = employeeOfMonth(state);
+  fill($('#perf-body'),
+    eom ? h('div', { class: 'card eom' }, h('b', {}, `⭐ موظف الشهر: ${eom.emp.name}`), h('span', { class: 'muted' }, `${titleFor(eom.emp)} · ${eom.score} من 100`)) : null,
+    h('p', { class: 'muted' }, 'الدرجة من 100 تُحسب من آخر 90 يوماً: الجودة (اعتماد العمل من أول مراجعة) 35%، وتقييمك بالنجوم 25%، والإنتاجية مقارنة بالأكثر إنجازاً 25%، والالتزام بمواعيد المشاريع 15%. ما لا تتوفر بياناته لا يُحتسب. قيّم أي عمل بالنجوم من نافذة «عرض النتيجة».'),
+    h('div', { class: 'row' },
+      h('button', { class: 'primary', disabled: [...busy].some((k) => k.startsWith('eval:')), onclick: evaluateAll }, '📝 اطلب من المدراء تقييم فرقهم')),
+    h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
+      h('thead', {}, h('tr', {}, ...['#', 'الموظف', 'الدرجة', 'التقدير', 'منجزة', 'من أول مرة', 'نجومك', 'آخر تقييم', ''].map((x) => h('th', {}, x)))),
+      h('tbody', {}, ...rows.map((r, i) => {
+        const ev = lastEvaluation(state, r.emp.id);
+        return h('tr', {},
+          h('td', {}, r.score === null ? '—' : String(i + 1)),
+          h('td', {}, `${r.emp.name}${eom?.emp.id === r.emp.id ? ' ⭐' : ''}`),
+          h('td', { class: 'num' }, r.score === null ? '—' : h('span', { class: `grade ${r.grade.cls}` }, String(r.score))),
+          h('td', {}, r.grade?.name || 'لا بيانات'),
+          h('td', { class: 'num' }, String(r.m.done)),
+          h('td', { class: 'num' }, r.m.reviewed ? `${Math.round((r.m.firstPass / r.m.reviewed) * 100)}%` : '—'),
+          h('td', { class: 'num' }, r.m.rated ? r.m.ratingAvg.toFixed(1) : '—'),
+          h('td', {}, ev ? `${ev.grade} · ${RECOMMENDATIONS[ev.recommendation]}` : '—'),
+          h('td', {}, h('button', { class: 'small', onclick: () => { $('#dlg-performance').close(); selectEmployee(r.emp.id); activeTab = 'profile'; renderPanel(); } }, 'الملف')));
+      })))));
+}
+$('#btn-performance').addEventListener('click', () => { renderPerformance(); $('#dlg-performance').showModal(); });
+
 // ------------------------------------------------------------ bonus approvals
 // A recommended bonus climbs HR → CFO → CEO, each reviewer weighing in from
 // their own angle (via the AI), then waits in the owner's approvals box.
@@ -1123,8 +1294,9 @@ async function processBonusQueue() {
   }
 }
 
+const pendingPromotions = () => (state.evaluations || []).filter((ev) => ev.pendingPromotion && emp(ev.empId) && LADDER[emp(ev.empId).level + 1]);
 function renderApprovalsBadge() {
-  const n = pendingForOwner(state).length;
+  const n = pendingForOwner(state).length + pendingPromotions().length;
   const badge = $('#approvals-count');
   badge.textContent = String(n);
   badge.hidden = n === 0;
@@ -1170,14 +1342,35 @@ function requestCard(req, { actions = false } = {}) {
       h('button', { class: 'small danger', onclick: () => decide(false) }, '❌ رفض')) : null);
 }
 
+function promotionCard(ev) {
+  const e = emp(ev.empId);
+  const next = LADDER[e.level + 1];
+  const done = (promote) => {
+    ev.pendingPromotion = false;
+    if (promote) changeLevel(e, 1); else { save(); toast(`أبقيت ${e.name} على مستواه`); }
+    renderApprovals();
+    renderApprovalsBadge();
+  };
+  return h('div', { class: 'project request' },
+    h('div', { class: 'row', style: 'justify-content: space-between' },
+      h('h4', {}, `⬆️ ترقية ${e.name} إلى «${next.name}»`), h('span', { class: 'badge proposal' }, 'توصية تقييم')),
+    h('div', { class: 'client' }, `${titleFor(e)} · تقييم ${ev.grade} (${ev.score} من 100) من ${emp(ev.by)?.name || '—'}`),
+    h('p', { class: 'brief' }, ev.reason || ev.summary),
+    h('div', { class: 'actions' },
+      h('button', { class: 'small primary', onclick: () => done(true) }, '✅ ترقية'),
+      h('button', { class: 'small', onclick: () => done(false) }, 'ليس الآن')));
+}
+
 function renderApprovals() {
   const waiting = pendingForOwner(state);
   const moving = inReview(state);
   const closed = (state.bonusRequests || []).filter((r) => r.status === 'approved' || r.status === 'rejected').slice(-20).reverse();
   fill($('#approvals-body'), 
     h('p', { class: 'muted' }, 'المكافآت لا تُصرف تلقائياً. يرشّح المدير صاحب العمل المتميز، ثم يمر الطلب على مدير الموارد البشرية، ثم المدير المالي، ثم المدير التنفيذي، ثم يصل إليك. لا يُسجَّل شيء في الرواتب إلا باعتمادك.'),
-    h('h3', {}, `بانتظار موافقتك (${waiting.length})`),
-    waiting.length ? h('div', { class: 'clients-list' }, ...waiting.map((r) => requestCard(r, { actions: true }))) : h('div', { class: 'empty' }, 'لا يوجد ما ينتظر موافقتك.'),
+    h('h3', {}, `بانتظار موافقتك (${waiting.length + pendingPromotions().length})`),
+    pendingPromotions().length ? h('div', { class: 'clients-list' }, ...pendingPromotions().map(promotionCard)) : null,
+    waiting.length ? h('div', { class: 'clients-list' }, ...waiting.map((r) => requestCard(r, { actions: true })))
+      : pendingPromotions().length ? null : h('div', { class: 'empty' }, 'لا يوجد ما ينتظر موافقتك.'),
     moving.length ? h('h3', {}, `قيد المراجعة (${moving.length})`) : null,
     moving.length ? h('div', { class: 'clients-list' }, ...moving.map((r) => requestCard(r))) : null,
     moving.length && !bonusQueueRunning ? h('button', { class: 'small', onclick: () => processBonusQueue() }, '↻ متابعة المراجعة') : null,
@@ -1494,10 +1687,10 @@ function renderFinance() {
         h('td', {}, new Date(a.at).toLocaleDateString('ar')),
         h('td', {}, emp(a.empId)?.name || '—'),
         h('td', {}, ADJ_TYPES[a.type].name + (a.hours ? ` (${hoursLabel(a.hours)})` : '')),
-        h('td', { class: `num ${a.type === 'deduction' ? 'minus' : 'plus'}` }, (a.type === 'deduction' ? '−' : '+') + fmt(a.amount)),
+        h('td', { class: `num ${a.type === 'deduction' || a.type === 'cut' ? 'minus' : 'plus'}` }, (a.type === 'deduction' || a.type === 'cut' ? '−' : '+') + fmt(a.amount)),
         h('td', {}, a.reason || '—'),
         h('td', {}, a.by === 'owner' ? 'المالك' : emp(a.by)?.name || '—'),
-        h('td', {}, a.type === 'raise' ? `${fmt(a.from)} ← ${fmt(a.to)}` : a.paid ? `صُرفت (${periodLabel(a.period)})` : 'مفتوحة'))))))
+        h('td', {}, a.type === 'raise' || a.type === 'cut' ? `${fmt(a.from)} ← ${fmt(a.to)}` : a.paid ? `صُرفت (${periodLabel(a.period)})` : 'مفتوحة'))))))
       : h('div', { class: 'empty' }, 'لا توجد حركات بعد.'));
   } else if (finTab === 'ledger') {
     const type = h('select', { id: 'led-type' }, h('option', { value: 'income' }, 'إيراد'), h('option', { value: 'expense' }, 'مصروف'));
@@ -1604,6 +1797,7 @@ function updateAdjustPreview() {
   let text = '';
   if (e && type === 'overtime') text = `أجر الساعة الإضافية ${money(e.salary / fin.monthlyHours * fin.overtimeRate)} · الإجمالي ${money(v * e.salary / fin.monthlyHours * fin.overtimeRate)}`;
   else if (e && type === 'raise') text = `الراتب سيصبح ${money(e.salary + v)} شهرياً`;
+  else if (e && type === 'cut') text = v >= e.salary ? 'التخفيض يجب أن يكون أقل من الراتب الحالي' : `الراتب سيصبح ${money(e.salary - v)} شهرياً بقرار منك`;
   else if (e) text = `تُحتسب في رواتب ${periodLabel(fin.period)}`;
   $('#adj-preview').textContent = text;
 }
@@ -1690,6 +1884,8 @@ document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('cli
 function refresh() {
   renderHeader();
   renderApprovalsBadge();
+  const eom = employeeOfMonth(state);
+  for (const e of state.employees) office.setFlag(e.id, eom?.emp.id === e.id ? '⭐ موظف الشهر' : '');
   renderRoster();
   for (const e of state.employees) office.updateEmployee(e, titleFor(e));
   for (let k = 0; k < PRIVATE_OFFICES; k++) {

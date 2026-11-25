@@ -94,3 +94,9 @@ test('reviews can recommend a bonus, and bonus reviewers answer in JSON without 
   assert.match(sys, /"decision":"approve أو reject"/);
   assert.match(sys, /لا ترفع المبلغ/);
 });
+
+test('evaluation mode asks for a fair JSON assessment with a fixed set of recommendations', () => {
+  const sys = buildSystemPrompt(validateChatRequest(base({ mode: 'evaluation' })));
+  assert.match(sys, /"recommendation":"promote أو bonus أو improve أو none"/);
+  assert.match(sys, /دون اختلاق/);
+});

@@ -698,13 +698,15 @@ export function createOffice(container, { onSelect } = {}) {
     const titleEl = document.createElement('span');
     const bubble = document.createElement('em');
     bubble.className = 'bubble';
-    label.append(bubble, nameEl, titleEl);
+    const flag = document.createElement('i');
+    flag.className = 'flag';
+    label.append(bubble, flag, nameEl, titleEl);
     label.addEventListener('click', () => onSelect?.(emp.id));
     const labelObj = new CSS2DObject(label);
     labelObj.position.set(0, 2.45, 0);
     g.add(labelObj);
 
-    return { group: g, body, legL, legR, armL, armR, headPivot, torso, ring, hit, label, nameEl, titleEl, bubble, labelObj, scale: look.height || 1 };
+    return { group: g, body, legL, legR, armL, armR, headPivot, torso, ring, hit, label, nameEl, titleEl, bubble, flag, labelObj, scale: look.height || 1 };
   }
 
   function addEmployee(emp, title) {
@@ -753,6 +755,14 @@ export function createOffice(container, { onSelect } = {}) {
     a.ring.material.color.setHex(STATUS_COLORS[status] ?? STATUS_COLORS.idle);
     a.bubble.textContent = bubbleText;
     a.label.classList.toggle('has-bubble', Boolean(bubbleText));
+  }
+
+  // A small badge on someone's name tag (e.g. employee of the month); '' clears it.
+  function setFlag(id, text) {
+    const a = actors.get(id);
+    if (!a) return;
+    a.flag.textContent = text;
+    a.label.classList.toggle('flagged', Boolean(text));
   }
 
   function setSelected(id) {
@@ -1069,6 +1079,6 @@ export function createOffice(container, { onSelect } = {}) {
 
   return {
     addEmployee, updateEmployee, removeEmployee, setStatus, setSelected, sendToMeeting, returnToDesks,
-    focusOn, setCompanyName, setDeskLit, setOfficeLabel, takeBreak, visit, recall, whereIs, pan, zoom,
+    focusOn, setCompanyName, setDeskLit, setOfficeLabel, takeBreak, visit, recall, whereIs, pan, zoom, setFlag,
   };
 }

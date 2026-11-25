@@ -118,6 +118,10 @@ h3 { font-size: 15px; color: var(--muted); }
   overflow: hidden; text-overflow: ellipsis;
 }
 .emp-label.has-bubble .bubble { display: block; }
+.emp-label .flag { display: none; font-style: normal; font-size: 10px; font-weight: 700; color: #1a1d2e;
+  background: linear-gradient(90deg, #f6d365, #fda085); padding: 0 8px; border-radius: 99px; margin-bottom: 2px; }
+.emp-label.flagged .flag { display: block; }
+.emp-label.flagged { border-color: #f6d365; }
 .room-tag {
   padding: 3px 12px; border-radius: 99px; font-size: 12px; font-weight: 700;
   background: rgba(124, 92, 255, 0.85); pointer-events: none;
@@ -268,6 +272,21 @@ table.fin tfoot td { font-weight: 700; }
 .badge.project { background: rgba(6,214,160,0.15); color: #7ee8c9; cursor: pointer; }
 .project .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .clients-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+
+/* Performance */
+.grade { font-weight: 700; font-variant-numeric: tabular-nums; }
+.grade.excellent { color: #4ade80; } .grade.verygood { color: #a3e635; } .grade.good { color: #fbbf24; }
+.grade.improve { color: #fb923c; } .grade.weak { color: #ff9db3; }
+.progress.excellent i { background: #4ade80; } .progress.verygood i { background: #a3e635; } .progress.good i { background: #fbbf24; }
+.progress.improve i { background: #fb923c; } .progress.weak i { background: #ef476f; }
+.evaluation { display: flex; flex-direction: column; gap: 4px; padding: 10px; border-radius: 10px; background: rgba(255,255,255,0.04); font-size: 13px; line-height: 1.6; }
+.evaluation p { margin: 0; color: var(--muted); }
+.eom { flex-direction: row; justify-content: space-between; align-items: center; border-color: #f6d365; }
+.flag-badge { background: linear-gradient(90deg, #f6d365, #fda085); color: #1a1d2e; }
+.stars { display: flex; align-items: center; gap: 2px; margin-bottom: 10px; white-space: normal; }
+.stars .star { background: none; border: none; padding: 2px 4px; font-size: 22px; color: rgba(255,255,255,0.25); }
+.stars .star.on { color: #f6d365; }
+.stars .star:hover { color: #fde68a; }
 
 /* Approvals */
 .count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-inline-start: 4px;

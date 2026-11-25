@@ -101,3 +101,22 @@ test('a new agency has Sheika as CFO with salaries for everyone; older ones get 
   assert.equal(old.employees.filter((e) => e.name === 'شيكا').length, 1);
   assert.equal(applyMigrations(old), false);
 });
+
+test('only the owner can cut a salary, and never to zero or below', () => {
+  const s = agency();
+  for (const by of ['cfo', 'e1', 'manager', undefined]) {
+    if (by === undefined) continue;
+    assert.throws(() => addAdjustment(s, { empId: 'a', type: 'cut', amount: 500, by }), /صلاحية المالك وحده/);
+  }
+  assert.equal(s.employees[0].salary, 9000);
+  const c = addAdjustment(s, { empId: 'a', type: 'cut', amount: 1500, reason: 'إعادة هيكلة', by: 'owner' });
+  assert.deepEqual([c.from, c.to, s.employees[0].salary], [9000, 7500, 7500]);
+  assert.equal(payLine(s, s.employees[0]).net, 7500);
+  assert.throws(() => addAdjustment(s, { empId: 'a', type: 'cut', amount: 7500, by: 'owner' }), /أقل من راتب/);
+});
+
+test('the finance manager cannot cut salaries through chat orders', () => {
+  const emps = [{ id: 'a', name: 'خالد' }];
+  assert.deepEqual(parseFinanceOrders('[[مالية: تخفيض | خالد | 500 | x]]', emps).orders, []);
+  assert.deepEqual(parseFinanceOrders('[[مالية: cut | خالد | 500 | x]]', emps).orders, []);
+});

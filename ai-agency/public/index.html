@@ -36,6 +36,7 @@
       <button id="btn-board">📋 المهام</button>
       <button id="btn-meeting">👥 اجتماع</button>
       <button id="btn-org">🏛️ الهيكل والسلم</button>
+      <button id="btn-performance">📊 الأداء</button>
       <button id="btn-approvals">📥 الموافقات <span id="approvals-count" class="count" hidden>0</span></button>
       <button id="btn-clients">🤝 العملاء</button>
       <button id="btn-finance">💰 المالية</button>
@@ -229,6 +230,14 @@
     </form>
   </dialog>
 
+  <dialog id="dlg-performance" class="wide">
+    <div class="dlg-head">
+      <h2>📊 أداء الفريق</h2>
+      <button class="icon" data-close aria-label="إغلاق">✕</button>
+    </div>
+    <div id="perf-body" class="fin-body"></div>
+  </dialog>
+
   <dialog id="dlg-approvals" class="wide">
     <div class="dlg-head">
       <h2>📥 الموافقات</h2>
@@ -348,6 +357,7 @@
           <option value="deduction">خصم</option>
           <option value="overtime">عمل إضافي (أوفرتايم)</option>
           <option value="raise">زيادة دائمة على الراتب</option>
+          <option value="cut">تخفيض دائم للراتب (صلاحيتك وحدك)</option>
         </select>
       </label>
       <label><span id="adj-amount-label">المبلغ</span> <input id="adj-amount" type="number" min="0.01" step="any" required></label>

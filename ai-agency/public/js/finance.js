@@ -12,6 +12,7 @@ export const ADJ_TYPES = {
   overtime: { name: 'عمل إضافي', sign: 1 },
   deduction: { name: 'خصم', sign: -1 },
   raise: { name: 'زيادة راتب', sign: 0 }, // changes the salary itself, not this month's pay
+  cut: { name: 'تخفيض راتب', sign: 0 }, // the owner's decision only (enforced below)
 };
 
 const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
@@ -66,6 +67,7 @@ export function addAdjustment(state, { empId, type, amount, hours, reason = '', 
   const e = state.employees.find((x) => x.id === empId);
   if (!e) throw new Error('الموظف غير موجود');
   if (!ADJ_TYPES[type]) throw new Error('نوع الحركة غير معروف');
+  if (type === 'cut' && by !== 'owner') throw new Error('تخفيض الراتب صلاحية المالك وحده');
   const entry = { id: `a${fin.nextId++}`, empId, type, reason: String(reason).trim().slice(0, FIN_LIMITS.reason), by, at, period: fin.period, paid: false };
   if (type === 'overtime') {
     entry.hours = positive(hours, FIN_LIMITS.hours, 'عدد الساعات');
@@ -84,6 +86,13 @@ export function addAdjustment(state, { empId, type, amount, hours, reason = '', 
     e.salary = round(e.salary + entry.amount);
     entry.to = e.salary;
     entry.paid = true; // nothing to pay out; it is part of the salary now
+  }
+  if (type === 'cut') {
+    if (entry.amount >= e.salary) throw new Error(`التخفيض يجب أن يكون أقل من راتب ${e.name} الحالي (${e.salary})`);
+    entry.from = e.salary;
+    e.salary = round(e.salary - entry.amount);
+    entry.to = e.salary;
+    entry.paid = true;
   }
   fin.adjustments.push(entry);
   trim(fin);
