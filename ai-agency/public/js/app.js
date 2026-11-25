@@ -159,6 +159,7 @@ function memoryOf(e) {
   if (live.length) {
     parts.push(`مشاريعك: ${live.map((p) => `${p.name} لـ${clientOf(p)?.name || 'عميل'} (${p.leadId === e.id ? 'أنت قائده' : 'عضو في الفريق'})`).join('، ')}.`);
   }
+  if (!officeOpen && !awayNow(e)) parts.unshift('الوقت الآن خارج الدوام وأنت في منزلك، فترد على رسالة المالك من هاتفك باختصار.');
   const l = awayNow(e);
   if (l) parts.unshift(`أنت الآن في إجازة ${LEAVE_TYPES[l.type].name} حتى ${l.to}، وتعود يوم ${addDays(l.to, 1)}. ترد على المالك من إجازتك باختصار.`);
   return parts.join(' ').slice(0, 1100);
@@ -225,7 +226,7 @@ function renderRoster() {
   const r = $('#roster');
   fill(r, ...[...state.employees].sort(byRank).map((e) =>
     h('button', { class: `chip${e.id === selectedId ? ' selected' : ''}${awayNow(e) ? ' away' : ''}`, title: awayNote(e) || undefined, onclick: () => selectEmployee(e.id) },
-      h('span', { class: `dot ${awayNow(e) ? 'away' : e.status || 'idle'}` }),
+      h('span', { class: `dot ${awayNow(e) ? 'away' : !officeOpen ? 'home' : e.status || 'idle'}`, title: !officeOpen && !awayNow(e) ? 'في المنزل (خارج الدوام)' : undefined }),
       avatar(e),
       h('span', {}, awayNow(e) ? `🌴 ${e.name}` : e.name, h('small', {}, awayNow(e) ? `في إجازة حتى ${awayNow(e).to}` : titleFor(e))))));
 }
@@ -466,6 +467,9 @@ async function runTask(id) {
   if (busy.has(e.id)) return toast(`${e.name} مشغول بمهمة أخرى الآن`);
   if (meeting?.attendees.includes(e.id)) return toast(`${e.name} في اجتماع الآن`);
   if (awayNow(e)) return toast(awayNote(e));
+  if (!officeOpen) openOffice([e.id]);
+  await arrived([e.id]);
+  if (busy.has(e.id)) return;
   busy.add(e.id);
   await office.recall(e.id);
   t.status = 'doing';
@@ -679,6 +683,10 @@ async function startWorkday() {
   }
   workdayRunning = true;
   $('#btn-workday').disabled = true;
+  if (!officeOpen) {
+    workdayLabel('🚶 الفريق يصل…');
+    await openOffice();
+  }
   const order = { high: 0, medium: 1, low: 2 };
   syncAway();
   markAttendance(state, today, atWork(state.employees).map((e) => e.id));
@@ -704,6 +712,87 @@ async function startWorkday() {
   workdayLabel('▶ ابدأ يوم العمل');
   toast(`🏁 انتهى يوم العمل${eod ? ` · ${countOf(eod, REPORTS_WORD)} في التقويم` : ''}${weekly ? ' · 📊 التقرير الأسبوعي جاهز' : ''}`);
   refresh();
+  if (new Date().getHours() >= WORK_HOURS[1]) setTimeout(() => closeOffice({ auto: true }), 4000);
+}
+
+// ---- office hours, day and night, visitors
+const WORK_HOURS = [8, 17];
+const PHASES = { morning: '🌅 صباحاً', day: '☀️ نهاراً', evening: '🌇 مساءً', night: '🌙 ليلاً' };
+const LIGHT_MODES = { auto: 'حسب الوقت', day: 'نهار', evening: 'مساء', night: 'ليل' };
+let lightMode = 'auto';
+let officeOpen = true;
+const phaseOf = (hr) => (hr >= 5 && hr < 8 ? 'morning' : hr >= 8 && hr < 17 ? 'day' : hr >= 17 && hr < 20 ? 'evening' : 'night');
+const inWorkHours = () => { const hr = new Date().getHours(); return isWorkDay(state, dayKey()) && hr >= WORK_HOURS[0] && hr < WORK_HOURS[1]; };
+function updateDaylight() {
+  const now = new Date();
+  const phase = lightMode === 'auto' ? phaseOf(now.getHours()) : lightMode;
+  office.setDaylight(phase, { lit: officeOpen });
+  const el = $('#clock-pill');
+  el.hidden = false;
+  el.textContent = `${PHASES[phase]} · ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}${officeOpen ? '' : ' · المكتب مغلق'}`;
+  $('#office-toggle').textContent = officeOpen ? '🌙' : '🏢';
+  $('#office-toggle').title = officeOpen ? 'انصراف الفريق وإغلاق المكتب' : 'فتح المكتب ووصول الفريق';
+  $('#light-toggle').title = `الإضاءة: ${LIGHT_MODES[lightMode]}`;
+}
+// Everyone walks in, those needed right now first; callers wait only for the people they need.
+const arrivals = new Map();
+const arrived = (ids) => Promise.all(ids.map((id) => arrivals.get(id)));
+function openOffice(first = []) {
+  if (officeOpen) return Promise.resolve();
+  officeOpen = true;
+  updateDaylight();
+  renderRoster();
+  toast('🚶 الفريق يصل إلى المكتب…');
+  const order = [...state.employees].sort((a, b) => first.includes(b.id) - first.includes(a.id) || a.desk - b.desk);
+  return Promise.all(order.map((e, i) => {
+    const p = office.arrive(e.id, i * 160);
+    arrivals.set(e.id, p);
+    return p;
+  }));
+}
+const teamBusy = () => workdayRunning || Boolean(meeting) || state.employees.some((e) => busy.has(e.id));
+async function closeOffice({ auto = false } = {}) {
+  if (!officeOpen) return;
+  if (teamBusy()) { if (!auto) toast('الفريق مشغول الآن. انتظر حتى ينتهي العمل.'); return; }
+  officeOpen = false;
+  updateDaylight();
+  renderRoster();
+  toast('🌙 انصرف الفريق إلى منازلهم. المكتب مغلق حتى تبدأ يوم العمل، ويمكنك مراسلتهم من المنزل.');
+  await Promise.all(state.employees.map((e, i) => office.leave(e.id, i * 180)));
+}
+$('#office-toggle').addEventListener('click', () => (officeOpen ? closeOffice() : openOffice()));
+$('#light-toggle').addEventListener('click', () => {
+  const keys = Object.keys(LIGHT_MODES);
+  lightMode = keys[(keys.indexOf(lightMode) + 1) % keys.length];
+  updateDaylight();
+  toast(`💡 الإضاءة: ${LIGHT_MODES[lightMode]}`);
+});
+
+// A client who comes in: through the front door to a meeting room, with their contact at the agency.
+const visitorKey = (c) => `v:${c.id}`;
+const FEMALE_NAMES = ['نوف', 'ريم', 'لين', 'هيا', 'لمى', 'جود', 'أمل', 'غدير', 'رهف', 'شهد', 'دانة', 'منيرة', 'سارة', 'ليلى'];
+const guessGender = (name) => { const n = name.replace(/^(د\.|م\.|أ\.)\s*/, '').trim(); return n.startsWith('أم ') || FEMALE_NAMES.includes(n.split(' ')[0]) || /[ةى]$/.test(n.split(' ')[0]) ? 'f' : 'm'; };
+function clientVisit(c, host = null) {
+  if (!officeOpen || !c || office.whereIs(visitorKey(c))) return null;
+  const who = contactOf(c);
+  const room = meeting?.room === 'b' ? 'a' : 'b';
+  const arrival = office.visitorArrive({ id: visitorKey(c), name: who.name, title: `عميل · ${c.name}`, color: 0x64748b,
+    look: lookFor({ id: c.id, name: who.name, gender: guessGender(who.name), level: 7 }) }, room);
+  let hosted = null;
+  if (host && office.whereIs(host.id) === 'desk' && !busy.has(host.id) && !awayNow(host) && !meeting?.attendees.includes(host.id)) {
+    hosted = host;
+    setStatus(host, 'meeting', `🤝 مع ${who.name}`);
+    office.sendToMeeting([host.id], room);
+  }
+  return { c, room, host: hosted, arrival };
+}
+async function endVisit(visit) {
+  if (!visit) return;
+  await visit.arrival;
+  office.visitorLeave(visitorKey(visit.c));
+  if (!visit.host) return;
+  if (office.whereIs(visit.host.id) === visit.room) await office.returnToDesks([visit.host.id]);
+  if (visit.host.status === 'meeting') setStatus(visit.host, 'idle');
 }
 
 // ---- reports: the morning plan, each manager's end of day, the weekly report
@@ -1178,6 +1267,7 @@ async function sendDealToClient(d) {
   const pt = dealProposal(d);
   busy.add(`client:${c.id}`);
   renderClients();
+  const visit = clientVisit(c, emp(d.ownerId));
   toast(`📨 أُرسل العرض إلى ${contactOf(c).name}…`);
   try {
     const talk = (d.history || []).filter((x) => x.note).slice(-6).map((x) => `- ${DEAL_STAGES[x.stage].name}: ${x.note}`).join('\n');
@@ -1208,6 +1298,7 @@ async function sendDealToClient(d) {
     toast(err.message);
   } finally {
     busy.delete(`client:${c.id}`);
+    endVisit(visit);
     save();
     refresh();
     if ($('#dlg-clients').open) renderClients();
@@ -1797,6 +1888,7 @@ function hireEmployee({ name, gender, dept, level, managerId, salary, personalit
   state.employees.push(e);
   for (const x of takeover) x.managerId = e.id;
   office.addEmployee(actorOf(e), titleFor(e));
+  if (!officeOpen) office.setHome(e.id, true);
   return e;
 }
 $('#dlg-hire').addEventListener('close', () => {
@@ -1949,6 +2041,8 @@ $('#dlg-meeting').addEventListener('close', async () => {
   renderMeeting('الفريق في الطريق إلى غرفة الاجتماعات…');
   office.focusOn(room);
   await Promise.all(attendees.map((id) => office.recall(id)));
+  if (!officeOpen) openOffice(attendees);
+  await arrived(attendees);
   await office.sendToMeeting(attendees, room);
   attendees.forEach((id) => setStatus(emp(id), 'meeting'));
   meeting.busy = false;
@@ -2607,7 +2701,10 @@ function askClient(c, mode, messages) {
 }
 
 let chattingClient = null;
+let chatVisit = null;
+$('#dlg-client-chat').addEventListener('close', () => { endVisit(chatVisit); chatVisit = null; chattingClient = null; });
 function openClientChat(c) {
+  if (chattingClient !== c.id) { endVisit(chatVisit); chatVisit = clientVisit(c); }
   chattingClient = c.id;
   const who = contactOf(c);
   $('#cc-title').textContent = `💬 ${who.name} · ${c.name}`;
@@ -2665,6 +2762,7 @@ async function sendToClient(p) {
   busy.add(key);
   renderClients();
   const who = contactOf(c);
+  const visit = clientVisit(c, emp(p.leadId));
   const per = Math.floor(4200 / items.length);
   const content = [
     `المشروع: ${p.name} (${p.type}).`, p.brief ? `موجز المشروع كما اتفقتم: ${p.brief}` : '',
@@ -2697,6 +2795,7 @@ async function sendToClient(p) {
     toast(err.message);
   } finally {
     busy.delete(key);
+    endVisit(visit);
     refresh();
     renderClients();
     if ($('#dlg-client-chat').open) renderClientChat();
@@ -3058,7 +3157,7 @@ function startRepeat(fn) {
   window.addEventListener('pointerup', stop);
   window.addEventListener('pointercancel', stop);
 }
-document.querySelectorAll('#nav-pad button').forEach((b) => {
+document.querySelectorAll('#nav-pad button:is([data-pan], [data-zoom], [data-reset])').forEach((b) => {
   b.addEventListener('pointerdown', (ev) => {
     ev.preventDefault();
     if (b.dataset.reset !== undefined) return office.focusOn('overview');
@@ -3132,10 +3231,18 @@ function applyState(next) {
   }
   state = next;
   state.employees.forEach((e) => office.addEmployee(actorOf(e), titleFor(e)));
+  if (!officeOpen) state.employees.forEach((e) => office.setHome(e.id, true));
   refresh();
 }
 
 state.employees.forEach((e) => office.addEmployee(actorOf(e), titleFor(e)));
+officeOpen = inWorkHours();
+if (!officeOpen) {
+  state.employees.forEach((e) => office.setHome(e.id, true));
+  setTimeout(() => toast('🌙 خارج الدوام: الفريق في منازلهم. ابدأ يوم العمل ليصلوا إلى المكتب، أو اضغط 🏢.'), 1500);
+}
+updateDaylight();
+setInterval(updateDaylight, 60_000);
 refresh();
 saveState(state);
 setInterval(() => { if (state.employees.some((e) => Boolean(awayNow(e)) !== (office.whereIs(e.id) === 'away'))) refresh(); }, 60_000); // leave starts or ends at midnight

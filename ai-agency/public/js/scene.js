@@ -100,7 +100,8 @@ export function createOffice(container, { onSelect } = {}) {
   controls.maxDistance = 115;
 
   // Lights
-  scene.add(new THREE.HemisphereLight(0xcfd8ff, 0x2a2340, 0.9));
+  const hemi = new THREE.HemisphereLight(0xcfd8ff, 0x2a2340, 0.9);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xffffff, 1.6);
   sun.position.set(-2, 36, 20);
   sun.target.position.set(16, 0, 0);
@@ -109,11 +110,35 @@ export function createOffice(container, { onSelect } = {}) {
   sun.shadow.mapSize.set(2048, 2048);
   Object.assign(sun.shadow.camera, { left: -46, right: 46, top: 30, bottom: -30, near: 1, far: 110 });
   scene.add(sun);
-  [[-9, -1], [13, -8], [13, 8], [26, -6], [36, 6], [48.5, 0]].forEach(([x, z]) => {
+  const lamps = [[-9, -1], [13, -8], [13, 8], [26, -6], [36, 6], [48.5, 0]].map(([x, z]) => {
     const p = new THREE.PointLight(0xffe2b8, 18, 18, 1.6);
     p.position.set(x, 6, z);
     scene.add(p);
+    return p;
   });
+
+  // Time of day: the sky, the sun and the office lamps ease toward a target.
+  const DAYLIGHT = {
+    morning: { bg: 0x1b2340, hemi: 0.7, sun: 1.25, sunColor: 0xffd7a8, lamps: 14 },
+    day: { bg: 0x0f1220, hemi: 0.9, sun: 1.6, sunColor: 0xffffff, lamps: 18 },
+    evening: { bg: 0x1c1330, hemi: 0.45, sun: 0.65, sunColor: 0xff9a5c, lamps: 24 },
+    night: { bg: 0x04050b, hemi: 0.09, sun: 0.06, sunColor: 0x7d8cff, lamps: 20 },
+  };
+  let lightTarget = null;
+  function setDaylight(phase, { lit = true } = {}) {
+    const d = DAYLIGHT[phase] || DAYLIGHT.day;
+    lightTarget = { hemi: d.hemi, sun: d.sun, lamps: lit ? d.lamps : d.lamps * 0.15, bg: new THREE.Color(d.bg), sunColor: new THREE.Color(d.sunColor) };
+  }
+  function stepDaylight(k) {
+    if (!lightTarget) return;
+    const t = lightTarget;
+    hemi.intensity += (t.hemi - hemi.intensity) * k;
+    sun.intensity += (t.sun - sun.intensity) * k;
+    sun.color.lerp(t.sunColor, k);
+    scene.background.lerp(t.bg, k);
+    scene.fog.color.copy(scene.background);
+    for (const l of lamps) l.intensity += (t.lamps - l.intensity) * k;
+  }
 
   // Floor & walls
   const floor = box(80, 0.2, 32, std(0xe8e3da, { roughness: 0.9 }));
@@ -765,26 +790,101 @@ export function createOffice(container, { onSelect } = {}) {
     a.label.classList.toggle('flagged', Boolean(text));
   }
 
-  // Someone on leave: their chair stands empty and their screen is off.
+  // Out of the office (on leave, or home after hours): the chair stands empty and the screen is off.
+  function showActor(a, shown) {
+    a.group.visible = shown;
+    a.labelObj.visible = shown;
+    a.label.style.display = shown ? '' : 'none';
+    deskScreens[a.deskIndex].material.emissiveIntensity = shown ? 1.1 : 0.15;
+  }
+  function seatAt(a) {
+    a.cancelWalk?.();
+    a.path = [];
+    a.group.position.copy(a.seat);
+    a.facing = seatFace(a);
+    a.location = 'desk';
+    a.sitting = true;
+  }
+  function hideActor(a, where) {
+    a.cancelWalk?.();
+    a.path = [];
+    a.holding = false;
+    a.visiting = null;
+    a.location = where;
+    showActor(a, false);
+  }
   function setAway(id, away) {
     const a = actors.get(id);
     if (!a || Boolean(a.away) === away) return;
     a.away = away;
-    a.group.visible = !away;
-    a.labelObj.visible = !away;
-    a.label.style.display = away ? 'none' : '';
-    deskScreens[a.deskIndex].material.emissiveIntensity = away ? 0.15 : 1.1;
-    if (away) {
-      a.path = [];
-      a.holding = false;
-      a.visiting = null;
-      a.location = 'away';
-    } else {
-      a.group.position.copy(a.seat);
-      a.facing = seatFace(a);
-      a.location = 'desk';
-      a.sitting = true;
-    }
+    if (away) hideActor(a, 'away');
+    else if (a.home) a.location = 'home';
+    else { seatAt(a); showActor(a, true); }
+  }
+
+  // Office hours: people walk in from the front door to their desks, and out again.
+  const ENTRANCE = new THREE.Vector3(4, 0, 19);
+  const LOBBY = new THREE.Vector3(4, 0, 15);
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  function setHome(id, home) {
+    const a = actors.get(id);
+    if (!a) return;
+    a.home = home;
+    if (a.away) return;
+    if (home) hideActor(a, 'home');
+    else { seatAt(a); showActor(a, true); }
+  }
+  async function arrive(id, delay = 0) {
+    const a = actors.get(id);
+    if (!a || !a.home) return;
+    a.home = false;
+    await wait(delay);
+    if (a.away || a.home) return;
+    a.group.position.copy(ENTRANCE);
+    a.location = 'desk';
+    showActor(a, true);
+    await walk(a, [LOBBY.clone(), ...exitPath(a).reverse(), a.seat.clone()], seatFace(a), { sit: true });
+  }
+  async function leave(id, delay = 0) {
+    const a = actors.get(id);
+    if (!a || a.home) return;
+    a.home = true;
+    if (a.away) return;
+    await wait(delay);
+    if (!a.home) return;
+    const from = a.location === 'desk' || a.location === 'break' ? toCorridor(a) : [];
+    await walk(a, [...from, LOBBY.clone(), ENTRANCE.clone()], new THREE.Vector3(4, 0, 30));
+    if (a.home && !a.away) hideActor(a, 'home');
+  }
+
+  // A client visiting the agency: in through the front door to a meeting room seat, then out.
+  function visitorArrive(v, roomKey) {
+    const existing = actors.get(v.id);
+    if (existing) return existing.arrival;
+    const a = makeCharacter(v);
+    const room = ROOMS[roomKey];
+    const seats = roomSeats[roomKey];
+    const seat = seats[seats.length - 1];
+    Object.assign(a, { path: [], seat: seat.pos.clone(), deskIndex: -1, facing: seat.face, status: 'talking', phase: 0, location: roomKey, sitting: false, visitor: true, room: roomKey });
+    a.nameEl.textContent = v.name;
+    a.titleEl.textContent = v.title || '';
+    a.ring.material.color.setHex(0x94a3b8);
+    a.group.position.copy(ENTRANCE);
+    scene.add(a.group);
+    actors.set(v.id, a);
+    a.arrival = walk(a, [LOBBY.clone(), new THREE.Vector3(4, 0, room.doorZ), new THREE.Vector3(room.x0 + 1.5, 0, room.doorZ),
+      new THREE.Vector3(seat.pos.x, 0, room.doorZ + (seat.pos.z > room.doorZ ? 0.5 : -0.5)), seat.pos.clone()], seat.face, { sit: true });
+    return a.arrival;
+  }
+  async function visitorLeave(id) {
+    const a = actors.get(id);
+    if (!a?.visitor || a.leaving) return;
+    a.leaving = true;
+    const room = ROOMS[a.room];
+    const p = a.group.position;
+    await walk(a, [new THREE.Vector3(p.x, 0, room.doorZ + (p.z > room.doorZ ? 0.5 : -0.5)), new THREE.Vector3(room.x0 + 1.5, 0, room.doorZ),
+      new THREE.Vector3(4, 0, room.doorZ), LOBBY.clone(), ENTRANCE.clone()], new THREE.Vector3(4, 0, 30));
+    removeEmployee(id);
   }
 
   function setSelected(id) {
@@ -1019,6 +1119,7 @@ export function createOffice(container, { onSelect } = {}) {
     const moveDt = Math.min(rawDt, 0.5);
     const t = clock.elapsedTime;
     const k = Math.min(1, dt * 8);
+    stepDaylight(Math.min(1, dt * 1.5));
     const ease = (obj, axis, target) => { obj.rotation[axis] += (target - obj.rotation[axis]) * k; };
     for (const a of actors.values()) {
       const walking = a.path.length > 0;
@@ -1102,5 +1203,6 @@ export function createOffice(container, { onSelect } = {}) {
   return {
     addEmployee, updateEmployee, removeEmployee, setStatus, setSelected, sendToMeeting, returnToDesks,
     focusOn, setCompanyName, setDeskLit, setOfficeLabel, takeBreak, visit, recall, whereIs, pan, zoom, setFlag, setAway,
+    setDaylight, setHome, arrive, leave, visitorArrive, visitorLeave,
   };
 }
