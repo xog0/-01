@@ -36,6 +36,7 @@
       <button id="btn-board">📋 المهام</button>
       <button id="btn-meeting">👥 اجتماع</button>
       <button id="btn-org">🏛️ الهيكل والسلم</button>
+      <button id="btn-approvals">📥 الموافقات <span id="approvals-count" class="count" hidden>0</span></button>
       <button id="btn-clients">🤝 العملاء</button>
       <button id="btn-finance">💰 المالية</button>
       <button id="btn-hire">➕ توظيف</button>
@@ -226,6 +227,14 @@
         <button class="primary" value="ok">حفظ</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="dlg-approvals" class="wide">
+    <div class="dlg-head">
+      <h2>📥 الموافقات</h2>
+      <button class="icon" data-close aria-label="إغلاق">✕</button>
+    </div>
+    <div id="approvals-body" class="fin-body"></div>
   </dialog>
 
   <dialog id="dlg-clients" class="wide">

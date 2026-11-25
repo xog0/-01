@@ -391,6 +391,7 @@ export function createInitialState() {
     finance: createFinance(now),
     clients: [],
     projects: [],
+    bonusRequests: [],
     migrations: MIGRATIONS.map((m) => m.key), // a fresh agency already has these
   };
   for (const e of STARTING_TEAM) {

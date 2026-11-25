@@ -34,6 +34,7 @@ function splitState(state) {
     const { ledger, ...books } = state.finance;
     docs.set('finance/books', { ...books, payrolls: books.payrolls.map((p) => ({ ...p, memo: (p.memo || '').slice(0, 2000) })) });
     docs.set('finance/ledger', { entries: ledger });
+    docs.set('finance/approvals', { requests: state.bonusRequests || [] });
   }
   if (state.clients || state.projects) docs.set('crm/book', { clients: state.clients || [], projects: state.projects || [] });
   for (const t of state.tasks) {
@@ -106,6 +107,7 @@ export async function connectCloud() {
     };
     const books = byId(finance);
     if (books.books) state.finance = { ...books.books, ledger: books.ledger?.entries || [] };
+    state.bonusRequests = books.approvals?.requests || [];
     const book = byId(crm).book;
     if (book) Object.assign(state, { clients: book.clients || [], projects: book.projects || [] });
     // Record what is stored now so the first save only sends real changes.

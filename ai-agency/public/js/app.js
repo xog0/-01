@@ -13,6 +13,9 @@ import {
   CLIENT_STATUS, PROJECT_STATUS, PROJECT_TYPES, clientTotals, deleteClient, deleteProject, isLate, outstanding,
   portfolioBrief, projectContext, projectProgress, receivables, recordPayment, saveClient, saveProject,
 } from './crm.js';
+import {
+  REQUEST_STATUS, ROLE_NAMES, createBonusRequest, currentStage, decideStage, inReview, ownerDecision, pendingForOwner, skipStage,
+} from './approvals.js';
 
 // ------------------------------------------------------------ DOM helpers
 const $ = (sel) => document.querySelector(sel);
@@ -52,6 +55,10 @@ function confirmBox(message, okLabel = 'تأكيد') {
   dlg.returnValue = '';
   dlg.showModal();
   return new Promise((resolve) => dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok'), { once: true }));
+}
+// replaceChildren() would print "null" for an empty optional section; fill() skips it.
+function fill(el, ...kids) {
+  el.replaceChildren(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false));
 }
 const hex = (n) => `#${n.toString(16).padStart(6, '0')}`;
 let toastTimer;
@@ -173,7 +180,7 @@ function avatar(e) {
 
 function renderRoster() {
   const r = $('#roster');
-  r.replaceChildren(...[...state.employees].sort(byRank).map((e) =>
+  fill(r, ...[...state.employees].sort(byRank).map((e) =>
     h('button', { class: `chip${e.id === selectedId ? ' selected' : ''}`, onclick: () => selectEmployee(e.id) },
       h('span', { class: `dot ${e.status || 'idle'}` }),
       avatar(e),
@@ -226,7 +233,7 @@ function renderChat(e) {
     items.push(h('div', { class: 'empty' }, `ابدأ محادثة مع ${e.name}. اسأله عن عمله، أو اطلب رأيه، أو كلّفه بشيء.`));
   }
   if (busy.has(`chat:${e.id}`)) items.push(h('div', { class: 'msg assistant typing' }, `${e.name} يكتب…`));
-  log.replaceChildren(...items);
+  fill(log, ...items);
   log.scrollTop = log.scrollHeight;
 }
 
@@ -311,11 +318,11 @@ function taskCard(t, { showOwner = false } = {}) {
 function renderEmpTasks(e) {
   const list = state.tasks.filter((t) => t.empId === e.id)
     .sort((a, b) => ['doing', 'review', 'todo', 'done'].indexOf(a.status) - ['doing', 'review', 'todo', 'done'].indexOf(b.status));
-  $('#emp-tasks').replaceChildren(...(list.length ? list.map((t) => taskCard(t)) : [h('div', { class: 'empty' }, 'لا توجد مهام لهذا الموظف.')]));
+  fill($('#emp-tasks'), ...(list.length ? list.map((t) => taskCard(t)) : [h('div', { class: 'empty' }, 'لا توجد مهام لهذا الموظف.')]));
   const keep = $('#task-project').value;
   const mine = liveProjects().filter((p) => p.leadId === e.id || p.team.includes(e.id));
   const others = liveProjects().filter((p) => !mine.includes(p));
-  $('#task-project').replaceChildren(h('option', { value: '' }, 'بدون مشروع'),
+  fill($('#task-project'), h('option', { value: '' }, 'بدون مشروع'),
     ...[...mine, ...others].map((p) => h('option', { value: p.id }, `📁 ${clientOf(p)?.name} · ${p.name}`)));
   $('#task-project').value = project(keep) ? keep : '';
 }
@@ -378,6 +385,8 @@ async function reviewBy(mgr, e, t) {
     return {
       decision: v.decision === 'revise' ? 'revise' : 'approve',
       feedback: typeof v.feedback === 'string' ? v.feedback.trim().slice(0, 600) : '',
+      bonus: v.decision !== 'revise' && v.bonus === true,
+      bonusReason: typeof v.bonusReason === 'string' ? v.bonusReason.trim().slice(0, 300) : '',
     };
   } catch {
     return { decision: 'approve', feedback: '' };
@@ -454,11 +463,18 @@ function finishTask(t, e, mgr, verdict) {
   t.status = 'done';
   t.doneAt = Date.now();
   t.feedback = '';
-  const bonus = state.finance?.taskBonus?.[t.priority] || 0;
-  if (bonus > 0) {
+  // No automatic bonus: a manager who finds the work outstanding (approved
+  // on the first review) recommends one, and it climbs the approval chain.
+  const suggested = state.finance?.taskBonus?.[t.priority] || 0;
+  if (mgr && verdict?.bonus && t.reviews?.length === 1 && suggested > 0) {
     try {
-      addAdjustment(state, { empId: e.id, type: 'taskBonus', amount: bonus, reason: `إنجاز: ${t.title}`.slice(0, 200), by: mgr ? mgr.id : 'owner' });
-    } catch { /* a missing salary record should never block finishing work */ }
+      createBonusRequest(state, {
+        empId: e.id, recommenderId: mgr.id, amount: suggested, taskId: t.id, newId,
+        reason: `${verdict.bonusReason || 'عمل متميز'} (المهمة: ${t.title})`.slice(0, 300),
+      });
+      setTimeout(() => toast(`🏅 ${mgr.name} رشّح ${e.name} لمكافأة، والطلب في طريقه للموارد البشرية`), 2500);
+      processBonusQueue();
+    } catch { /* a request that cannot be opened must never block finishing work */ }
   }
   const before = e.xp;
   e.xp += TASK_XP[t.priority];
@@ -610,7 +626,7 @@ function showOutput(t) {
   const e = emp(t.empId);
   $('#out-title').textContent = t.title;
   $('#out-meta').textContent = `${e ? `${e.name} · ${titleFor(e)}` : ''}${t.doneAt ? ` · ${new Date(t.doneAt).toLocaleString('ar')}` : ''}`;
-  $('#out-body').replaceChildren(richText(t.output || ''));
+  fill($('#out-body'), richText(t.output || ''));
   if (t.reviews?.length) {
     $('#out-body').append(h('div', { class: 'reviews' },
       h('h4', {}, 'المراجعة'),
@@ -637,7 +653,7 @@ function renderProfile(e) {
     state.employees.filter((x) => x.id !== e.id && !isUnder(x.id, e.id))
       .map((x) => h('option', { value: x.id, selected: x.id === e.managerId }, `${x.name} — ${titleFor(x)}`)));
 
-  $('#profile-pane').replaceChildren(
+  fill($('#profile-pane'), 
     h('div', { class: 'card' },
       h('dl', { class: 'kv' },
         h('dt', {}, 'المسمى'), h('dd', {}, titleFor(e)),
@@ -756,12 +772,12 @@ function fillHireForm() {
     ? `شاغر: ${freeOpen} مكتب في المساحة المفتوحة، و${freeOffices} مكتب خاص للمدراء`
     : 'لا توجد مكاتب شاغرة.';
   $('#hire-submit').disabled = freeOpen + freeOffices <= 0;
-  $('#hire-dept').replaceChildren(...Object.entries(DEPARTMENTS).map(([k, d]) => h('option', { value: k }, d.name)));
-  $('#hire-level').replaceChildren(...LADDER.map((l, i) => h('option', { value: i, selected: i === 1 }, l.name)));
-  $('#hire-manager').replaceChildren(h('option', { value: '' }, 'مالك الوكالة مباشرة'),
+  fill($('#hire-dept'), ...Object.entries(DEPARTMENTS).map(([k, d]) => h('option', { value: k }, d.name)));
+  fill($('#hire-level'), ...LADDER.map((l, i) => h('option', { value: i, selected: i === 1 }, l.name)));
+  fill($('#hire-manager'), h('option', { value: '' }, 'مالك الوكالة مباشرة'),
     ...[...state.employees].sort(byRank).map((x, i) => h('option', { value: x.id, selected: i === 0 }, `${x.name} — ${titleFor(x)}`)));
   $('#hire-takeover-row').hidden = true;
-  $('#hire-position').replaceChildren(h('option', { value: '' }, 'منصب مخصص (اختر القسم والمستوى)'),
+  fill($('#hire-position'), h('option', { value: '' }, 'منصب مخصص (اختر القسم والمستوى)'),
     ...POSITIONS.map((p) => {
       const holder = p.unique && positionHolder(p);
       return h('option', { value: p.key, disabled: Boolean(holder) }, holder ? `${p.name} (يشغله ${holder.name})` : p.name);
@@ -855,16 +871,16 @@ function renderBoard() {
     toast('تمت إضافة المهمة');
   } }, h('h3', {}, 'تكليف جديد'), h('label', {}, 'الموظف', assign), title, desc, prio, proj, h('button', { class: 'primary', type: 'submit' }, 'إضافة'));
   cols[0].firstChild.after(form);
-  $('#board').replaceChildren(...cols);
+  fill($('#board'), ...cols);
 }
 $('#btn-board').addEventListener('click', () => {
   const f = $('#board-filter');
   const keep = f.value;
-  f.replaceChildren(h('option', { value: '' }, 'كل الموظفين'), ...state.employees.map((x) => h('option', { value: x.id }, x.name)));
+  fill(f, h('option', { value: '' }, 'كل الموظفين'), ...state.employees.map((x) => h('option', { value: x.id }, x.name)));
   f.value = state.employees.some((x) => x.id === keep) ? keep : '';
   const pf = $('#board-project');
   const keepP = pf.value;
-  pf.replaceChildren(h('option', { value: '' }, 'كل المشاريع'), ...liveProjects().map((p) => h('option', { value: p.id }, `${clientOf(p)?.name} · ${p.name}`)));
+  fill(pf, h('option', { value: '' }, 'كل المشاريع'), ...liveProjects().map((p) => h('option', { value: p.id }, `${clientOf(p)?.name} · ${p.name}`)));
   pf.value = project(keepP) ? keepP : '';
   renderBoard();
   $('#dlg-board').showModal();
@@ -888,10 +904,10 @@ function renderOrg() {
     const kids = state.employees.filter((x) => (x.managerId || null) === id).sort(byRank);
     return kids.length ? h('ul', {}, ...kids.map(node)) : null;
   };
-  $('#org-tree').replaceChildren(h('ul', {}, h('li', {},
+  fill($('#org-tree'), h('ul', {}, h('li', {},
     h('div', { class: 'org-node owner' }, h('div', { class: 'avatar', style: 'background:#7c5cff' }, '★'), h('span', {}, 'أنت', h('small', {}, 'مالك الوكالة'))),
     children(null))));
-  $('#ladder').replaceChildren(...LADDER.map((l, i) => {
+  fill($('#ladder'), ...LADDER.map((l, i) => {
     const people = state.employees.filter((x) => x.level === i);
     return h('li', { style: `border-color:hsl(${250 - i * 25} 80% 65%)` },
       h('b', {}, `${i + 1}. ${l.name}`, h('span', { class: 'muted' }, `${l.xp} نقطة`)),
@@ -903,15 +919,15 @@ $('#btn-org').addEventListener('click', () => { renderOrg(); $('#dlg-org').showM
 
 // ------------------------------------------------------------ meetings
 function fillMeetingForm() {
-  $('#meet-room').replaceChildren(...Object.entries(ROOMS).map(([k, r]) => h('option', { value: k }, `${r.name} (${r.seats} مقاعد)`)));
+  fill($('#meet-room'), ...Object.entries(ROOMS).map(([k, r]) => h('option', { value: k }, `${r.name} (${r.seats} مقاعد)`)));
   // Preselect the most senior people, few enough to fit the smaller room.
   const fits = Math.min(...Object.values(ROOMS).map((r) => r.seats));
-  $('#meet-people').replaceChildren(...[...state.employees].sort(byRank).map((e, i) =>
+  fill($('#meet-people'), ...[...state.employees].sort(byRank).map((e, i) =>
     h('label', { title: titleFor(e) }, h('input', { type: 'checkbox', value: e.id, checked: i < fits, onchange: updateSeatCount }), `${e.name}`)));
   updateSeatCount();
   const hist = state.meetings.slice().reverse();
   $('#meet-history').hidden = !hist.length;
-  $('#meet-history-list').replaceChildren(...hist.map((m) => h('div', { class: 'task' },
+  fill($('#meet-history-list'), ...hist.map((m) => h('div', { class: 'task' },
     h('h4', {}, m.topic),
     h('p', {}, `${ROOMS[m.room]?.name || ''} · ${new Date(m.at).toLocaleString('ar')}`),
     h('div', { class: 'row' }, h('button', { type: 'button', class: 'small', onclick: () => {
@@ -964,7 +980,7 @@ function renderMeeting(note) {
     h('span', { class: 'who' }, l.who), richText(l.text)));
   if (note) items.push(h('div', { class: 'msg system' }, note));
   if (!meeting.log.length && !note) items.push(h('div', { class: 'empty' }, 'ابدأ جولة نقاش أو اكتب افتتاحية الاجتماع.'));
-  $('#m-log').replaceChildren(...items);
+  fill($('#m-log'), ...items);
   $('#m-log').scrollTop = $('#m-log').scrollHeight;
   $('#m-round').disabled = $('#m-end').disabled = meeting.busy;
 }
@@ -1038,6 +1054,139 @@ $('#m-end').addEventListener('click', async () => {
   done.attendees.forEach((id) => emp(id) && setStatus(emp(id), 'idle'));
 });
 
+// ------------------------------------------------------------ bonus approvals
+// A recommended bonus climbs HR → CFO → CEO, each reviewer weighing in from
+// their own angle (via the AI), then waits in the owner's approvals box.
+let bonusQueueRunning = false;
+const ROLE_ANGLE = {
+  hr: 'بصفتك مدير الموارد البشرية: تحقق من عدالة المكافأة مقارنة بزملائه وبسجل أدائه، وألا تكون مجاملة.',
+  cfo: 'بصفتك المدير المالي: تحقق من أثرها على الرصيد ومسير الرواتب، ومن أن المبلغ معقول.',
+  ceo: 'بصفتك المدير التنفيذي: قرّر هل ترفعها للمالك للاعتماد النهائي، بالنظر إلى أثرها على الفريق والوكالة.',
+};
+
+function bonusContext(req, reviewer, stage) {
+  const e = emp(req.empId);
+  const done = state.tasks.filter((t) => t.empId === req.empId && t.status === 'done');
+  const firstPass = done.filter((t) => t.reviews?.length && t.reviews[0].decision === 'approve').length;
+  const monthBonuses = (state.bonusRequests || []).filter((r) => r.empId === req.empId && r.status === 'approved' && periodOfMs(r.closedAt) === state.finance.period);
+  const prior = req.chain.filter((s) => s.decision && s.decision !== 'skipped')
+    .map((s) => `${emp(s.empId)?.name || ROLE_NAMES[s.role]} (${ROLE_NAMES[s.role]}): ${s.decision === 'approve' ? `وافق بمبلغ ${fmt(s.amount)}` : 'رفض'} — ${s.note || ''}`);
+  return [
+    ROLE_ANGLE[stage.role],
+    `طلب مكافأة لـ${e?.name} (${e ? titleFor(e) : ''}) بمبلغ ${fmt(req.amount)} ${state.finance.currency}.`,
+    `سبب الترشيح: ${req.reason}`,
+    `سجل الموظف: الراتب ${fmt(e?.salary || 0)}، مهام منجزة ${done.length}، منها ${firstPass} اعتُمدت من أول مراجعة، ومكافآت معتمدة هذا الشهر ${monthBonuses.length}.`,
+    `المالية: الرصيد ${fmt(balance(state))}، ومسير هذا الشهر حتى الآن ${fmt(payrollPreview(state).total)}، وطلبات مكافآت أخرى قيد المراجعة ${inReview(state).length - 1}.`,
+    prior.length ? `آراء من راجعه قبلك:\n${prior.join('\n')}` : '',
+  ].filter(Boolean).join('\n');
+}
+const periodOfMs = (ms) => (ms ? `${new Date(ms).getFullYear()}-${String(new Date(ms).getMonth() + 1).padStart(2, '0')}` : '');
+
+async function processBonusQueue() {
+  if (bonusQueueRunning) return;
+  bonusQueueRunning = true;
+  try {
+    for (let guard = 0; guard < 50; guard++) {
+      const req = inReview(state)[0];
+      if (!req) break;
+      const stage = currentStage(req);
+      if (!stage || stage.role === 'owner') break;
+      const reviewer = emp(stage.empId);
+      if (!reviewer) { skipStage(state, req, 'غادر الوكالة'); save(); continue; }
+      const prev = reviewer.status;
+      const prevBubble = bubbles.get(reviewer.id) || '';
+      setStatus(reviewer, 'talking', `🧾 يراجع مكافأة ${emp(req.empId)?.name || ''}`);
+      let verdict = { decision: 'approve', amount: req.amount, note: '' };
+      try {
+        const reply = await ask(reviewer, 'bonus', [{ role: 'user', content: bonusContext(req, reviewer, stage).slice(0, 5800) }]);
+        try {
+          const v = JSON.parse(reply.slice(reply.indexOf('{'), reply.lastIndexOf('}') + 1));
+          verdict = { decision: v.decision === 'reject' ? 'reject' : 'approve', amount: Number(v.amount) || req.amount, note: typeof v.note === 'string' ? v.note : '' };
+        } catch { /* unreadable answer: pass it on unchanged */ }
+      } catch (err) {
+        toast(err.message);
+        break; // try again later rather than skip a reviewer because the AI was unavailable
+      } finally {
+        if (reviewer.status === 'talking') setStatus(reviewer, prev === 'talking' ? 'idle' : prev, prevBubble);
+      }
+      decideStage(state, req, verdict);
+      save();
+      const who = emp(req.empId)?.name || '';
+      if (req.status === 'rejected') toast(`✋ ${reviewer.name} رفض مكافأة ${who}: ${verdict.note}`.slice(0, 160));
+      else if (req.status === 'awaiting_owner') toast(`📥 مكافأة ${who} (${money(req.amount)}) وصلت بانتظار موافقتك`);
+      renderApprovalsBadge();
+      if ($('#dlg-approvals').open) renderApprovals();
+    }
+  } finally {
+    bonusQueueRunning = false;
+    renderApprovalsBadge();
+  }
+}
+
+function renderApprovalsBadge() {
+  const n = pendingForOwner(state).length;
+  const badge = $('#approvals-count');
+  badge.textContent = String(n);
+  badge.hidden = n === 0;
+}
+
+function chainTrail(req) {
+  const icon = { approve: '✅', reject: '❌', skipped: '⏭️' };
+  const waiting = currentStage(req);
+  return h('ol', { class: 'trail' }, ...req.chain.map((s) => {
+    const who = s.role === 'owner' ? 'أنت' : emp(s.empId)?.name || '—';
+    const state_ = s.decision ? icon[s.decision] : s === waiting ? '⏳' : '·';
+    const detail = s.decision === 'approve' ? `${s.role === 'manager' ? 'رشّح' : 'وافق'} بمبلغ ${fmt(s.amount)}` : s.decision === 'reject' ? 'رفض' : s.decision === 'skipped' ? 'تخطّى' : s === waiting ? 'بانتظار المراجعة' : '';
+    return h('li', { class: `step ${s.decision || (s === waiting ? 'waiting' : '')}` },
+      h('b', {}, `${state_} ${who}`), h('small', {}, ` · ${ROLE_NAMES[s.role]}${detail ? ` · ${detail}` : ''}`),
+      s.note ? h('p', {}, s.note) : null);
+  }));
+}
+
+function requestCard(req, { actions = false } = {}) {
+  const e = emp(req.empId);
+  const amount = h('input', { type: 'number', min: '0.01', step: 'any', value: String(req.amount), 'aria-label': 'المبلغ' });
+  const note = h('input', { maxlength: 300, placeholder: 'ملاحظة (اختياري)', 'aria-label': 'ملاحظة' });
+  const decide = (approve) => {
+    try {
+      const adj = ownerDecision(state, req, { approve, amount: amount.value, note: note.value });
+      save();
+      toast(approve ? `✅ اعتمدت مكافأة ${e?.name} (${money(adj.amount)})، وستُصرف مع رواتب ${periodLabel(state.finance.period)}` : `رفضت مكافأة ${e?.name}`);
+    } catch (err) { toast(err.message); }
+    renderApprovals();
+    renderApprovalsBadge();
+    if ($('#dlg-finance').open) renderFinance();
+  };
+  return h('div', { class: 'project request' },
+    h('div', { class: 'row', style: 'justify-content: space-between' },
+      h('h4', {}, `🏅 مكافأة ${e?.name || 'موظف سابق'} · ${money(req.amount)}`),
+      h('span', { class: `badge ${req.status === 'approved' ? 'active' : req.status === 'rejected' ? 'cancelled' : 'proposal'}` }, REQUEST_STATUS[req.status])),
+    h('div', { class: 'client' }, `${e ? titleFor(e) : ''} · ${new Date(req.createdAt).toLocaleDateString('ar')}${req.requested !== req.amount ? ` · المبلغ المرشَّح ${fmt(req.requested)}` : ''}`),
+    chainTrail(req),
+    actions ? h('div', { class: 'row' },
+      h('label', { class: 'grow' }, 'المبلغ', amount), h('label', { class: 'grow' }, 'ملاحظتك', note)) : null,
+    actions ? h('div', { class: 'actions' },
+      h('button', { class: 'small primary', onclick: () => decide(true) }, '✅ اعتماد'),
+      h('button', { class: 'small danger', onclick: () => decide(false) }, '❌ رفض')) : null);
+}
+
+function renderApprovals() {
+  const waiting = pendingForOwner(state);
+  const moving = inReview(state);
+  const closed = (state.bonusRequests || []).filter((r) => r.status === 'approved' || r.status === 'rejected').slice(-20).reverse();
+  fill($('#approvals-body'), 
+    h('p', { class: 'muted' }, 'المكافآت لا تُصرف تلقائياً. يرشّح المدير صاحب العمل المتميز، ثم يمر الطلب على مدير الموارد البشرية، ثم المدير المالي، ثم المدير التنفيذي، ثم يصل إليك. لا يُسجَّل شيء في الرواتب إلا باعتمادك.'),
+    h('h3', {}, `بانتظار موافقتك (${waiting.length})`),
+    waiting.length ? h('div', { class: 'clients-list' }, ...waiting.map((r) => requestCard(r, { actions: true }))) : h('div', { class: 'empty' }, 'لا يوجد ما ينتظر موافقتك.'),
+    moving.length ? h('h3', {}, `قيد المراجعة (${moving.length})`) : null,
+    moving.length ? h('div', { class: 'clients-list' }, ...moving.map((r) => requestCard(r))) : null,
+    moving.length && !bonusQueueRunning ? h('button', { class: 'small', onclick: () => processBonusQueue() }, '↻ متابعة المراجعة') : null,
+    closed.length ? h('h3', {}, 'آخر القرارات') : null,
+    closed.length ? h('div', { class: 'clients-list' }, ...closed.map((r) => requestCard(r))) : null);
+}
+
+$('#btn-approvals').addEventListener('click', () => { renderApprovals(); $('#dlg-approvals').showModal(); });
+
 // ------------------------------------------------------------ clients & projects
 let crmTab = 'projects';
 let projectFilter = 'live';
@@ -1094,7 +1243,7 @@ function renderClients() {
     const list = (state.projects || []).filter((p) => groups[projectFilter].includes(p.status))
       .sort((a, b) => ['active', 'proposal', 'done', 'cancelled'].indexOf(a.status) - ['active', 'proposal', 'done', 'cancelled'].indexOf(b.status));
     const active = (state.projects || []).filter((p) => p.status === 'active');
-    body.replaceChildren(
+    fill(body, 
       h('div', { class: 'tiles' },
         tile('مشاريع قيد التنفيذ', String(active.length)),
         tile('عروض أسعار', String((state.projects || []).filter((p) => p.status === 'proposal').length)),
@@ -1106,7 +1255,7 @@ function renderClients() {
         : h('div', { class: 'empty' }, state.clients?.length ? 'لا توجد مشاريع هنا. أضف مشروعاً جديداً لأحد العملاء.' : 'أضف عميلاً أولاً، ثم أنشئ له مشروعاً.'));
   } else {
     const clients = [...(state.clients || [])].sort((a, b) => ['active', 'prospect', 'past'].indexOf(a.status) - ['active', 'prospect', 'past'].indexOf(b.status));
-    body.replaceChildren(clients.length ? h('div', { class: 'clients-list' }, ...clients.map((c) => {
+    fill(body, clients.length ? h('div', { class: 'clients-list' }, ...clients.map((c) => {
       const tot = clientTotals(state, c.id);
       return h('div', { class: 'project' },
         h('div', { class: 'row', style: 'justify-content: space-between' },
@@ -1125,7 +1274,7 @@ function renderClients() {
 function openClientForm(c = null) {
   $('#client-form').reset();
   $('#client-form-title').textContent = c ? `تعديل ${c.name}` : 'عميل جديد';
-  $('#cl-status').replaceChildren(...Object.entries(CLIENT_STATUS).map(([k, v]) => h('option', { value: k }, v)));
+  fill($('#cl-status'), ...Object.entries(CLIENT_STATUS).map(([k, v]) => h('option', { value: k }, v)));
   $('#cl-id').value = c?.id || '';
   for (const f of ['name', 'industry', 'city', 'contact', 'notes']) $(`#cl-${f}`).value = c?.[f] || '';
   $('#cl-status').value = c?.status || 'active';
@@ -1156,12 +1305,12 @@ function openProjectForm(p = null, clientId = '') {
   if (!state.clients?.length) return toast('أضف عميلاً أولاً');
   $('#project-form').reset();
   $('#project-form-title').textContent = p ? `تعديل ${p.name}` : 'مشروع جديد';
-  $('#pj-client').replaceChildren(...state.clients.map((c) => h('option', { value: c.id }, c.name)));
-  $('#pj-type').replaceChildren(...PROJECT_TYPES.map((t) => h('option', { value: t }, t)));
-  $('#pj-status').replaceChildren(...Object.entries(PROJECT_STATUS).map(([k, v]) => h('option', { value: k }, v)));
+  fill($('#pj-client'), ...state.clients.map((c) => h('option', { value: c.id }, c.name)));
+  fill($('#pj-type'), ...PROJECT_TYPES.map((t) => h('option', { value: t }, t)));
+  fill($('#pj-status'), ...Object.entries(PROJECT_STATUS).map(([k, v]) => h('option', { value: k }, v)));
   const people = [...state.employees].sort(byRank);
-  $('#pj-lead').replaceChildren(h('option', { value: '' }, 'بدون قائد'), ...people.map((e) => h('option', { value: e.id }, `${e.name} — ${titleFor(e)}`)));
-  $('#pj-team').replaceChildren(...people.map((e) => h('label', { title: titleFor(e) },
+  fill($('#pj-lead'), h('option', { value: '' }, 'بدون قائد'), ...people.map((e) => h('option', { value: e.id }, `${e.name} — ${titleFor(e)}`)));
+  fill($('#pj-team'), ...people.map((e) => h('label', { title: titleFor(e) },
     h('input', { type: 'checkbox', value: e.id, checked: Boolean(p?.team.includes(e.id)) }), e.name)));
   $('#pj-id').value = p?.id || '';
   $('#pj-client').value = p?.clientId || clientId || state.clients[0].id;
@@ -1300,7 +1449,7 @@ function renderFinance() {
     const m = monthTotals(state);
     const p = payrollPreview(state);
     const last = fin.payrolls.at(-1);
-    body.replaceChildren(
+    fill(body, 
       h('div', { class: 'tiles' },
         tile('الرصيد الحالي', money(balance(state)), balance(state) >= 0 ? 'good' : 'bad'),
         tile(`إيرادات ${periodLabel(fin.period)}`, money(m.income), 'good'),
@@ -1309,7 +1458,7 @@ function renderFinance() {
         tile('حركات مفتوحة', String(fin.adjustments.filter((a) => !a.paid && a.type !== 'raise').length)),
         tile('مستحقات العملاء', money(receivables(state)))),
       h('p', { class: 'muted' }, keeper
-        ? `${keeper.name} (${titleFor(keeper)}) مسؤول عن الرواتب والخصومات والمكافآت. اطلب منه في المحادثة، مثلاً: «اخصم 200 من خالد بسبب التأخير» أو «أضف 6 ساعات أوفرتايم لليلى».`
+        ? `${keeper.name} (${titleFor(keeper)}) مسؤول عن الرواتب والخصومات والمكافآت، ويراجع طلبات المكافأة ضمن سلسلة الموافقات. اطلب منه في المحادثة، مثلاً: «اخصم 200 من خالد بسبب التأخير» أو «أضف 6 ساعات أوفرتايم لليلى».`
         : 'لا يوجد مدير مالي حالياً. يمكنك توظيف «المدير المالي» من نموذج التوظيف.'),
       last ? h('div', { class: 'card' },
         h('h3', {}, `آخر مسير: ${periodLabel(last.period)} · ${money(last.total)}`),
@@ -1328,7 +1477,7 @@ function renderFinance() {
         h('td', { class: 'num' }, h('b', {}, fmt(l.net))),
         h('td', {}, h('button', { class: 'small', onclick: () => openAdjust(l.empId) }, '＋ حركة')));
     });
-    body.replaceChildren(
+    fill(body, 
       h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
         h('thead', {}, h('tr', {}, ...['الموظف', 'المسمى', 'الأساسي', 'أوفرتايم', 'مكافآت', 'خصومات', 'الصافي', ''].map((x) => h('th', {}, x)))),
         h('tbody', {}, ...rows),
@@ -1339,7 +1488,7 @@ function renderFinance() {
           `💸 صرف رواتب ${periodLabel(fin.period)}${keeper ? ` (يُعدّها ${keeper.name})` : ''}`)));
   } else if (finTab === 'moves') {
     const list = [...fin.adjustments].reverse();
-    body.replaceChildren(list.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
+    fill(body, list.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
       h('thead', {}, h('tr', {}, ...['التاريخ', 'الموظف', 'النوع', 'المبلغ', 'السبب', 'بواسطة', 'الحالة'].map((x) => h('th', {}, x)))),
       h('tbody', {}, ...list.map((a) => h('tr', {},
         h('td', {}, new Date(a.at).toLocaleDateString('ar')),
@@ -1369,7 +1518,7 @@ function renderFinance() {
       h('td', {}, new Date(l.at).toLocaleDateString('ar')),
       h('td', {}, l.type === 'income' ? 'إيراد' : 'مصروف'), h('td', {}, l.category), h('td', {}, l.note || '—'),
       h('td', { class: `num ${l.type === 'income' ? 'plus' : 'minus'}` }, (l.type === 'income' ? '+' : '−') + fmt(l.amount))));
-    body.replaceChildren(form,
+    fill(body, form,
       h('p', { class: 'muted' }, `الرصيد الافتتاحي ${money(fin.openingBalance)} · الرصيد الحالي ${money(balance(state))}`),
       rows.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
         h('thead', {}, h('tr', {}, ...['التاريخ', 'النوع', 'البند', 'ملاحظة', 'المبلغ'].map((x) => h('th', {}, x)))),
@@ -1394,12 +1543,13 @@ function renderFinance() {
     field('الرصيد الافتتاحي', 'fs-ob', fin.openingBalance, { type: 'number', min: '0', step: 'any' }),
     field('معامل العمل الإضافي', 'fs-ot', fin.overtimeRate, { type: 'number', min: '1', step: '0.25' }),
     field('ساعات العمل الشهرية', 'fs-hrs', fin.monthlyHours, { type: 'number', min: '1' }),
-    field('مكافأة إنجاز مهمة منخفضة', 'fs-low', fin.taskBonus.low, { type: 'number', min: '0' }),
-    field('مكافأة إنجاز مهمة متوسطة', 'fs-med', fin.taskBonus.medium, { type: 'number', min: '0' }),
-    field('مكافأة إنجاز مهمة عالية', 'fs-high', fin.taskBonus.high, { type: 'number', min: '0' }),
+    field('المكافأة المقترحة لعمل متميز (أولوية منخفضة)', 'fs-low', fin.taskBonus.low, { type: 'number', min: '0' }),
+    field('المكافأة المقترحة لعمل متميز (أولوية متوسطة)', 'fs-med', fin.taskBonus.medium, { type: 'number', min: '0' }),
+    field('المكافأة المقترحة لعمل متميز (أولوية عالية)', 'fs-high', fin.taskBonus.high, { type: 'number', min: '0' }),
     h('button', { class: 'primary', type: 'submit' }, 'حفظ'));
-    body.replaceChildren(form, h('p', { class: 'muted' },
-      'أجر ساعة العمل الإضافي = الراتب الأساسي ÷ ساعات العمل الشهرية × المعامل. مكافأة الإنجاز تُضاف تلقائياً عند اعتماد المهمة، وتُصرف مع راتب الشهر.'));
+    fill(body, form, h('p', { class: 'muted' },
+      'أجر ساعة العمل الإضافي = الراتب الأساسي ÷ ساعات العمل الشهرية × المعامل. ' +
+      'لا تُصرف أي مكافأة تلقائياً: المدير يرشّح صاحب العمل المتميز بالمبلغ المقترح أعلاه، ثم يمر الطلب على الموارد البشرية والمالية والمدير التنفيذي، ولا يُسجَّل في الرواتب إلا بموافقتك.'));
   }
 }
 
@@ -1439,7 +1589,7 @@ async function payPayroll() {
 }
 
 function openAdjust(empId) {
-  $('#adj-emp').replaceChildren(...[...state.employees].sort(byRank).map((e) => h('option', { value: e.id, selected: e.id === empId }, `${e.name} — ${money(e.salary)}`)));
+  fill($('#adj-emp'), ...[...state.employees].sort(byRank).map((e) => h('option', { value: e.id, selected: e.id === empId }, `${e.name} — ${money(e.salary)}`)));
   $('#adjust-form').reset();
   if (empId) $('#adj-emp').value = empId;
   updateAdjustPreview();
@@ -1539,6 +1689,7 @@ document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('cli
 // ------------------------------------------------------------ boot
 function refresh() {
   renderHeader();
+  renderApprovalsBadge();
   renderRoster();
   for (const e of state.employees) office.updateEmployee(e, titleFor(e));
   for (let k = 0; k < PRIVATE_OFFICES; k++) {
@@ -1588,6 +1739,7 @@ connectCloud().then(async (c) => {
       saveState(state);
     }
     cloud = c;
+    processBonusQueue();
     if (!remote || migrated) cloud.save(state); // first visit uploads; a one-time update is stored
     setSync('saved');
   } catch {
@@ -1608,6 +1760,9 @@ setInterval(() => {
     setTimeout(() => { if (e.status === 'idle' && bubbles.get(e.id) === '☕') setStatus(e, 'idle'); }, 30000);
   }
 }, 12000);
+
+renderApprovalsBadge();
+setTimeout(() => processBonusQueue(), 4000); // resume requests left mid-review
 
 backendStatus().then((s) => {
   const pill = $('#ai-mode');

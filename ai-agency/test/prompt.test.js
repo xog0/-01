@@ -87,3 +87,10 @@ test('the agency portfolio reaches the prompt and is length-checked', () => {
   assert.match(buildSystemPrompt(req), /مشاريع الوكالة الجارية مع العملاء: بيت الزعتر/);
   assert.throws(() => validateChatRequest(base({ company: { name: 'آفاق', portfolio: 'x'.repeat(1300) } })), ValidationError);
 });
+
+test('reviews can recommend a bonus, and bonus reviewers answer in JSON without raising the amount', () => {
+  assert.match(buildSystemPrompt(validateChatRequest(base({ mode: 'review' }))), /"bonus":true أو false/);
+  const sys = buildSystemPrompt(validateChatRequest(base({ mode: 'bonus' })));
+  assert.match(sys, /"decision":"approve أو reject"/);
+  assert.match(sys, /لا ترفع المبلغ/);
+});

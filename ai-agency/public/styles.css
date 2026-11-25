@@ -254,6 +254,18 @@ table.fin tfoot td { font-weight: 700; }
 .project .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .clients-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 
+/* Approvals */
+.count { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; margin-inline-start: 4px;
+  border-radius: 99px; background: var(--danger); color: #fff; font-size: 12px; font-weight: 700; }
+.trail { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; border-inline-start: 2px solid var(--line); padding-inline-start: 10px; }
+.trail .step { font-size: 13px; }
+.trail .step small { color: var(--muted); }
+.trail .step p { margin: 2px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+.trail .step.waiting b { color: var(--warn); }
+.trail .step.reject b { color: #ff9db3; }
+.trail .step.skipped { opacity: 0.6; }
+label.grow { flex: 1; min-width: 120px; }
+
 /* Dialogs */
 dialog {
   border: 1px solid var(--line); border-radius: 18px; padding: 20px;
