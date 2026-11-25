@@ -765,6 +765,28 @@ export function createOffice(container, { onSelect } = {}) {
     a.label.classList.toggle('flagged', Boolean(text));
   }
 
+  // Someone on leave: their chair stands empty and their screen is off.
+  function setAway(id, away) {
+    const a = actors.get(id);
+    if (!a || Boolean(a.away) === away) return;
+    a.away = away;
+    a.group.visible = !away;
+    a.labelObj.visible = !away;
+    a.label.style.display = away ? 'none' : '';
+    deskScreens[a.deskIndex].material.emissiveIntensity = away ? 0.15 : 1.1;
+    if (away) {
+      a.path = [];
+      a.holding = false;
+      a.visiting = null;
+      a.location = 'away';
+    } else {
+      a.group.position.copy(a.seat);
+      a.facing = seatFace(a);
+      a.location = 'desk';
+      a.sitting = true;
+    }
+  }
+
   function setSelected(id) {
     for (const [eid, a] of actors) a.label.classList.toggle('selected', eid === id);
   }
@@ -1079,6 +1101,6 @@ export function createOffice(container, { onSelect } = {}) {
 
   return {
     addEmployee, updateEmployee, removeEmployee, setStatus, setSelected, sendToMeeting, returnToDesks,
-    focusOn, setCompanyName, setDeskLit, setOfficeLabel, takeBreak, visit, recall, whereIs, pan, zoom, setFlag,
+    focusOn, setCompanyName, setDeskLit, setOfficeLabel, takeBreak, visit, recall, whereIs, pan, zoom, setFlag, setAway,
   };
 }

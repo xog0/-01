@@ -273,6 +273,17 @@ table.fin tfoot td { font-weight: 700; }
 .project .money.gain { color: var(--ok); }
 .project .money.loss { color: #ff9db3; }
 .project .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip.away { opacity: 0.6; }
+.dot.away { background: #94a3b8; }
+.notice { padding: 8px 12px; border-radius: 10px; background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.35); color: #fde68a; font-size: 13px; line-height: 1.7; margin: 0 0 8px; }
+.iv-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.iv-card { padding: 14px; border-radius: 14px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.iv-card.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.iv-card h3 { margin: 0; font-size: 16px; }
+.iv-card p { margin: 0; font-size: 13px; line-height: 1.7; }
+.iv-card label { font-size: 12px; }
+.iv-card .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
+#iv-chat h3 { font-size: 15px; margin: 4px 0 8px; }
 .lib-filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; padding-bottom: 6px; }
 .lib-group { margin-bottom: 16px; }
 .lib-group h3 { font-size: 14px; margin: 4px 0 8px; }

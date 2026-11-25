@@ -7,6 +7,8 @@
 //   core/finance/books    settings, payroll adjustments and payroll runs
 //   core/finance/ledger   income and expense entries
 //   core/crm/book         clients and projects
+//   core/hr/people        leave records and daily attendance
+//   core/hr/hiring        the open hiring round with its interviews
 // Writes are diffed against what was last stored, so only changed
 // documents are sent, one write at a time per document.
 
@@ -37,6 +39,10 @@ function splitState(state) {
     docs.set('finance/approvals', { requests: state.bonusRequests || [] });
   }
   if (state.clients || state.projects) docs.set('crm/book', { clients: state.clients || [], projects: state.projects || [] });
+  docs.set('hr/people', { leaves: state.leaves || [], attendance: state.attendance || {} });
+  const round = state.hiring;
+  docs.set('hr/hiring', { round: round ? { ...round, candidates: round.candidates.map((c) => ({ ...c,
+    chat: c.chat.slice(-16).map((m) => ({ ...m, content: m.content.slice(0, 1200) })) })) } : null });
   const byEmp = {};
   for (const ev of state.evaluations || []) (byEmp[ev.empId] ||= []).push(ev);
   for (const [empId, items] of Object.entries(byEmp)) docs.set(`evaluations/${empId}`, { items: items.slice(-6) });
@@ -93,8 +99,8 @@ export async function connectCloud() {
       return null;
     }
     const c = snap.data();
-    const [outputs, chats, meetings, finance, crm, evaluations, clientchats] = await withTimeout(Promise.all(
-      ['outputs', 'chats', 'meetings', 'finance', 'crm', 'evaluations', 'clientchats'].map((name) => core.collection(name).get()),
+    const [outputs, chats, meetings, finance, crm, evaluations, clientchats, hr] = await withTimeout(Promise.all(
+      ['outputs', 'chats', 'meetings', 'finance', 'crm', 'evaluations', 'clientchats', 'hr'].map((name) => core.collection(name).get()),
     ), LOAD_TIMEOUT_MS);
     const byId = (qs) => Object.fromEntries(qs.docs.map((d) => [d.id, d.data()]));
     const out = byId(outputs);
@@ -118,6 +124,10 @@ export async function connectCloud() {
     state.evaluations = Object.values(byId(evaluations)).flatMap((d) => d.items || []).sort((a, b) => a.at - b.at);
     const book = byId(crm).book;
     if (book) Object.assign(state, { clients: book.clients || [], projects: book.projects || [] });
+    const people = byId(hr);
+    state.leaves = people.people?.leaves || [];
+    state.attendance = people.people?.attendance || {};
+    state.hiring = people.hiring?.round || null;
     // Record what is stored now so the first save only sends real changes.
     for (const [key, body] of splitState(state)) written.set(key, JSON.stringify(body));
     for (const d of outputs.docs) written.set(`outputs/${d.id}`, written.get(`outputs/${d.id}`) ?? '?');

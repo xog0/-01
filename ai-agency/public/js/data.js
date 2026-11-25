@@ -298,6 +298,7 @@ export function lookFor(emp) {
 
 /** Age, experience, background and communication style for the AI persona. */
 export function bioFor(emp) {
+  if (emp.bio?.background) return emp.bio; // hired through interviews: the candidate's own story
   if (BIOS[emp.name]) return BIOS[emp.name];
   const h = hashOf(`${emp.name}:${emp.id}`);
   const years = [0, 1, 3, 5, 7, 9, 12, 16, 20][emp.level] ?? 3;
@@ -394,6 +395,9 @@ export function createInitialState() {
     bonusRequests: [],
     evaluations: [],
     clientChats: {},
+    leaves: [],
+    attendance: {},
+    hiring: null,
     migrations: MIGRATIONS.map((m) => m.key), // a fresh agency already has these
   };
   for (const e of STARTING_TEAM) {

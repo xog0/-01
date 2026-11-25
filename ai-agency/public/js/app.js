@@ -21,6 +21,10 @@ import {
   RECOMMENDATIONS, employeeOfMonth, evaluatorOf, lastEvaluation, metricsOf, parseEvaluation, recordEvaluation, teamPerformance,
 } from './performance.js';
 import { invoiceHtml, invoiceNumber, itemsMarkdown, ledgerCsv, libraryItems, statementHtml } from './docs.js';
+import {
+  LEAVE_TYPES, MAX_LEAVE_DAYS, addDays, attendanceOf, dayKey, daysWord, endLeave, grantLeave, leaveBalance, leaveOn, markAttendance,
+  parseCandidates, salaryRange, sampleCandidates, upcomingLeaves,
+} from './hr.js';
 
 // ------------------------------------------------------------ DOM helpers
 const $ = (sel) => document.querySelector(sel);
@@ -110,6 +114,21 @@ const PROJECTS_WORD = ['مشروع واحد', 'مشروعان', 'مشاريع', 
 const TASKS_WORD = ['مهمة واحدة', 'مهمتان', 'مهام', 'مهمة'];
 const project = (id) => state.projects?.find((p) => p.id === id) || null;
 const clientOf = (p) => state.clients?.find((c) => c.id === p?.clientId) || null;
+// ---- leave: who is away today, and who stands in for a manager on leave
+const awayNow = (e) => (e ? leaveOn(state, e.id, dayKey()) : null);
+const awayNote = (e) => { const l = awayNow(e); return l ? `${e.name} في إجازة ${LEAVE_TYPES[l.type].name} حتى ${l.to}` : ''; };
+const atWork = (list) => list.filter((m) => !awayNow(m));
+function actingManager(e) {
+  const seen = new Set();
+  for (let m = e.managerId ? emp(e.managerId) : null; m && !seen.has(m.id); m = m.managerId ? emp(m.managerId) : null) {
+    seen.add(m.id);
+    if (!awayNow(m)) return m;
+  }
+  return null;
+}
+function syncAway() {
+  for (const e of state.employees) office.setAway(e.id, Boolean(awayNow(e)));
+}
 
 // What someone remembers at work: their last finished tasks and the last
 // note their manager gave them.
@@ -125,6 +144,8 @@ function memoryOf(e) {
   if (live.length) {
     parts.push(`مشاريعك: ${live.map((p) => `${p.name} لـ${clientOf(p)?.name || 'عميل'} (${p.leadId === e.id ? 'أنت قائده' : 'عضو في الفريق'})`).join('، ')}.`);
   }
+  const l = awayNow(e);
+  if (l) parts.unshift(`أنت الآن في إجازة ${LEAVE_TYPES[l.type].name} حتى ${l.to}، وتعود يوم ${addDays(l.to, 1)}. ترد على المالك من إجازتك باختصار.`);
   return parts.join(' ').slice(0, 1100);
 }
 
@@ -188,10 +209,10 @@ function avatar(e) {
 function renderRoster() {
   const r = $('#roster');
   fill(r, ...[...state.employees].sort(byRank).map((e) =>
-    h('button', { class: `chip${e.id === selectedId ? ' selected' : ''}`, onclick: () => selectEmployee(e.id) },
-      h('span', { class: `dot ${e.status || 'idle'}` }),
+    h('button', { class: `chip${e.id === selectedId ? ' selected' : ''}${awayNow(e) ? ' away' : ''}`, title: awayNote(e) || undefined, onclick: () => selectEmployee(e.id) },
+      h('span', { class: `dot ${awayNow(e) ? 'away' : e.status || 'idle'}` }),
       avatar(e),
-      h('span', {}, e.name, h('small', {}, titleFor(e))))));
+      h('span', {}, awayNow(e) ? `🌴 ${e.name}` : e.name, h('small', {}, awayNow(e) ? `في إجازة حتى ${awayNow(e).to}` : titleFor(e))))));
 }
 
 // ------------------------------------------------------------ side panel
@@ -240,6 +261,7 @@ function renderChat(e) {
     items.push(h('div', { class: 'empty' }, `ابدأ محادثة مع ${e.name}. اسأله عن عمله، أو اطلب رأيه، أو كلّفه بشيء.`));
   }
   if (busy.has(`chat:${e.id}`)) items.push(h('div', { class: 'msg assistant typing' }, `${e.name} يكتب…`));
+  if (awayNow(e)) items.unshift(h('div', { class: 'notice' }, `🌴 ${awayNote(e)}. لا تُسند إليه مهام حتى يعود، ويرد عليك باختصار.`));
   fill(log, ...items);
   log.scrollTop = log.scrollHeight;
 }
@@ -367,6 +389,7 @@ function runWhenFree(taskId, tries = 0) {
   const t = state.tasks.find((x) => x.id === taskId);
   const e = t && emp(t.empId);
   if (!t || !e || t.status !== 'todo') return;
+  if (awayNow(e)) { toast(`${awayNote(e)}. بقيت المهمة في قائمته، أو انقلها لزميل من لوحة المهام.`); return; }
   if (busy.has(e.id) || meeting?.attendees.includes(e.id)) {
     if (tries < 400) setTimeout(() => runWhenFree(taskId, tries + 1), 3000);
     return;
@@ -427,6 +450,7 @@ async function runTask(id) {
   if (!t || !e || t.status !== 'todo') return;
   if (busy.has(e.id)) return toast(`${e.name} مشغول بمهمة أخرى الآن`);
   if (meeting?.attendees.includes(e.id)) return toast(`${e.name} في اجتماع الآن`);
+  if (awayNow(e)) return toast(awayNote(e));
   busy.add(e.id);
   await office.recall(e.id);
   t.status = 'doing';
@@ -434,7 +458,7 @@ async function runTask(id) {
   setStatus(e, 'working', `⌨️ ${t.title}`);
   office.setDeskLit(e.desk, true);
   refresh();
-  const mgr = e.managerId ? emp(e.managerId) : null;
+  const mgr = actingManager(e); // the next manager up stands in for one on leave
   try {
     for (let round = 0; ; round++) {
       t.output = await ask(e, 'task', [{ role: 'user', content: taskPrompt(t, mgr) }]);
@@ -581,6 +605,11 @@ async function assignProjectTasks(p) {
 async function assignTasks(manager, members, perMember, focus, proj, { urgent = false } = {}) {
   const key = `assign:${manager.id}`;
   if (busy.has(key)) return;
+  if (awayNow(manager)) return toast(`${awayNote(manager)}. اطلب التوزيع من مديره أو أضف المهام من لوحة المهام.`);
+  const away = members.filter(awayNow);
+  members = atWork(members);
+  if (away.length) toast(`لن يُكلَّف ${away.map((m) => m.name).join('، ')} لأنه في إجازة`);
+  if (!members.length) return;
   busy.add(key);
   const prev = manager.status;
   setStatus(manager, 'talking', '📋 توزّع المهام');
@@ -627,14 +656,17 @@ async function startWorkday() {
   workdayRunning = true;
   $('#btn-workday').disabled = true;
   $('#btn-workday').textContent = '⏳ الفريق يعمل…';
-  if (!state.tasks.some((t) => t.status === 'todo' && !meeting?.attendees.includes(t.empId))) {
+  if (!state.tasks.some((t) => t.status === 'todo' && !meeting?.attendees.includes(t.empId) && !awayNow(emp(t.empId)))) {
     workdayRunning = false;
     $('#btn-workday').disabled = false;
     $('#btn-workday').textContent = '▶ ابدأ يوم العمل';
     return toast('لا توجد مهام في الانتظار. اطلب من سارة تكليف الفريق، أو أضف مهاماً من لوحة المهام.');
   }
   const order = { high: 0, medium: 1, low: 2 };
-  await Promise.all(state.employees.map(async (e) => {
+  syncAway();
+  markAttendance(state, dayKey(), atWork(state.employees).map((e) => e.id));
+  save();
+  await Promise.all(atWork(state.employees).map(async (e) => {
     for (;;) {
       if (meeting?.attendees.includes(e.id)) return;
       const next = state.tasks.filter((t) => t.empId === e.id && t.status === 'todo')
@@ -792,6 +824,306 @@ $('#lib-download-all').addEventListener('click', () => {
   if (items.length) saveFile(`مكتبة الأعمال ${today()}`, 'md', libraryMd(items));
 });
 
+// ------------------------------------------------------------ leave and attendance
+let leaveFor = null;
+function openLeave(e) {
+  leaveFor = e.id;
+  $('#leave-form').reset();
+  $('#leave-title').textContent = `🌴 إجازة ${e.name}`;
+  fill($('#leave-type'), Object.entries(LEAVE_TYPES).map(([k, t]) => h('option', { value: k }, `إجازة ${t.name}`)));
+  $('#leave-from').min = dayKey();
+  $('#leave-from').value = dayKey();
+  $('#leave-days').max = String(MAX_LEAVE_DAYS);
+  const open = state.tasks.filter((t) => t.empId === e.id && t.status === 'todo');
+  const others = atWork(state.employees.filter((x) => x.id !== e.id)).sort((a, b) => (b.dept === e.dept) - (a.dept === e.dept) || byRank(a, b));
+  fill($('#leave-handover'), h('option', { value: '' }, open.length ? `تبقى معه (${countOf(open.length, TASKS_WORD)})` : 'لا توجد مهام مفتوحة'),
+    open.length ? others.map((x) => h('option', { value: x.id }, `تُنقل إلى ${x.name} — ${titleFor(x)}`)) : []);
+  $('#leave-handover').disabled = !open.length;
+  updateLeavePreview();
+  $('#dlg-leave').showModal();
+}
+function updateLeavePreview() {
+  const e = emp(leaveFor);
+  if (!e) return;
+  const type = $('#leave-type').value;
+  const days = Math.floor(Number($('#leave-days').value)) || 0;
+  const from = $('#leave-from').value;
+  const bal = leaveBalance(state, e.id, type, (from || dayKey()).slice(0, 4));
+  const parts = [];
+  if (/^\d{4}-\d{2}-\d{2}$/.test(from) && days >= 1 && days <= MAX_LEAVE_DAYS) parts.push(`من ${from} إلى ${addDays(from, days - 1)}، ويعود ${addDays(from, days)}`);
+  if (bal.quota !== null) parts.push(`استخدم هذه السنة ${bal.used} من ${bal.quota} يوماً، والمتبقي ${daysWord(bal.left)}`);
+  else if (days >= 1) parts.push(`يُخصم ${money(Math.round((e.salary / 30) * days * 100) / 100)} من راتب الشهر المفتوح (أجر يوم عن كل يوم)`);
+  $('#leave-preview').textContent = parts.join(' · ');
+}
+['#leave-type', '#leave-from', '#leave-days'].forEach((sel) => $(sel).addEventListener('input', updateLeavePreview));
+$('#dlg-leave').addEventListener('close', () => {
+  if ($('#dlg-leave').returnValue !== 'ok') return;
+  const e = emp(leaveFor);
+  if (!e) return;
+  try {
+    const l = grantLeave(state, { empId: e.id, type: $('#leave-type').value, from: $('#leave-from').value,
+      days: Number($('#leave-days').value), reason: $('#leave-reason').value }, { newId });
+    const to = emp($('#leave-handover').value);
+    let moved = 0;
+    if (to) for (const t of state.tasks) if (t.empId === e.id && t.status === 'todo') { t.empId = to.id; moved++; }
+    save();
+    refresh();
+    if ($('#dlg-performance').open) renderPerformance();
+    toast(`🌴 ${e.name}: إجازة ${LEAVE_TYPES[l.type].name} ${daysWord(l.days)} من ${l.from}${moved ? ` · نُقلت ${countOf(moved, TASKS_WORD)} إلى ${to.name}` : ''}`);
+  } catch (err) { toast(err.message); }
+});
+async function bringBack(l) {
+  const e = emp(l.empId);
+  const upcoming = l.from > dayKey();
+  if (!(await confirmBox(upcoming ? `إلغاء إجازة ${e?.name || ''} (${l.from} — ${l.to})؟` : `إنهاء إجازة ${e?.name || ''} اليوم وعودته إلى مكتبه؟`, upcoming ? 'إلغاء الإجازة' : 'إنهاء الإجازة'))) return;
+  try {
+    const r = endLeave(state, l.id);
+    save();
+    refresh();
+    if ($('#dlg-performance').open) renderPerformance();
+    toast(r.cancelled ? `أُلغيت إجازة ${e?.name || ''}` : `👋 عاد ${e?.name || ''} إلى مكتبه`);
+  } catch (err) { toast(err.message); }
+}
+function leaveCard(e) {
+  const now = awayNow(e);
+  const coming = upcomingLeaves(state).filter((l) => l.empId === e.id);
+  const att = attendanceOf(state, e.id);
+  const year = dayKey().slice(0, 4);
+  return h('div', { class: 'card' },
+    h('h3', {}, '🌴 الإجازات والحضور'),
+    now ? h('p', { class: 'notice' }, `${awayNote(e)}، ويعود ${addDays(now.to, 1)}.`) : null,
+    h('p', { class: 'muted' }, `رصيد ${year}: ` + ['annual', 'sick', 'emergency'].map((k) => {
+      const b = leaveBalance(state, e.id, k, year);
+      return `${LEAVE_TYPES[k].name} ${b.used} من ${b.quota}`;
+    }).join(' · ')),
+    h('p', { class: 'muted' }, att.workdays
+      ? `آخر 30 يوماً: ${att.workdays} يوم عمل · حضر ${att.present} · إجازة ${att.leave}`
+      : 'لم يُسجَّل حضور بعد. يُسجَّل حضور الفريق كلما بدأت يوم العمل.'),
+    ...coming.map((l) => h('div', { class: 'row', style: 'justify-content: space-between' },
+      h('span', {}, `${LEAVE_TYPES[l.type].name}: ${l.from} ← ${l.to} (${daysWord(l.days)})${l.reason ? ` · ${l.reason}` : ''}`),
+      h('button', { class: 'small', onclick: () => bringBack(l) }, l.from > dayKey() ? 'إلغاء' : '↩️ إنهاؤها اليوم'))),
+    h('button', { onclick: () => openLeave(e) }, '🌴 منح إجازة'));
+}
+function renderAttendance() {
+  const today = dayKey();
+  const rec = state.attendance?.[today];
+  const away = state.employees.filter(awayNow);
+  const coming = upcomingLeaves(state).filter((l) => l.from > today);
+  fill($('#perf-body'),
+    h('div', { class: 'tiles' },
+      tile('في المكتب اليوم', String(state.employees.length - away.length), 'good'),
+      tile('في إجازة اليوم', String(away.length), away.length ? 'bad' : ''),
+      tile('إجازات قادمة', String(coming.length)),
+      tile('حضور اليوم', rec ? `${rec.present.length} حضروا` : 'لم يبدأ يوم العمل')),
+    h('p', { class: 'muted' },
+      `الإجازة السنوية ${LEAVE_TYPES.annual.quota} يوماً في السنة، والمرضية حتى ${LEAVE_TYPES.sick.quota}، والاضطرارية ${LEAVE_TYPES.emergency.quota} أيام. ` +
+      'الإجازة بدون راتب يُخصم عنها أجر يوم (الراتب ÷ 30) عن كل يوم. من في إجازة لا تُسند إليه مهام ولا يحضر الاجتماعات، ويظهر مكتبه فارغاً، ' +
+      'ويراجع أعمال فريقه مديره الأعلى حتى يعود. يُسجَّل الحضور كلما بدأت يوم العمل.'),
+    h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
+      h('thead', {}, h('tr', {}, ...['الموظف', 'اليوم', 'أيام العمل (30 يوماً)', 'حضر', 'سنوية', 'مرضية', 'اضطرارية', 'الإجازة القادمة', ''].map((x) => h('th', {}, x)))),
+      h('tbody', {}, ...[...state.employees].sort(byRank).map((e) => {
+        const a = attendanceOf(state, e.id);
+        const now = awayNow(e);
+        const next = upcomingLeaves(state).find((l) => l.empId === e.id);
+        const bal = (k) => { const b = leaveBalance(state, e.id, k, today.slice(0, 4)); return `${b.used}/${b.quota}`; };
+        return h('tr', {},
+          h('td', {}, e.name),
+          h('td', {}, now ? `🌴 ${LEAVE_TYPES[now.type].name}` : rec?.present.includes(e.id) ? '✅ حاضر' : '—'),
+          h('td', { class: 'num' }, String(a.workdays)), h('td', { class: 'num' }, String(a.present)),
+          h('td', { class: 'num' }, bal('annual')), h('td', { class: 'num' }, bal('sick')), h('td', { class: 'num' }, bal('emergency')),
+          h('td', {}, next ? `${next.from} ← ${next.to}` : '—'),
+          h('td', {}, h('div', { class: 'row' },
+            h('button', { class: 'small', onclick: () => openLeave(e) }, '🌴 إجازة'),
+            next ? h('button', { class: 'small', onclick: () => bringBack(next) }, next.from > today ? 'إلغاء' : '↩️ عودة') : null)));
+      })))));
+}
+document.querySelectorAll('[data-perf]').forEach((b) => b.addEventListener('click', () => { perfTab = b.dataset.perf; renderPerformance(); }));
+
+// ------------------------------------------------------------ hiring through interviews
+// The HR manager (or else the role's future manager) shortlists three people; the
+// owner interviews them in chat, sets the salary offer and hires one.
+const hrHead = () => state.employees.filter((x) => x.dept === 'hr' && x.level >= MANAGER_LEVEL).sort(byRank)[0] || null;
+const QUESTIONS_WORD = ['سؤال واحد', 'سؤالان', 'أسئلة', 'سؤالاً'];
+let ivActive = null; // the candidate being interviewed
+
+async function startHiringRound(spec) {
+  if (state.hiring) { openInterviews(); return; }
+  if (busy.has('hiring')) return;
+  if (freeSeat(state, spec.level) === undefined) { toast('لا يوجد مكتب شاغر لهذه الوظيفة.'); return; }
+  const recruiter = atWork([hrHead(), emp(spec.managerId), topManager()].filter(Boolean))[0] || null;
+  const title = titleFor({ dept: spec.dept, level: spec.level });
+  const base = defaultSalary(spec.level);
+  const years = [0, 1, 3, 5, 7, 9, 12, 16, 20][spec.level] ?? 3;
+  const [lo, hi] = salaryRange(base);
+  const taken = state.employees.map((e) => e.name);
+  busy.add('hiring');
+  let list = null;
+  if (recruiter) {
+    const prev = recruiter.status;
+    setStatus(recruiter, 'working', '🔎 يبحث عن مرشحين');
+    toast(`🔎 ${recruiter.name} يبحث عن مرشحين لوظيفة ${title}…`);
+    try {
+      const reply = await ask(recruiter, 'candidates', [{ role: 'user', content:
+        `الوظيفة الشاغرة: ${title}\nالقسم: ${DEPARTMENTS[spec.dept].name} (المهارات: ${DEPARTMENTS[spec.dept].skills})\n` +
+        `المستوى: ${LADDER[spec.level].name}، وخبرة معتادة نحو ${years} ${years > 10 ? 'سنة' : 'سنوات'}\n` +
+        `المدير المباشر: ${emp(spec.managerId)?.name || 'مالك الوكالة'}\n` +
+        `نطاق الراتب: من ${lo} إلى ${hi} ${state.finance.currency} شهرياً (المعتاد ${base})\n` +
+        `أسماء الموظفين الحاليين، فلا تكررها: ${taken.join('، ')}`.slice(0, 5800) }]);
+      list = parseCandidates(reply, { base, years, taken });
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      setStatus(recruiter, prev === 'working' ? 'idle' : prev || 'idle');
+    }
+  }
+  if (!list?.candidates.length) list = sampleCandidates({ deptName: DEPARTMENTS[spec.dept].name, years, base, taken, seed: state.nextId });
+  busy.delete('hiring');
+  state.hiring = {
+    id: newId(state, 'h'), ...spec, title, by: recruiter?.id || null, at: Date.now(), note: list.note || '',
+    candidates: list.candidates.map((c, i) => ({ ...c, id: `c${i + 1}`, offer: c.salary, chat: [] })),
+  };
+  ivActive = null;
+  save();
+  refresh();
+  openInterviews();
+}
+
+function openInterviews() {
+  if (!state.hiring) return;
+  renderInterviews();
+  if (!$('#dlg-interviews').open) $('#dlg-interviews').showModal();
+}
+
+function candidatePersona(c, r) {
+  const mgr = emp(r.managerId);
+  return {
+    name: c.name, title: r.title, level: LADDER[r.level].name, department: DEPARTMENTS[r.dept].name, skills: DEPARTMENTS[r.dept].skills,
+    personality: [c.personality, c.style && `أسلوبك في العمل: ${c.style}`, c.strengths && `نقاط قوتك: ${c.strengths}`, c.weakness && `نقطة ضعفك: ${c.weakness}`]
+      .filter(Boolean).join(' ').slice(0, 1100),
+    bio: `عمرك ${c.age} سنة، وخبرتك ${c.years} ${c.years > 10 ? 'سنة' : 'سنوات'}. ${c.background}`.slice(0, 1100),
+    memory: (`الراتب الذي تطلبه ${c.salary} ${state.finance.currency} شهرياً. المدير المباشر للوظيفة: ${mgr ? `${mgr.name} (${titleFor(mgr)})` : 'مالك الوكالة'}.` +
+      (emp(r.by) ? ` رشّحك ${emp(r.by).name} من الوكالة.` : '')).slice(0, 1100),
+    duties: 'candidate',
+  };
+}
+
+function renderInterviews() {
+  const r = state.hiring;
+  if (!r) return;
+  const rec = emp(r.by);
+  const [lo] = salaryRange(defaultSalary(r.level));
+  $('#iv-title').textContent = `🎤 مقابلات: ${r.title}`;
+  $('#iv-sub').textContent = `${DEPARTMENTS[r.dept].name} · المدير المباشر: ${emp(r.managerId)?.name || 'أنت'} · ${rec ? `رشّحهم ${rec.name} (${titleFor(rec)})` : 'قائمة مرشحين جاهزة'}`;
+  fill($('#iv-note'), r.note ? h('p', { class: 'notice' }, h('b', {}, `${rec?.name || 'الموارد البشرية'}: `), r.note) : null);
+  fill($('#iv-cards'), r.candidates.map((c) => {
+    const asked = c.chat.filter((m) => m.role === 'user').length;
+    return h('article', { class: `iv-card${ivActive === c.id ? ' active' : ''}` },
+      h('div', { class: 'row', style: 'justify-content: space-between' },
+        h('h3', {}, c.name), h('span', { class: 'muted' }, `${c.gender === 'f' ? 'أنثى' : 'ذكر'} · ${c.age} سنة · خبرة ${c.years}`)),
+      c.background ? h('p', {}, c.background) : null,
+      c.style ? h('p', { class: 'muted' }, `الأسلوب: ${c.style}`) : null,
+      c.strengths ? h('p', {}, `💪 ${c.strengths}`) : null,
+      c.weakness ? h('p', {}, `⚠️ ${c.weakness}`) : null,
+      h('p', { class: 'muted' }, `يطلب ${money(c.salary)} · ${asked ? `سألته ${countOf(asked, QUESTIONS_WORD)}` : 'لم تقابله بعد'}`),
+      h('label', {}, 'الراتب المعروض', h('input', {
+        type: 'number', min: String(lo), step: 'any', value: String(c.offer), 'aria-label': `الراتب المعروض على ${c.name}`,
+        onchange: (ev) => {
+          const v = Number(ev.target.value);
+          if (!(v >= lo)) { ev.target.value = String(c.offer); toast(`أقل راتب لهذه الوظيفة ${money(lo)}`); return; }
+          c.offer = Math.round(v);
+          save();
+        },
+      })),
+      h('div', { class: 'actions' },
+        h('button', { class: 'small', onclick: () => { ivActive = c.id; renderInterviews(); $('#iv-input').focus(); } }, '💬 مقابلة'),
+        h('button', { class: 'small primary', onclick: () => hireCandidate(c) }, '✅ توظيف'),
+        r.candidates.length > 1 ? h('button', { class: 'small', onclick: () => dropCandidate(c) }, '✖ استبعاد') : null));
+  }));
+  const c = r.candidates.find((x) => x.id === ivActive);
+  $('#iv-chat').hidden = !c;
+  if (!c) return;
+  $('#iv-chat-title').textContent = `💬 مقابلة مع ${c.name}`;
+  const log = $('#iv-log');
+  fill(log,
+    c.chat.length ? c.chat.map((m) => h('div', { class: `msg ${m.role}` }, h('span', { class: 'who' }, m.role === 'user' ? 'أنت' : c.name), richText(m.content)))
+      : h('div', { class: 'empty' }, `اسأل ${c.name} عن خبرته، أو كيف يتصرف في موقف من العمل، أو عن الراتب.`),
+    busy.has(`iv:${c.id}`) ? h('div', { class: 'msg assistant typing' }, `${c.name} يكتب…`) : null);
+  log.scrollTop = log.scrollHeight;
+}
+
+$('#iv-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const r = state.hiring;
+  const c = r?.candidates.find((x) => x.id === ivActive);
+  const text = $('#iv-input').value.trim();
+  if (!c || !text || busy.has(`iv:${c.id}`)) return;
+  $('#iv-input').value = '';
+  c.chat.push({ role: 'user', content: text.slice(0, 2000) });
+  busy.add(`iv:${c.id}`);
+  renderInterviews();
+  try {
+    const reply = await askEmployee({ mode: 'chat', persona: candidatePersona(c, r),
+      company: { name: state.company.name, about: state.company.about || '' }, messages: c.chat.slice(-20) });
+    c.chat.push({ role: 'assistant', content: reply });
+  } catch (err) {
+    c.chat.pop();
+    $('#iv-input').value = text;
+    toast(err.message);
+  } finally {
+    busy.delete(`iv:${c.id}`);
+    c.chat = c.chat.slice(-24);
+    save();
+    if (state.hiring === r) renderInterviews();
+  }
+});
+$('#iv-input').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter' && !ev.shiftKey) {
+    ev.preventDefault();
+    $('#iv-form').requestSubmit();
+  }
+});
+
+async function hireCandidate(c) {
+  const r = state.hiring;
+  if (!r || !(await confirmBox(`توظيف ${c.name} بمسمى «${r.title}» براتب ${money(c.offer)} شهرياً؟`, 'توظيف'))) return;
+  const e = hireEmployee({
+    name: c.name, gender: c.gender, dept: r.dept, level: r.level, managerId: emp(r.managerId) ? r.managerId : null,
+    salary: c.offer, personality: c.personality || c.style || '',
+    bio: { age: c.age, years: c.years, background: c.background || 'انضم إلى الوكالة بعد مقابلة مع المالك.', style: c.style || 'مهني وواضح.' },
+    takeover: r.takeover ? state.employees.filter((x) => (x.managerId || null) === (r.managerId || null)) : [],
+  });
+  if (!e) return;
+  // The interview is where they first met: it stays in their chat history.
+  if (c.chat.length) state.chats[e.id] = [...c.chat];
+  state.hiring = null;
+  ivActive = null;
+  $('#dlg-interviews').close();
+  save();
+  refresh();
+  selectEmployee(e.id);
+  toast(`👋 انضم ${e.name} إلى الفريق بعد المقابلة!`);
+}
+
+function dropCandidate(c) {
+  const r = state.hiring;
+  if (!r) return;
+  r.candidates = r.candidates.filter((x) => x !== c);
+  if (ivActive === c.id) ivActive = null;
+  save();
+  renderInterviews();
+  toast(`استُبعد ${c.name}`);
+}
+
+$('#iv-cancel').addEventListener('click', async () => {
+  if (!state.hiring || !(await confirmBox('إلغاء جولة التوظيف واستبعاد كل المرشحين؟', 'إلغاء الجولة'))) return;
+  state.hiring = null;
+  ivActive = null;
+  $('#dlg-interviews').close();
+  save();
+  refresh();
+  toast('أُلغيت جولة التوظيف');
+});
+
 // ------------------------------------------------------------ invoices and statements
 const isClientPayment = (l) => l.type === 'income' && (l.projectId || l.category === 'دفعة عميل');
 const invoiceButton = (l, label = '🧾 فاتورة') => dlButton(label, () => [`فاتورة ${invoiceNumber(l)}`, 'html', invoiceHtml(state, l)]);
@@ -827,6 +1159,7 @@ function renderProfile(e) {
         h('dt', {}, 'الخلفية'), h('dd', {}, bioFor(e).background),
         h('dt', {}, 'أسلوبه'), h('dd', {}, bioFor(e).style))),
     performanceCard(e),
+    leaveCard(e),
     h('div', { class: 'card' },
       h('h3', {}, 'التقدم الوظيفي'),
       h('div', { class: 'progress' }, h('i', { style: `width:${pct}%` })),
@@ -945,6 +1278,8 @@ function fillHireForm() {
       return h('option', { value: p.key, disabled: Boolean(holder) }, holder ? `${p.name} (يشغله ${holder.name})` : p.name);
     }));
   updateHirePreview();
+  $('#hire-interview').textContent = state.hiring ? '🎤 جولة المقابلات المفتوحة' : '🎤 مقابلات: رشّحوا لي 3 مرشحين';
+  $('#hire-interview').disabled = busy.has('hiring');
 }
 const positionHolder = (p) => state.employees.find((x) => x.dept === p.dept && x.level === p.level && !x.customTitle);
 $('#hire-position').addEventListener('change', () => {
@@ -985,23 +1320,42 @@ $('#hire-salary').addEventListener('input', () => { $('#hire-salary').dataset.to
   updateHirePreview();
 }));
 $('#btn-hire').addEventListener('click', () => { fillHireForm(); $('#dlg-hire').showModal(); });
-$('#dlg-hire').addEventListener('close', () => {
-  if ($('#dlg-hire').returnValue !== 'ok') return;
-  const name = $('#hire-name').value.trim();
-  const level = Number($('#hire-level').value);
+function hireEmployee({ name, gender, dept, level, managerId, salary, personality = '', bio = null, takeover = [] }) {
   const desk = freeSeat(state, level);
-  if (!name) return;
-  if (desk === undefined) return toast(level >= MANAGER_LEVEL ? 'لا يوجد مكتب شاغر.' : 'لا يوجد مكتب شاغر في المساحة المفتوحة.');
-  const takeover = $('#hire-takeover').checked ? takeoverCandidates() : [];
+  if (desk === undefined) {
+    toast(level >= MANAGER_LEVEL ? 'لا يوجد مكتب شاغر.' : 'لا يوجد مكتب شاغر في المساحة المفتوحة.');
+    return null;
+  }
   const e = {
-    id: newId(state, 'e'), name, gender: $('#hire-gender').value, dept: $('#hire-dept').value,
-    level, xp: LADDER[level].xp, personality: $('#hire-personality').value.trim(),
-    salary: Number($('#hire-salary').value) > 0 ? Math.round(Number($('#hire-salary').value)) : defaultSalary(level),
-    desk, managerId: $('#hire-manager').value || null, hiredAt: Date.now(), status: 'idle',
+    id: newId(state, 'e'), name, gender, dept, level, xp: LADDER[level].xp, personality,
+    salary: salary > 0 ? Math.round(salary) : defaultSalary(level),
+    desk, managerId: managerId || null, hiredAt: Date.now(), status: 'idle', ...(bio ? { bio } : {}),
   };
   state.employees.push(e);
   for (const x of takeover) x.managerId = e.id;
   office.addEmployee(actorOf(e), titleFor(e));
+  return e;
+}
+$('#dlg-hire').addEventListener('close', () => {
+  const choice = $('#dlg-hire').returnValue;
+  if (choice === 'interview') {
+    const level = Number($('#hire-level').value);
+    const spec = { dept: $('#hire-dept').value, level, managerId: $('#hire-manager').value || null, position: $('#hire-position').value || '',
+      takeover: $('#hire-takeover').checked && takeoverCandidates().length > 0 };
+    $('#hire-form').reset();
+    $('#hire-takeover-row').hidden = true;
+    startHiringRound(spec);
+    return;
+  }
+  if (choice !== 'ok') return;
+  const name = $('#hire-name').value.trim();
+  if (!name) return;
+  const e = hireEmployee({
+    name, gender: $('#hire-gender').value, dept: $('#hire-dept').value, level: Number($('#hire-level').value),
+    managerId: $('#hire-manager').value || null, salary: Number($('#hire-salary').value), personality: $('#hire-personality').value.trim(),
+    takeover: $('#hire-takeover').checked ? takeoverCandidates() : [],
+  });
+  if (!e) return;
   save();
   $('#hire-form').reset();
   $('#hire-takeover-row').hidden = true;
@@ -1085,8 +1439,9 @@ function fillMeetingForm() {
   fill($('#meet-room'), ...Object.entries(ROOMS).map(([k, r]) => h('option', { value: k }, `${r.name} (${r.seats} مقاعد)`)));
   // Preselect the most senior people, few enough to fit the smaller room.
   const fits = Math.min(...Object.values(ROOMS).map((r) => r.seats));
-  fill($('#meet-people'), ...[...state.employees].sort(byRank).map((e, i) =>
-    h('label', { title: titleFor(e) }, h('input', { type: 'checkbox', value: e.id, checked: i < fits, onchange: updateSeatCount }), `${e.name}`)));
+  fill($('#meet-people'), ...atWork([...state.employees].sort(byRank)).map((e, i) =>
+    h('label', { title: titleFor(e) }, h('input', { type: 'checkbox', value: e.id, checked: i < fits, onchange: updateSeatCount }), `${e.name}`)),
+  ...state.employees.filter(awayNow).map((e) => h('label', { class: 'muted', title: awayNote(e) }, h('input', { type: 'checkbox', disabled: true }), `🌴 ${e.name}`)));
   updateSeatCount();
   const hist = state.meetings.slice().reverse();
   $('#meet-history').hidden = !hist.length;
@@ -1324,7 +1679,10 @@ async function evaluateAll() {
   if ($('#dlg-performance').open) renderPerformance();
 }
 
+let perfTab = 'score';
 function renderPerformance() {
+  document.querySelectorAll('[data-perf]').forEach((b) => b.classList.toggle('active', b.dataset.perf === perfTab));
+  if (perfTab === 'attendance') return renderAttendance();
   const rows = teamPerformance(state);
   const eom = employeeOfMonth(state);
   fill($('#perf-body'),
@@ -1427,7 +1785,7 @@ const readyProposals = () => (state.projects || []).filter((p) => p.status === '
 const lateProjects = () => (state.projects || []).filter((p) => isLate(p) && p.lateAck !== p.due);
 const dueForPromotion = () => state.employees.filter((e) => LADDER[e.level + 1] && e.xp >= LADDER[e.level + 1].xp && e.promoAck !== e.level
   && !pendingPromotions().some((ev) => ev.empId === e.id));
-const inboxCount = () => pendingForOwner(state).length + pendingPromotions().length + readyProposals().length + lateProjects().length + dueForPromotion().length;
+const inboxCount = () => (state.hiring ? 1 : 0) + pendingForOwner(state).length + pendingPromotions().length + readyProposals().length + lateProjects().length + dueForPromotion().length;
 function renderApprovalsBadge() {
   const n = inboxCount();
   const badge = $('#approvals-count');
@@ -1504,6 +1862,11 @@ function inboxCard(title, badge, sub, text, actions) {
 
 function otherInboxCards() {
   const cards = [];
+  if (state.hiring) {
+    const r = state.hiring;
+    cards.push(inboxCard(`🎤 مقابلات: ${r.title}`, 'توظيف', `${countOf(r.candidates.length, ['مرشح واحد', 'مرشحان', 'مرشحين', 'مرشحاً'])}${emp(r.by) ? ` · رشّحهم ${emp(r.by).name}` : ''}`,
+      r.note, [['فتح المقابلات', () => { $('#dlg-approvals').close(); openInterviews(); }, 'primary']]));
+  }
   for (const p of readyProposals()) {
     const t = proposalTask(p);
     cards.push(inboxCard(`📝 عرض «${p.name}» جاهز`, 'عرض سعر', `${clientOf(p)?.name} · ${money(p.fee)} · كتبه ${emp(t.empId)?.name || '—'}`,
@@ -2269,6 +2632,7 @@ document.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('cli
 
 // ------------------------------------------------------------ boot
 function refresh() {
+  syncAway();
   renderHeader();
   renderApprovalsBadge();
   const eom = employeeOfMonth(state);
@@ -2299,6 +2663,7 @@ function applyState(next) {
 state.employees.forEach((e) => office.addEmployee(actorOf(e), titleFor(e)));
 refresh();
 saveState(state);
+setInterval(() => { if (state.employees.some((e) => Boolean(awayNow(e)) !== (office.whereIs(e.id) === 'away'))) refresh(); }, 60_000); // leave starts or ends at midnight
 
 const SYNC_LABELS = { loading: '☁️ جارٍ التحميل…', saving: '☁️ جارٍ الحفظ…', saved: '☁️ محفوظ', error: '⚠️ لم يُحفظ', offline: '⚠️ السحابة غير متاحة' };
 function setSync(status, detail) {

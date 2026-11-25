@@ -46,7 +46,7 @@ export async function askEmployee(payload) {
   return data.truncated ? `${data.reply}\n\n(…توقف الرد لأنه طويل جداً)` : data.reply;
 }
 
-const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick', bonus: 'quick', evaluation: 'quick', client_review: 'quick' };
+const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick', bonus: 'quick', evaluation: 'quick', client_review: 'quick', candidates: 'quick' };
 
 async function askViaSample(sample, payload) {
   const req = validateChatRequest(payload);
@@ -100,6 +100,14 @@ async function demoReply({ mode, persona, messages }) {
     return JSON.stringify(Math.random() < 0.35
       ? { decision: 'changes', feedback: 'العمل جيد، لكن أريد نبرة أقرب لزبائني وعرضاً أوضح للسعر.', satisfaction: 3 }
       : { decision: 'approve', feedback: 'ممتاز، هذا ما كنت أريده. شكراً لكم.', satisfaction: 5 });
+  }
+  if (mode === 'candidates') return ''; // the app falls back to a ready-made shortlist
+  if (persona.duties === 'candidate') {
+    return pick([
+      `شكراً لوقتك. أنا ${persona.name}، وأرى أن خبرتي تناسب هذه الوظيفة، ويسعدني أن أشرح كيف عملت في مشاريع مشابهة.`,
+      'نقطة ضعفي أنني أحياناً أطيل في التفاصيل، وأعمل على ذلك بتحديد وقت لكل مهمة.',
+      'سؤالي: كيف يُقاس النجاح في هذه الوظيفة خلال أول ثلاثة أشهر؟',
+    ]) + note;
   }
   if (persona.duties === 'client') {
     return pick([`أهلاً، معك ${persona.name}. كيف يسير مشروعنا؟`, 'أريد أن أرى نتائج واضحة هذا الشهر، وميزانيتي محدودة.', 'شكراً لكم، أنتظر الأعمال القادمة.']) + note;

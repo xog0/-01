@@ -147,7 +147,8 @@
       <p class="muted" id="hire-preview"></p>
       <div class="row end">
         <button value="cancel" formnovalidate>إلغاء</button>
-        <button class="primary" value="ok" id="hire-submit">توظيف</button>
+        <button value="interview" formnovalidate id="hire-interview" title="يقترح مدير الموارد البشرية ثلاثة مرشحين تقابلهم ثم تختار">🎤 مقابلات: رشّحوا لي 3 مرشحين</button>
+        <button class="primary" value="ok" id="hire-submit">توظيف مباشر</button>
       </div>
     </form>
   </dialog>
@@ -237,6 +238,10 @@
       <h2>📊 أداء الفريق</h2>
       <button class="icon" data-close aria-label="إغلاق">✕</button>
     </div>
+    <div class="tabs crm-tabs" role="tablist">
+      <button role="tab" data-perf="score" class="active">الأداء</button>
+      <button role="tab" data-perf="attendance">الحضور والإجازات</button>
+    </div>
     <div id="perf-body" class="fin-body"></div>
   </dialog>
 
@@ -284,6 +289,47 @@
     </div>
     <p class="muted" id="lib-count"></p>
     <div id="lib-list" class="fin-body"></div>
+  </dialog>
+
+  <dialog id="dlg-leave">
+    <form method="dialog" id="leave-form" class="stack">
+      <h2 id="leave-title">🌴 إجازة</h2>
+      <div class="row">
+        <label>نوع الإجازة <select id="leave-type"></select></label>
+        <label>عدد الأيام <input id="leave-days" type="number" min="1" max="30" step="1" value="1" required></label>
+      </div>
+      <label>تبدأ من <input id="leave-from" type="date" required></label>
+      <label>السبب (اختياري) <input id="leave-reason" maxlength="200" placeholder="مثال: سفر عائلي"></label>
+      <label>مهامه المفتوحة <select id="leave-handover"></select></label>
+      <p class="muted" id="leave-preview"></p>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">منح الإجازة</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-interviews" class="wide">
+    <div class="dlg-head">
+      <div>
+        <h2 id="iv-title">🎤 مقابلات التوظيف</h2>
+        <p class="muted" id="iv-sub"></p>
+      </div>
+      <div class="row">
+        <button id="iv-cancel" class="danger">إلغاء الجولة</button>
+        <button class="icon" data-close aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <div id="iv-note"></div>
+    <div id="iv-cards" class="iv-cards"></div>
+    <section id="iv-chat" hidden>
+      <h3 id="iv-chat-title"></h3>
+      <div id="iv-log" class="chat-log client-log"></div>
+      <form id="iv-form" class="chat-form">
+        <textarea id="iv-input" rows="2" maxlength="2000" placeholder="اسأل المرشح…" required></textarea>
+        <button class="primary" type="submit">إرسال</button>
+      </form>
+    </section>
   </dialog>
 
   <dialog id="dlg-client-chat">

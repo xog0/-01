@@ -111,3 +111,17 @@ test('a client persona is framed as a customer of the agency, not staff', () => 
   assert.match(review, /"decision":"approve أو changes"/);
   assert.match(review, /"satisfaction"/);
 });
+
+test('candidates mode asks for three distinct people as JSON; a candidate persona is an applicant, not staff', () => {
+  const sys = buildSystemPrompt(validateChatRequest(base({ mode: 'candidates' })));
+  assert.match(sys, /ثلاثة مرشحين/);
+  assert.match(sys, /"candidates":\[\{"name"/);
+  const cand = { name: 'ريم العتيبي', title: 'أخصائي تسويق', level: 'أخصائي', department: 'التسويق', duties: 'candidate',
+    bio: 'العمر 29، خبرة 6 سنوات', personality: 'هادئة', memory: 'الراتب الذي تطلبه 11000' };
+  const chat = buildSystemPrompt(validateChatRequest(base({ persona: cand })));
+  assert.match(chat, /مرشح لوظيفة "أخصائي تسويق"/);
+  assert.match(chat, /ولست موظفاً فيها بعد/);
+  assert.match(chat, /الراتب الذي تطلبه 11000/);
+  assert.doesNotMatch(chat, /تعمل بمسمى/);
+  assert.throws(() => validateChatRequest(base({ persona: { ...cand, duties: 'admin' } })), /مسؤوليات غير معروفة/);
+});

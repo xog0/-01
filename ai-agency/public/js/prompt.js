@@ -8,8 +8,8 @@ export const LIMITS = Object.freeze({
   maxLongFieldChars: 1200,
 });
 
-const MODES = new Set(['chat', 'task', 'meeting', 'summary', 'assign', 'review', 'memo', 'bonus', 'evaluation', 'client_review']);
-const DUTIES = new Set(['', 'finance', 'client']);
+const MODES = new Set(['chat', 'task', 'meeting', 'summary', 'assign', 'review', 'memo', 'bonus', 'evaluation', 'client_review', 'candidates']);
+const DUTIES = new Set(['', 'finance', 'client', 'candidate']);
 
 export class ValidationError extends Error {}
 
@@ -115,6 +115,12 @@ const MODE_INSTRUCTIONS = {
     'كن منصفاً ومحدداً: اذكر نقاط القوة وما يحتاج تحسيناً بأمثلة من المرفق. ' +
     'التوصية واحدة من: promote (ترقية، فقط لأداء ممتاز ومستمر)، bonus (مكافأة لأداء متميز حديث)، improve (خطة تحسين لأداء ضعيف)، none (استمرار). ' +
     'أعد JSON فقط دون أي نص قبله أو بعده: {"summary":"خلاصة التقييم بصوتك في جملتين أو ثلاث","strengths":"نقاط القوة","improve":"ما يحتاج تحسيناً","recommendation":"promote أو bonus أو improve أو none","reason":"سبب التوصية في جملة"}',
+  candidates:
+    'أنت مسؤول عن التوظيف، وطلب منك المالك ترشيح أشخاص لوظيفة شاغرة ستصلك بياناتها. اقترح ثلاثة مرشحين افتراضيين مختلفين فعلاً: ' +
+    'في الخبرة والخلفية وأسلوب العمل ونقاط القوة والضعف، بأسماء عربية واقعية (اسم أول واسم عائلة)، وكلهم مناسبون للوظيفة بدرجات متفاوتة. ' +
+    'اذكر لكل مرشح نقطة ضعف حقيقية، والراتب الذي يطلبه ضمن النطاق المذكور في الطلب. ثم رأيك المختصر فيمن تفضّل ولماذا. ' +
+    'أعد JSON فقط دون أي نص قبله أو بعده: {"note":"رأيك بصوتك في جملة أو جملتين","candidates":[{"name":"الاسم الكامل","gender":"m أو f","age":العمر رقماً,"years":سنوات الخبرة رقماً,' +
+    '"background":"خبرته السابقة في جملة أو جملتين","style":"أسلوبه في العمل والتواصل","strengths":"نقاط قوته","weakness":"نقطة ضعفه","personality":"شخصيته في جملة","salary":الراتب المطلوب رقماً}]}',
   memo:
     'اكتب مذكرة داخلية موجزة ومهنية بصوتك إلى المالك والمدير التنفيذي، بناءً على الأرقام التي تصلك فقط ودون اختلاق أرقام جديدة. ' +
     'اذكر الإجمالي وأبرز البنود والملاحظات، وتوصية واحدة عملية. لا تتجاوز 150 كلمة.',
@@ -146,8 +152,27 @@ function clientPrompt({ mode, persona, company }) {
   return lines.join('\n');
 }
 
+// Someone applying to join the agency, interviewed by its owner.
+function candidatePrompt({ persona, company }) {
+  const lines = [
+    `أنت ${persona.name}، مرشح لوظيفة "${persona.title}" (المستوى: ${persona.level}) في قسم ${persona.department} لدى وكالة التسويق «${company.name}». ` +
+      'أنت في مقابلة عمل مع مالك الوكالة، ولست موظفاً فيها بعد.',
+  ];
+  if (company.about) lines.push(`ما تعرفه عن الوكالة: ${company.about}`);
+  if (persona.bio) lines.push(`عنك: ${persona.bio}`);
+  if (persona.personality) lines.push(`شخصيتك وأسلوبك: ${persona.personality}`);
+  if (persona.memory) lines.push(`ما يخص المقابلة: ${persona.memory}`);
+  lines.push(
+    'أجب كمرشح حقيقي بالعربية: بصدق ومن خبرتك المذكورة فقط، دون مبالغة أو اختلاق إنجازات أو أرقام. اعترف بنقطة ضعفك إذا سُئلت عنها وقل كيف تعمل على تحسينها.',
+    'يمكنك أن تسأل عن الوظيفة والفريق، وأن تتمسك بالراتب الذي تطلبه بأدب أو تتفاوض عليه. رد بإيجاز في حدود 120 كلمة.',
+    'إذا سُئلت مباشرة هل أنت ذكاء اصطناعي فأجب بصدق أنك مرشح افتراضي يعمل بالذكاء الاصطناعي.',
+  );
+  return lines.join('\n');
+}
+
 export function buildSystemPrompt({ mode, persona, company }) {
   if (persona.duties === 'client') return clientPrompt({ mode, persona, company });
+  if (persona.duties === 'candidate') return candidatePrompt({ persona, company });
   const lines = [
     `أنت ${persona.name}، تعمل بمسمى "${persona.title}" (المستوى الوظيفي: ${persona.level}) ` +
       `في قسم ${persona.department} لدى "${company.name}"، وهي وكالة تسويق يعمل فيها فريق من الموظفين.`,
