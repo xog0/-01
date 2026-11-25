@@ -25,6 +25,9 @@ import {
   LEAVE_TYPES, MAX_LEAVE_DAYS, addDays, attendanceOf, dayKey, daysWord, endLeave, grantLeave, leaveBalance, leaveOn, markAttendance,
   parseCandidates, salaryRange, sampleCandidates, upcomingLeaves,
 } from './hr.js';
+import {
+  DEAL_STAGES, OPEN_STAGES, isOpen, linkProposal, moveDeal, parseDealReview, parseLeads, pipelineStats, sampleLeads, saveDeal, syncDealWithProject,
+} from './sales.js';
 
 // ------------------------------------------------------------ DOM helpers
 const $ = (sel) => document.querySelector(sel);
@@ -64,6 +67,15 @@ function confirmBox(message, okLabel = 'تأكيد') {
   dlg.returnValue = '';
   dlg.showModal();
   return new Promise((resolve) => dlg.addEventListener('close', () => resolve(dlg.returnValue === 'ok'), { once: true }));
+}
+function promptBox(message, placeholder = '') {
+  const dlg = $('#dlg-prompt');
+  $('#prompt-msg').textContent = message;
+  $('#prompt-input').value = '';
+  $('#prompt-input').placeholder = placeholder;
+  dlg.showModal();
+  return new Promise((resolve) => dlg.addEventListener('close',
+    () => resolve(dlg.returnValue === 'ok' ? $('#prompt-input').value.trim().slice(0, 300) : null), { once: true }));
 }
 // replaceChildren() would print "null" for an empty optional section; fill() skips it.
 function fill(el, ...kids) {
@@ -822,6 +834,256 @@ $('#lib-q').addEventListener('input', (ev) => { libFilter.q = ev.target.value.sl
 $('#lib-download-all').addEventListener('click', () => {
   const items = libraryItems(state, libFilter);
   if (items.length) saveFile(`مكتبة الأعمال ${today()}`, 'md', libraryMd(items));
+});
+
+// ------------------------------------------------------------ sales pipeline
+const DELIVERY = new Set(['strategy', 'marketing', 'content', 'social', 'ads', 'design', 'seo', 'pr', 'email']);
+const salesHead = () => atWork(state.employees.filter((x) => x.dept === 'sales')).sort(byRank)[0] || null;
+const clientById = (id) => state.clients?.find((c) => c.id === id) || null;
+const DEALS_WORD = ['فرصة واحدة', 'فرصتين', 'فرص', 'فرصة'];
+// Who leads delivery on a newly won project: a senior delivery person with the fewest live projects.
+function deliveryLead() {
+  const live = (id) => (state.projects || []).filter((p) => p.leadId === id && (p.status === 'active' || p.status === 'proposal')).length;
+  return atWork(state.employees.filter((e) => DELIVERY.has(e.dept) && e.level >= MANAGER_LEVEL))
+    .sort((a, b) => live(a.id) - live(b.id) || byRank(a, b))[0] || topManager() || null;
+}
+const dealProposal = (d) => (d.projectId && project(d.projectId) ? proposalTask(project(d.projectId)) : null);
+
+function renderPipeline(body) {
+  const st = pipelineStats(state);
+  const head = salesHead();
+  const deals = state.deals || [];
+  const closed = deals.filter((d) => !isOpen(d)).sort((a, b) => (b.closedAt || 0) - (a.closedAt || 0)).slice(0, 8);
+  fill(body,
+    h('div', { class: 'tiles' },
+      tile('فرص مفتوحة', String(st.open)),
+      tile('قيمة المسار', money(st.value)),
+      tile('المتوقع (حسب احتمال كل مرحلة)', money(st.weighted), 'good'),
+      tile('نسبة الفوز', st.winRate === null ? '—' : `${st.winRate}% (${st.won} من ${st.won + st.lost})`)),
+    h('div', { class: 'row' },
+      h('button', { class: 'primary', onclick: () => openDealForm() }, '＋ فرصة جديدة'),
+      h('button', { disabled: busy.has('leads') || !head, onclick: findLeads, title: head ? undefined : 'لا يوجد موظف مبيعات في المكتب الآن' },
+        busy.has('leads') ? `⏳ ${head?.name || ''} يبحث…` : `🔎 ${head ? `${head.name} يبحث عن عملاء محتملين` : 'ابحث عن عملاء محتملين'}`)),
+    h('div', { class: 'pipeline' }, OPEN_STAGES.map((stage) => {
+      const list = deals.filter((d) => d.stage === stage).sort((a, b) => b.value - a.value);
+      return h('section', { class: 'pipe-col' },
+        h('h3', {}, DEAL_STAGES[stage].name, h('span', { class: 'badge' }, String(list.length))),
+        h('div', { class: 'muted' }, `${money(list.reduce((s, d) => s + d.value, 0))} · احتمال ${DEAL_STAGES[stage].p}%`),
+        list.length ? list.map(dealCard) : h('div', { class: 'empty' }, '—'));
+    })),
+    closed.length ? h('h3', {}, 'آخر الفرص المغلقة') : null,
+    closed.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
+      h('thead', {}, h('tr', {}, ...['الفرصة', 'العميل', 'النتيجة', 'القيمة', 'السبب', 'التاريخ'].map((x) => h('th', {}, x)))),
+      h('tbody', {}, ...closed.map((d) => h('tr', {},
+        h('td', {}, d.title), h('td', {}, clientById(d.clientId)?.name || '—'),
+        h('td', {}, d.stage === 'won' ? '🎉 فزنا بها' : '✖ خسرناها'), h('td', { class: 'num' }, fmt(d.value)),
+        h('td', {}, d.lostReason || '—'), h('td', {}, new Date(d.closedAt || d.updatedAt).toLocaleDateString('ar'))))))) : null);
+}
+
+function dealCard(d) {
+  const c = clientById(d.clientId);
+  const owner = emp(d.ownerId);
+  const next = OPEN_STAGES[OPEN_STAGES.indexOf(d.stage) + 1];
+  const pt = dealProposal(d);
+  const writing = d.projectId && state.tasks.some((t) => t.projectId === d.projectId && t.status !== 'done' && t.title.startsWith('عرض فني ومالي'));
+  const since = Math.floor((Date.now() - (d.history?.at(-1)?.at || d.createdAt)) / 86400000);
+  const talking = c && busy.has(`client:${c.id}`);
+  const late = d.stage === 'proposal' || d.stage === 'negotiation';
+  return h('article', { class: 'deal' },
+    h('h4', {}, d.title),
+    h('div', { class: 'client' }, `${c?.name || '—'} · ${d.type}`),
+    h('div', { class: 'money' }, h('b', {}, money(d.value)), h('span', { class: 'muted' }, owner ? `👤 ${owner.name}` : 'بلا مسؤول')),
+    d.note ? h('p', { class: 'brief' }, d.note) : null,
+    d.counter ? h('p', { class: 'notice' }, `${contactOf(c).name} يقبل بـ${money(d.counter)}`) : null,
+    d.lastReply ? h('p', { class: 'brief' }, `💬 «${d.lastReply}»`) : null,
+    h('div', { class: 'since' }, since > 0 ? `في هذه المرحلة منذ ${daysWord(since)}` : 'تحرّكت اليوم'),
+    h('div', { class: 'actions' },
+      next ? h('button', { class: 'small', onclick: () => advanceDeal(d, next) }, `← ${DEAL_STAGES[next].name}`) : null,
+      !late ? h('button', { class: 'small', onclick: () => followUp(d) }, '✉️ متابعة') : null,
+      d.stage === 'meeting' || (d.stage === 'contact' && d.value > 0)
+        ? h('button', { class: 'small', disabled: writing, onclick: () => proposalForDeal(d) }, writing ? '⏳ العرض قيد الكتابة' : '📝 كتابة العرض') : null,
+      pt ? h('button', { class: 'small', onclick: () => showOutput(pt) }, '📄 العرض') : null,
+      late ? h('button', { class: 'small primary', disabled: talking || writing, onclick: () => sendDealToClient(d) }, talking ? '⏳ ينتظر الرد' : '📨 أرسل للعميل') : null,
+      d.counter ? h('button', { class: 'small primary', onclick: () => winDeal(d, d.counter) }, `✅ قبول ${fmt(d.counter)}`) : null,
+      late ? h('button', { class: 'small', onclick: () => winDeal(d) }, '🎉 فزنا') : null,
+      c ? h('button', { class: 'small', onclick: () => openClientChat(c) }, '💬') : null,
+      h('button', { class: 'small', onclick: () => openDealForm(d), title: 'تعديل' }, '✏️'),
+      h('button', { class: 'small danger', onclick: () => loseDeal(d), title: 'خسرناها' }, '✖')));
+}
+
+function advanceDeal(d, stage) {
+  try {
+    moveDeal(state, d.id, stage, { newId });
+    save();
+    renderClients();
+  } catch (err) { toast(err.message); }
+}
+
+function winDeal(d, value) {
+  try {
+    const { project: p } = moveDeal(state, d.id, 'won', { newId, value, leadId: deliveryLead()?.id || null, note: value ? `اتفقنا على ${fmt(value)}` : 'فزنا بالفرصة' });
+    d.counter = null;
+    save();
+    refresh();
+    renderClients();
+    toast(`🎉 فزنا بـ«${d.title}» بقيمة ${money(d.value)}، وبدأ مشروع «${p.name}»${emp(p.leadId) ? ` بقيادة ${emp(p.leadId).name}` : ''}`);
+  } catch (err) { toast(err.message); }
+}
+
+async function loseDeal(d) {
+  const reason = await promptBox(`لماذا خسرنا «${d.title}»؟`, 'مثال: السعر مرتفع، اختار وكالة أخرى، أجّل المشروع');
+  if (reason === null) return;
+  try {
+    moveDeal(state, d.id, 'lost', { newId, note: reason || 'لم يُذكر سبب' });
+    save();
+    refresh();
+    renderClients();
+    toast(`أُغلقت «${d.title}» كخسارة`);
+  } catch (err) { toast(err.message); }
+}
+
+function followUp(d) {
+  const owner = emp(d.ownerId) || salesHead();
+  if (!owner) return toast('حدد مسؤولاً عن الفرصة أولاً');
+  const c = clientById(d.clientId);
+  addTask(owner.id, `رسالة متابعة إلى ${c?.name || 'العميل'}`.slice(0, 200),
+    `اكتب رسالة متابعة قصيرة ومهنية إلى ${contactOf(c).name} من ${c?.name} بخصوص «${d.title}» (${d.type}، المرحلة: ${DEAL_STAGES[d.stage].name}، القيمة التقديرية ${fmt(d.value)} ${state.finance.currency}). ` +
+      `${d.note ? `احتياج العميل: ${d.note}. ` : ''}${c?.notes ? `عن العميل: ${c.notes}. ` : ''}اقترح الخطوة التالية بوضوح: موعد اجتماع أو إرسال عرض.`,
+    'medium');
+  d.history = [...(d.history || []), { at: Date.now(), stage: d.stage, note: 'رسالة متابعة' }].slice(-20);
+  d.updatedAt = Date.now();
+  save();
+  toast(`📋 كُلّف ${owner.name} بكتابة رسالة متابعة لـ${c?.name || 'العميل'}${awayNow(owner) ? ' (سيكتبها عند عودته من الإجازة)' : ''}`);
+}
+
+// The proposal is written as a project at the quote stage, led by whoever will deliver it.
+function proposalForDeal(d) {
+  const lead = deliveryLead();
+  if (!lead) return toast('لا يوجد مدير متاح لكتابة العرض');
+  try {
+    let p = d.projectId ? project(d.projectId) : null;
+    if (!p || p.status === 'cancelled') {
+      p = saveProject(state, { clientId: d.clientId, name: d.title, type: d.type, fee: d.value, status: 'proposal', brief: d.note, leadId: lead.id }, { newId });
+    }
+    linkProposal(state, d.id, p.id);
+    save();
+    requestProposal(p);
+  } catch (err) { toast(err.message); }
+}
+
+async function sendDealToClient(d) {
+  const c = clientById(d.clientId);
+  if (!c || busy.has(`client:${c.id}`)) return;
+  const pt = dealProposal(d);
+  busy.add(`client:${c.id}`);
+  renderClients();
+  toast(`📨 أُرسل العرض إلى ${contactOf(c).name}…`);
+  try {
+    const talk = (d.history || []).filter((x) => x.note).slice(-6).map((x) => `- ${DEAL_STAGES[x.stage].name}: ${x.note}`).join('\n');
+    const reply = await askClient(c, 'deal_review', [{ role: 'user', content: (
+      `عرض من ${state.company.name}: «${d.title}» (${d.type})\nالسعر المعروض: ${d.value} ${state.finance.currency}\n` +
+      (d.note ? `ما فهمناه من احتياجك: ${d.note}\n` : '') +
+      (pt?.output ? `\nنص العرض:\n${pt.output.slice(0, 3500)}\n` : '\n(لم يُرفق نص عرض مفصّل، فقط الفكرة والسعر.)\n') +
+      (talk ? `\nسجل تواصلنا:\n${talk}` : '')).slice(0, 5800) }]);
+    const r = parseDealReview(reply);
+    if (!r) throw new Error(`لم يصل رد واضح من ${contactOf(c).name}. حاول مرة أخرى.`);
+    d.lastReply = r.feedback;
+    (state.clientChats[c.id] ||= []).push(
+      { role: 'user', content: `أرسلنا لك عرض «${d.title}» بسعر ${fmt(d.value)} ${state.finance.currency}.` },
+      { role: 'assistant', content: r.feedback || '—' });
+    if (r.decision === 'accept') {
+      busy.delete(`client:${c.id}`);
+      winDeal(d);
+      toast(`🎉 ${contactOf(c).name} قبِل العرض: «${r.feedback}»`);
+    } else if (r.decision === 'negotiate') {
+      if (d.stage !== 'negotiation') moveDeal(state, d.id, 'negotiation', { newId, note: r.value ? `يطلب ${fmt(r.value)}` : 'يريد التفاوض' });
+      d.counter = r.value && r.value !== d.value ? r.value : null;
+      toast(`🤝 ${contactOf(c).name} يفاوض${d.counter ? ` على ${money(d.counter)}` : ''}: «${r.feedback}»`);
+    } else {
+      moveDeal(state, d.id, 'lost', { newId, note: r.feedback || 'رفض العرض' });
+      toast(`✖ ${contactOf(c).name} رفض العرض: «${r.feedback}»`);
+    }
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    busy.delete(`client:${c.id}`);
+    save();
+    refresh();
+    if ($('#dlg-clients').open) renderClients();
+  }
+}
+
+async function findLeads() {
+  const head = salesHead();
+  if (!head || busy.has('leads')) return;
+  busy.add('leads');
+  renderClients();
+  const prev = head.status;
+  setStatus(head, 'working', '🔎 يبحث عن عملاء');
+  const taken = (state.clients || []).map((c) => c.name);
+  let list = null;
+  try {
+    const reply = await ask(head, 'leads', [{ role: 'user', content: (
+      `عن الوكالة: ${state.company.about || state.company.name}\nأنواع المشاريع التي نقدمها: ${PROJECT_TYPES.join('، ')}\n` +
+      `عملاؤنا الحاليون، فلا تكررهم: ${taken.join('، ') || 'لا أحد بعد'}`).slice(0, 5800) }]);
+    list = parseLeads(reply, { taken });
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    setStatus(head, prev === 'working' ? 'idle' : prev || 'idle');
+    busy.delete('leads');
+  }
+  if (!list) list = sampleLeads({ taken, seed: state.nextId });
+  let added = 0;
+  for (const l of list.leads) {
+    try {
+      const c = saveClient(state, { name: l.name, industry: l.industry, city: l.city, contact: l.contact, notes: l.notes, status: 'prospect' }, { newId });
+      saveDeal(state, { clientId: c.id, title: `${l.type} لـ${l.name}`, type: l.type, value: l.value, ownerId: head.id, note: l.need, source: 'sales' }, { newId });
+      added++;
+    } catch { /* a cap was reached: keep what was added */ }
+  }
+  save();
+  refresh();
+  if ($('#dlg-clients').open) renderClients();
+  toast(added ? `💼 ${head.name} أضاف ${countOf(added, DEALS_WORD)} إلى مسار المبيعات${list.note ? `: «${list.note}»` : ''}` : 'لم تُضف فرص جديدة');
+}
+
+let editingDeal = null;
+function openDealForm(d = null) {
+  editingDeal = d?.id || null;
+  $('#deal-form').reset();
+  $('#deal-form-title').textContent = d ? `تعديل «${d.title}»` : 'فرصة بيع جديدة';
+  fill($('#deal-client'), (state.clients || []).map((c) => h('option', { value: c.id }, c.name)), h('option', { value: '__new' }, '＋ عميل جديد…'));
+  fill($('#deal-type'), PROJECT_TYPES.map((t) => h('option', { value: t }, t)));
+  const people = [...state.employees].sort((a, b) => (b.dept === 'sales') - (a.dept === 'sales') || byRank(a, b));
+  fill($('#deal-owner'), h('option', { value: '' }, 'بلا مسؤول'), people.map((e) => h('option', { value: e.id }, `${e.name} — ${titleFor(e)}`)));
+  fill($('#deal-stage'), OPEN_STAGES.map((k) => h('option', { value: k }, DEAL_STAGES[k].name)));
+  $('#deal-stage-row').hidden = Boolean(d);
+  $('#deal-client').value = d?.clientId || (state.clients?.find((c) => c.status === 'prospect')?.id ?? '__new');
+  $('#deal-title').value = d?.title || '';
+  $('#deal-type').value = d?.type || PROJECT_TYPES[0];
+  $('#deal-value').value = d ? String(d.value) : '';
+  $('#deal-owner').value = d ? d.ownerId || '' : salesHead()?.id || '';
+  $('#deal-note').value = d?.note || '';
+  $('#deal-new-client').hidden = $('#deal-client').value !== '__new';
+  $('#dlg-deal').showModal();
+}
+$('#deal-client').addEventListener('change', () => { $('#deal-new-client').hidden = $('#deal-client').value !== '__new'; });
+$('#dlg-deal').addEventListener('close', () => {
+  if ($('#dlg-deal').returnValue !== 'ok') return;
+  try {
+    let clientId = $('#deal-client').value;
+    if (clientId === '__new') {
+      clientId = saveClient(state, { name: $('#deal-client-name').value, industry: $('#deal-client-industry').value, status: 'prospect' }, { newId }).id;
+    }
+    const d = saveDeal(state, { id: editingDeal || undefined, clientId, title: $('#deal-title').value, type: $('#deal-type').value,
+      value: $('#deal-value').value || 0, ownerId: $('#deal-owner').value || null, note: $('#deal-note').value, stage: $('#deal-stage').value }, { newId });
+    save();
+    refresh();
+    crmTab = 'pipeline';
+    if ($('#dlg-clients').open) renderClients();
+    toast(editingDeal ? 'حُفظت الفرصة' : `💼 أُضيفت «${d.title}» إلى مسار المبيعات`);
+  } catch (err) { toast(err.message); }
 });
 
 // ------------------------------------------------------------ leave and attendance
@@ -1872,8 +2134,8 @@ function otherInboxCards() {
     cards.push(inboxCard(`📝 عرض «${p.name}» جاهز`, 'عرض سعر', `${clientOf(p)?.name} · ${money(p.fee)} · كتبه ${emp(t.empId)?.name || '—'}`,
       'اقرأ العرض، ثم سجّل رد العميل عليه.', [
         ['📄 قراءة العرض', () => { $('#dlg-approvals').close(); showOutput(t); }],
-        ['✅ العميل قبِل: ابدأ المشروع', () => { saveProject(state, { ...p, status: 'active' }, { newId }); toast(`🎉 بدأ مشروع ${p.name}`); }, 'primary'],
-        ['❌ العميل رفض', () => { saveProject(state, { ...p, status: 'cancelled' }, { newId }); }, 'danger'],
+        ['✅ العميل قبِل: ابدأ المشروع', () => { saveProject(state, { ...p, status: 'active' }, { newId }); syncDealWithProject(state, p); toast(`🎉 بدأ مشروع ${p.name}`); }, 'primary'],
+        ['❌ العميل رفض', () => { saveProject(state, { ...p, status: 'cancelled' }, { newId }); syncDealWithProject(state, p); }, 'danger'],
         ['لاحقاً', () => { p.proposalSeen = true; }],
       ]));
   }
@@ -1984,7 +2246,9 @@ function projectCard(p) {
 function renderClients() {
   document.querySelectorAll('[data-crm]').forEach((b) => b.classList.toggle('active', b.dataset.crm === crmTab));
   const body = $('#crm-body');
-  if (crmTab === 'projects') {
+  if (crmTab === 'pipeline') {
+    renderPipeline(body);
+  } else if (crmTab === 'projects') {
     const groups = { live: ['active', 'proposal'], done: ['done'], cancelled: ['cancelled'], all: Object.keys(PROJECT_STATUS) };
     const list = (state.projects || []).filter((p) => groups[projectFilter].includes(p.status))
       .sort((a, b) => ['active', 'proposal', 'done', 'cancelled'].indexOf(a.status) - ['active', 'proposal', 'done', 'cancelled'].indexOf(b.status));
@@ -2008,6 +2272,8 @@ function renderClients() {
           h('h4', {}, c.name), h('span', { class: `badge ${c.status === 'active' ? 'active' : c.status === 'prospect' ? 'proposal' : 'cancelled'}` }, CLIENT_STATUS[c.status])),
         h('div', { class: 'client' }, [c.industry, c.city].filter(Boolean).join(' · ') || '—'),
         c.contact ? h('div', { class: 'client' }, `👤 ${c.contact}`) : null,
+        ...(state.deals || []).filter((d) => d.clientId === c.id && isOpen(d)).map((d) =>
+          h('div', { class: 'client' }, `💼 ${d.title} · ${DEAL_STAGES[d.stage].name} · ${money(d.value)}`)),
         c.notes ? h('p', { class: 'brief' }, c.notes) : null,
         h('div', { class: 'money' }, h('span', {}, `${countOf(tot.projects, PROJECTS_WORD)} · ${money(tot.fee)}`), h('span', { class: 'muted' }, `متبقٍ ${fmt(tot.owed)}`)),
         tot.projects ? (() => { const cp = clientProfit(state, c.id); return h('div', { class: `money ${cp.profit >= 0 ? 'gain' : 'loss'}` },
@@ -2116,6 +2382,9 @@ function clientMemory(c) {
     return `مشروع «${p.name}» (${PROJECT_STATUS[p.status]}، القيمة ${fmt(p.fee)}، دفعت منها ${fmt(p.paid || 0)})` +
       (last ? `، وآخر رد منك على أعماله: ${last.decision === 'approve' ? 'اعتماد' : 'طلب تعديلات'} — «${last.feedback}»` : '');
   });
+  for (const d of (state.deals || []).filter((x) => x.clientId === c.id && isOpen(x))) {
+    lines.push(`تتحدث مع الوكالة عن «${d.title}» (${DEAL_STAGES[d.stage].name}، القيمة المطروحة ${fmt(d.value)})${d.note ? `، واحتياجك: ${d.note}` : ''}`);
+  }
   const sat = clientSatisfaction(state, c.id);
   return `${lines.join('؛ ')}${sat !== null ? `. رضاك عن الوكالة حالياً ${sat} من 5.` : ''}`.slice(0, 1150);
 }

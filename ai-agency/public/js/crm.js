@@ -73,14 +73,21 @@ export function saveProject(state, input, { newId, now = Date.now() } = {}) {
     if (!p) throw new Error('المشروع غير موجود');
     if (fields.fee < (p.paid || 0)) throw new Error('قيمة المشروع أقل من المبلغ المحصّل منه');
     if (fields.status === 'done' && p.status !== 'done') p.doneAt = now;
-    return Object.assign(p, fields);
+    Object.assign(p, fields);
+    activateClient(state, p);
+    return p;
   }
   if (state.projects.length >= CRM_CAP.projects) throw new Error('وصلت إلى الحد الأقصى لعدد المشاريع');
   const p = { id: newId(state, 'p'), ...fields, paid: 0, createdAt: now };
   state.projects.push(p);
+  activateClient(state, p);
+  return p;
+}
+
+// A prospect becomes an active client once one of their projects is under way.
+function activateClient(state, p) {
   const client = state.clients.find((c) => c.id === p.clientId);
   if (client && client.status === 'prospect' && p.status === 'active') client.status = 'active';
-  return p;
 }
 
 export const outstanding = (p) => Math.max(0, Math.round(((p.fee || 0) - (p.paid || 0)) * 100) / 100);

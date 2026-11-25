@@ -284,6 +284,17 @@ table.fin tfoot td { font-weight: 700; }
 .iv-card label { font-size: 12px; }
 .iv-card .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
 #iv-chat h3 { font-size: 15px; margin: 4px 0 8px; }
+.pipeline { flex-shrink: 0; align-items: start; display: grid; grid-template-columns: repeat(4, minmax(220px, 1fr)); gap: 10px; overflow-x: auto; padding-bottom: 6px; margin: 10px 0; }
+.pipe-col { background: rgba(255,255,255,0.03); border: 1px solid var(--line); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pipe-col h3 { margin: 0; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+.pipe-col > .muted { font-size: 12px; }
+.deal { padding: 10px; border-radius: 12px; background: rgba(255,255,255,0.05); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.deal h4 { margin: 0; font-size: 14px; }
+.deal .client, .deal .since { color: var(--muted); font-size: 12px; }
+.deal .money { display: flex; justify-content: space-between; font-size: 13px; }
+.deal .brief { font-size: 12px; color: var(--muted); margin: 0; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.deal .notice { margin: 0; font-size: 12px; }
+.deal .actions { display: flex; gap: 4px; flex-wrap: wrap; }
 .lib-filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; padding-bottom: 6px; }
 .lib-group { margin-bottom: 16px; }
 .lib-group h3 { font-size: 14px; margin: 4px 0 8px; }

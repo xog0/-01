@@ -346,6 +346,31 @@ const SAMPLE_PROJECTS = [
     ] },
 ];
 
+// Open sales opportunities for the sample prospects: the clinics already
+// have a proposal in the works; the travel agency is still talking.
+const SAMPLE_DEALS = {
+  'دروب للسفر والسياحة': { title: 'حملة موسم الصيف', type: 'حملة إعلانية', value: 45000, stage: 'meeting',
+    note: 'يريد حملة لباقات الصيف العائلية على سناب وإنستغرام. ينتظر منا تصوراً أولياً وتقدير ميزانية.' },
+};
+/** Adds a deal for every prospect client that has none (agencies saved before the sales pipeline). */
+function seedDeals(state, now = Date.now()) {
+  state.deals ||= [];
+  const sales = state.employees.filter((e) => e.dept === 'sales').sort((a, b) => b.level - a.level)[0] || null;
+  for (const c of state.clients || []) {
+    if (c.status !== 'prospect' || state.deals.some((d) => d.clientId === c.id)) continue;
+    const proposal = (state.projects || []).find((p) => p.clientId === c.id && p.status === 'proposal');
+    const sample = SAMPLE_DEALS[c.name];
+    if (!proposal && !sample) continue;
+    const stage = proposal ? 'proposal' : sample.stage;
+    state.deals.push({
+      id: newId(state, 'd'), clientId: c.id, title: proposal ? proposal.name : sample.title, type: proposal ? proposal.type : sample.type,
+      value: proposal ? proposal.fee : sample.value, note: proposal ? proposal.brief : sample.note, ownerId: sales ? sales.id : null,
+      stage, source: 'owner', projectId: proposal ? proposal.id : null, createdAt: now, updatedAt: now,
+      history: [{ at: now, stage, note: 'أُضيفت الفرصة' }],
+    });
+  }
+}
+
 /** Adds the sample clients, projects and their tasks to an agency that has none. */
 function seedClients(state, now = Date.now()) {
   state.clients ||= [];
@@ -395,6 +420,7 @@ export function createInitialState() {
     bonusRequests: [],
     evaluations: [],
     clientChats: {},
+    deals: [],
     leaves: [],
     attendance: {},
     hiring: null,
@@ -405,6 +431,7 @@ export function createInitialState() {
   }
   addInterns(state);
   seedClients(state, now);
+  seedDeals(state, now);
   return state;
 }
 
@@ -443,6 +470,7 @@ const MIGRATIONS = [
   { key: 'finance-setup', run: setUpFinance },
   { key: 'add-sheika-cfo', run: addSheika },
   { key: 'add-clients', run: (state) => seedClients(state) },
+  { key: 'add-deals', run: (state) => seedDeals(state) },
 ];
 
 // Whoever heads a department (its members whose manager is outside it)

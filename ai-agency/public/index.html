@@ -264,6 +264,7 @@
     </div>
     <div class="tabs crm-tabs" role="tablist">
       <button role="tab" data-crm="projects" class="active">المشاريع</button>
+      <button role="tab" data-crm="pipeline">💼 المبيعات</button>
       <button role="tab" data-crm="clients">العملاء</button>
     </div>
     <div id="crm-body" class="fin-body"></div>
@@ -289,6 +290,42 @@
     </div>
     <p class="muted" id="lib-count"></p>
     <div id="lib-list" class="fin-body"></div>
+  </dialog>
+
+  <dialog id="dlg-deal">
+    <form method="dialog" id="deal-form" class="stack">
+      <h2 id="deal-form-title">فرصة بيع جديدة</h2>
+      <label>العميل <select id="deal-client" required></select></label>
+      <div class="row" id="deal-new-client" hidden>
+        <label>اسم العميل الجديد <input id="deal-client-name" maxlength="80"></label>
+        <label>المجال <input id="deal-client-industry" maxlength="80"></label>
+      </div>
+      <label>عنوان الفرصة <input id="deal-title" maxlength="120" required placeholder="مثال: حملة إطلاق التطبيق"></label>
+      <div class="row">
+        <label>نوع المشروع <select id="deal-type"></select></label>
+        <label>القيمة التقديرية <input id="deal-value" type="number" min="0" step="any"></label>
+      </div>
+      <div class="row">
+        <label>المسؤول عن الفرصة <select id="deal-owner"></select></label>
+        <label id="deal-stage-row">المرحلة <select id="deal-stage"></select></label>
+      </div>
+      <label>احتياج العميل وملاحظات <textarea id="deal-note" rows="3" maxlength="600"></textarea></label>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-prompt">
+    <form method="dialog" class="stack">
+      <p id="prompt-msg"></p>
+      <input id="prompt-input" maxlength="300">
+      <div class="row end">
+        <button class="primary" value="ok">تأكيد</button>
+        <button value="cancel" formnovalidate>إلغاء</button>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="dlg-leave">

@@ -125,3 +125,13 @@ test('candidates mode asks for three distinct people as JSON; a candidate person
   assert.doesNotMatch(chat, /تعمل بمسمى/);
   assert.throws(() => validateChatRequest(base({ persona: { ...cand, duties: 'admin' } })), /مسؤوليات غير معروفة/);
 });
+
+test('sales modes: the sales head proposes prospects; a prospect answers a proposal', () => {
+  const leads = buildSystemPrompt(validateChatRequest(base({ mode: 'leads' })));
+  assert.match(leads, /ثلاثة عملاء محتملين/);
+  assert.match(leads, /"leads":\[\{"name"/);
+  const client = { name: 'سلطان', title: 'المدير التجاري', level: 'عميل', department: 'دروب للسفر', duties: 'client' };
+  const review = buildSystemPrompt(validateChatRequest(base({ persona: client, mode: 'deal_review' })));
+  assert.match(review, /"decision":"accept أو negotiate أو reject"/);
+  assert.match(review, /ولست موظفاً فيها/);
+});

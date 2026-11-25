@@ -46,7 +46,7 @@ export async function askEmployee(payload) {
   return data.truncated ? `${data.reply}\n\n(…توقف الرد لأنه طويل جداً)` : data.reply;
 }
 
-const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick', bonus: 'quick', evaluation: 'quick', client_review: 'quick', candidates: 'quick' };
+const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick', bonus: 'quick', evaluation: 'quick', client_review: 'quick', candidates: 'quick', leads: 'quick', deal_review: 'quick' };
 
 async function askViaSample(sample, payload) {
   const req = validateChatRequest(payload);
@@ -101,7 +101,13 @@ async function demoReply({ mode, persona, messages }) {
       ? { decision: 'changes', feedback: 'العمل جيد، لكن أريد نبرة أقرب لزبائني وعرضاً أوضح للسعر.', satisfaction: 3 }
       : { decision: 'approve', feedback: 'ممتاز، هذا ما كنت أريده. شكراً لكم.', satisfaction: 5 });
   }
-  if (mode === 'candidates') return ''; // the app falls back to a ready-made shortlist
+  if (mode === 'candidates' || mode === 'leads') return ''; // the app falls back to a ready-made list
+  if (mode === 'deal_review') {
+    const r = Math.random();
+    return JSON.stringify(r < 0.45 ? { decision: 'accept', feedback: 'العرض واضح ومناسب لنا. لنبدأ.' }
+      : r < 0.85 ? { decision: 'negotiate', value: Math.round((Number((last.match(/السعر المعروض:\s*([\d.]+)/) || [])[1]) || 10000) * 0.85), feedback: 'العرض جيد لكن الميزانية أقل. هل يمكن تعديل السعر؟' }
+        : { decision: 'reject', feedback: 'شكراً لكم، لكن الميزانية لا تسمح حالياً.' });
+  }
   if (persona.duties === 'candidate') {
     return pick([
       `شكراً لوقتك. أنا ${persona.name}، وأرى أن خبرتي تناسب هذه الوظيفة، ويسعدني أن أشرح كيف عملت في مشاريع مشابهة.`,
