@@ -98,3 +98,20 @@ test('new agencies start with sample clients and projects; older ones get them o
   applyMigrations(mine);
   assert.equal(mine.clients.length, 1);
 });
+
+test('project profit counts team time at hourly rates, review time and expenses', async () => {
+  const { projectProfit, clientProfit, recordProjectExpense } = await import('../public/js/crm.js');
+  const s = agency();
+  s.employees = [{ id: 'e1', name: 'سارة', salary: 16000 }, { id: 'e2', name: 'خالد', salary: 8000 }];
+  const c = saveClient(s, { name: 'مقهى الركن' }, { newId });
+  const p = saveProject(s, { clientId: c.id, name: 'حملة', fee: 10000, status: 'active', leadId: 'e1', team: ['e2'] }, { newId });
+  // Khalid: one high task (8h at 50/h) reviewed twice by Sara (0.5h each at 100/h); one open task does not count.
+  s.tasks.push({ id: 't1', projectId: p.id, empId: 'e2', status: 'done', priority: 'high', reviews: [{ by: 'e1' }, { by: 'e1' }] });
+  s.tasks.push({ id: 't2', projectId: p.id, empId: 'e2', status: 'todo', priority: 'high' });
+  recordProjectExpense(s, p.id, 1500, { note: 'إعلانات ممولة' });
+  const r = projectProfit(s, p);
+  assert.deepEqual([r.laborHours, r.labor, r.expenses, r.cost, r.profit, r.margin], [8, 500, 1500, 2000, 8000, 80]);
+  assert.equal(s.finance.ledger[0].projectId, p.id);
+  assert.deepEqual(clientProfit(s, c.id), { fee: 10000, cost: 2000, profit: 8000, margin: 80 });
+  assert.throws(() => recordProjectExpense(s, 'nope', 10), /غير موجود/);
+});

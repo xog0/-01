@@ -270,6 +270,8 @@ table.fin tfoot td { font-weight: 700; }
 .badge.cancelled { background: rgba(255,255,255,0.08); color: var(--muted); }
 .badge.late { background: rgba(239,71,111,0.2); color: #ff9db3; }
 .badge.project { background: rgba(6,214,160,0.15); color: #7ee8c9; cursor: pointer; }
+.project .money.gain { color: var(--ok); }
+.project .money.loss { color: #ff9db3; }
 .project .actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .clients-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 

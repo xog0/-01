@@ -2,7 +2,7 @@
 // who leads each project, how far the work has come, and how much has been
 // collected. Pure functions over state.clients, state.projects, state.tasks
 // and state.finance, so they can be tested without a browser.
-import { addLedger } from './finance.js';
+import { addLedger, hourlyRate } from './finance.js';
 
 export const CLIENT_STATUS = { active: 'نشط', prospect: 'محتمل', past: 'سابق' };
 export const PROJECT_STATUS = { proposal: 'عرض سعر', active: 'قيد التنفيذ', done: 'مكتمل', cancelled: 'ملغى' };
@@ -94,11 +94,62 @@ export function recordPayment(state, projectId, amount, { at = Date.now(), note 
   if (v > outstanding(p)) throw new Error(`المبلغ أكبر من المتبقي على المشروع (${outstanding(p)})`);
   const client = state.clients.find((c) => c.id === p.clientId);
   const entry = addLedger(state, {
-    type: 'income', category: 'دفعة عميل', amount: v, at,
+    type: 'income', category: 'دفعة عميل', amount: v, at, projectId,
     note: `${client?.name || 'عميل'} — ${p.name}${note ? ` — ${note}` : ''}`,
   });
   p.paid = Math.round(((p.paid || 0) + v) * 100) / 100;
   return entry;
+}
+
+/** Money spent on a project (ads, tools, freelancers): an expense tied to it. */
+export function recordProjectExpense(state, projectId, amount, { note = '', category = 'مصروفات مشروع', at = Date.now() } = {}) {
+  const p = state.projects.find((x) => x.id === projectId);
+  if (!p) throw new Error('المشروع غير موجود');
+  const client = state.clients.find((c) => c.id === p.clientId);
+  return addLedger(state, { type: 'expense', category, amount, at, projectId,
+    note: `${client?.name || 'عميل'} — ${p.name}${note ? ` — ${note}` : ''}` });
+}
+
+const DEFAULT_HOURS = { low: 2, medium: 4, high: 8 };
+const REVIEW_HOURS = 0.5;
+
+/**
+ * What a project has cost so far and what it leaves: team time (estimated
+ * hours per finished task by priority, at each person's hourly rate, plus
+ * half an hour of the reviewer's time per review) and expenses booked
+ * against it. Uses current salaries, so it is an estimate.
+ */
+export function projectProfit(state, p) {
+  const fin = state.finance || {};
+  const hours = fin.taskHours || DEFAULT_HOURS;
+  const rate = (id) => {
+    const e = state.employees.find((x) => x.id === id);
+    return e ? hourlyRate(e.salary || 0, fin) : 0;
+  };
+  const tasks = state.tasks.filter((t) => t.projectId === p.id && t.status === 'done');
+  let laborHours = 0;
+  let labor = 0;
+  for (const t of tasks) {
+    const h = hours[t.priority] ?? DEFAULT_HOURS[t.priority] ?? 4;
+    laborHours += h;
+    labor += h * rate(t.empId);
+    for (const r of t.reviews || []) labor += REVIEW_HOURS * rate(r.by);
+  }
+  const expenses = (fin.ledger || []).filter((l) => l.projectId === p.id && l.type === 'expense').reduce((s, l) => s + l.amount, 0);
+  const cost = Math.round((labor + expenses) * 100) / 100;
+  const profit = Math.round(((p.fee || 0) - cost) * 100) / 100;
+  return {
+    labor: Math.round(labor * 100) / 100, laborHours, expenses: Math.round(expenses * 100) / 100, cost, profit,
+    margin: p.fee ? Math.round((profit / p.fee) * 100) : null, tasks: tasks.length,
+  };
+}
+
+export function clientProfit(state, clientId) {
+  const ps = (state.projects || []).filter((p) => p.clientId === clientId && p.status !== 'cancelled');
+  const sum = (k) => Math.round(ps.reduce((s, p) => s + projectProfit(state, p)[k], 0) * 100) / 100;
+  const fee = ps.reduce((s, p) => s + (p.fee || 0), 0);
+  const profit = sum('profit');
+  return { fee, cost: sum('cost'), profit, margin: fee ? Math.round((profit / fee) * 100) : null };
 }
 
 export function projectProgress(state, p) {

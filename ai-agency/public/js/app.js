@@ -12,6 +12,7 @@ import {
 import {
   CLIENT_STATUS, PROJECT_STATUS, PROJECT_TYPES, clientTotals, deleteClient, deleteProject, isLate, outstanding,
   portfolioBrief, projectContext, projectProgress, receivables, recordPayment, saveClient, saveProject,
+  projectProfit, clientProfit, recordProjectExpense,
 } from './crm.js';
 import {
   REQUEST_STATUS, ROLE_NAMES, createBonusRequest, currentStage, decideStage, inReview, ownerDecision, pendingForOwner, skipStage,
@@ -1295,8 +1296,16 @@ async function processBonusQueue() {
 }
 
 const pendingPromotions = () => (state.evaluations || []).filter((ev) => ev.pendingPromotion && emp(ev.empId) && LADDER[emp(ev.empId).level + 1]);
+// Everything else that waits on the owner: proposals written, projects past
+// their due date, and people whose points qualify them for the next rung.
+const proposalTask = (p) => state.tasks.filter((t) => t.projectId === p.id && t.status === 'done' && t.title.startsWith('عرض فني ومالي')).at(-1);
+const readyProposals = () => (state.projects || []).filter((p) => p.status === 'proposal' && !p.proposalSeen && proposalTask(p));
+const lateProjects = () => (state.projects || []).filter((p) => isLate(p) && p.lateAck !== p.due);
+const dueForPromotion = () => state.employees.filter((e) => LADDER[e.level + 1] && e.xp >= LADDER[e.level + 1].xp && e.promoAck !== e.level
+  && !pendingPromotions().some((ev) => ev.empId === e.id));
+const inboxCount = () => pendingForOwner(state).length + pendingPromotions().length + readyProposals().length + lateProjects().length + dueForPromotion().length;
 function renderApprovalsBadge() {
-  const n = pendingForOwner(state).length + pendingPromotions().length;
+  const n = inboxCount();
   const badge = $('#approvals-count');
   badge.textContent = String(n);
   badge.hidden = n === 0;
@@ -1361,16 +1370,62 @@ function promotionCard(ev) {
       h('button', { class: 'small', onclick: () => done(false) }, 'ليس الآن')));
 }
 
+function inboxCard(title, badge, sub, text, actions) {
+  return h('div', { class: 'project request' },
+    h('div', { class: 'row', style: 'justify-content: space-between' }, h('h4', {}, title), h('span', { class: 'badge proposal' }, badge)),
+    sub ? h('div', { class: 'client' }, sub) : null,
+    text ? h('p', { class: 'brief' }, text) : null,
+    h('div', { class: 'actions' }, ...actions.map(([label, fn, cls]) => h('button', { class: `small ${cls || ''}`, onclick: () => { fn(); save(); refresh(); renderApprovals(); } }, label))));
+}
+
+function otherInboxCards() {
+  const cards = [];
+  for (const p of readyProposals()) {
+    const t = proposalTask(p);
+    cards.push(inboxCard(`📝 عرض «${p.name}» جاهز`, 'عرض سعر', `${clientOf(p)?.name} · ${money(p.fee)} · كتبه ${emp(t.empId)?.name || '—'}`,
+      'اقرأ العرض، ثم سجّل رد العميل عليه.', [
+        ['📄 قراءة العرض', () => { $('#dlg-approvals').close(); showOutput(t); }],
+        ['✅ العميل قبِل: ابدأ المشروع', () => { saveProject(state, { ...p, status: 'active' }, { newId }); toast(`🎉 بدأ مشروع ${p.name}`); }, 'primary'],
+        ['❌ العميل رفض', () => { saveProject(state, { ...p, status: 'cancelled' }, { newId }); }, 'danger'],
+        ['لاحقاً', () => { p.proposalSeen = true; }],
+      ]));
+  }
+  for (const p of lateProjects()) {
+    const prog = projectProgress(state, p);
+    // Extend from today when already overdue, so the new date is really ahead.
+    const extend = (days) => {
+      const from = Math.max(Date.parse(p.due), Date.parse(new Date().toISOString().slice(0, 10)));
+      p.due = new Date(from + days * 86400000).toISOString().slice(0, 10);
+      toast(`مُدّد تسليم ${p.name} إلى ${p.due}`);
+    };
+    cards.push(inboxCard(`⏰ «${p.name}» متأخر`, 'مشروع متأخر', `${clientOf(p)?.name} · كان التسليم ${p.due} · أُنجز ${prog.done} من ${prog.total}`,
+      emp(p.leadId) ? `قائد المشروع: ${emp(p.leadId).name}` : '', [
+        ['تمديد أسبوع', () => extend(7), 'primary'],
+        ['تمديد أسبوعين', () => extend(14)],
+        ['تجاهل', () => { p.lateAck = p.due; }],
+      ]));
+  }
+  for (const e of dueForPromotion()) {
+    const next = LADDER[e.level + 1];
+    cards.push(inboxCard(`⬆️ ${e.name} مستوفٍ للترقية`, 'نقاط الخبرة', `${titleFor(e)} · ${e.xp} نقطة من ${next.xp} المطلوبة لـ«${next.name}»`, '', [
+      ['✅ ترقية', () => changeLevel(e, 1), 'primary'],
+      ['ليس الآن', () => { e.promoAck = e.level; }],
+    ]));
+  }
+  return cards;
+}
+
 function renderApprovals() {
   const waiting = pendingForOwner(state);
   const moving = inReview(state);
   const closed = (state.bonusRequests || []).filter((r) => r.status === 'approved' || r.status === 'rejected').slice(-20).reverse();
   fill($('#approvals-body'), 
-    h('p', { class: 'muted' }, 'المكافآت لا تُصرف تلقائياً. يرشّح المدير صاحب العمل المتميز، ثم يمر الطلب على مدير الموارد البشرية، ثم المدير المالي، ثم المدير التنفيذي، ثم يصل إليك. لا يُسجَّل شيء في الرواتب إلا باعتمادك.'),
-    h('h3', {}, `بانتظار موافقتك (${waiting.length + pendingPromotions().length})`),
+    h('p', { class: 'muted' }, 'كل ما ينتظر قرارك في مكان واحد: المكافآت (بعد مرورها على الموارد البشرية والمالية والمدير التنفيذي)، وتوصيات الترقية من التقييمات، ومن استوفى نقاط الترقية، والعروض الجاهزة، والمشاريع المتأخرة.'),
+    h('h3', {}, `بانتظار قرارك (${inboxCount()})`),
     pendingPromotions().length ? h('div', { class: 'clients-list' }, ...pendingPromotions().map(promotionCard)) : null,
-    waiting.length ? h('div', { class: 'clients-list' }, ...waiting.map((r) => requestCard(r, { actions: true })))
-      : pendingPromotions().length ? null : h('div', { class: 'empty' }, 'لا يوجد ما ينتظر موافقتك.'),
+    waiting.length ? h('div', { class: 'clients-list' }, ...waiting.map((r) => requestCard(r, { actions: true }))) : null,
+    otherInboxCards().length ? h('div', { class: 'clients-list' }, ...otherInboxCards()) : null,
+    inboxCount() ? null : h('div', { class: 'empty' }, 'لا يوجد ما ينتظر قرارك.'),
     moving.length ? h('h3', {}, `قيد المراجعة (${moving.length})`) : null,
     moving.length ? h('div', { class: 'clients-list' }, ...moving.map((r) => requestCard(r))) : null,
     moving.length && !bonusQueueRunning ? h('button', { class: 'small', onclick: () => processBonusQueue() }, '↻ متابعة المراجعة') : null,
@@ -1392,6 +1447,13 @@ function openClients(tab = crmTab) {
 
 function personChip(e, lead = false) {
   return Object.assign(avatar(e), { title: `${e.name} — ${titleFor(e)}${lead ? ' (قائد المشروع)' : ''}`, className: `avatar${lead ? ' lead' : ''}` });
+}
+
+function profitLine(p) {
+  const r = projectProfit(state, p);
+  if (!r.cost && !r.tasks) return null;
+  return h('div', { class: `money ${r.profit >= 0 ? 'gain' : 'loss'}`, title: `وقت الفريق ${fmt(r.laborHours)} ساعة = ${fmt(r.labor)} · مصروفات ${fmt(r.expenses)}` },
+    h('span', {}, `التكلفة ${fmt(r.cost)} · الربح ${fmt(r.profit)}`), h('span', {}, r.margin === null ? '' : `هامش ${r.margin}%`));
 }
 
 function projectCard(p) {
@@ -1416,6 +1478,7 @@ function projectCard(p) {
     h('div', { class: 'money' },
       h('span', {}, `القيمة ${money(p.fee)}`),
       h('span', { class: 'muted' }, `محصّل ${fmt(p.paid || 0)} · متبقٍ ${fmt(outstanding(p))}`)),
+    profitLine(p),
     h('div', { class: 'actions' },
       p.status === 'active' || p.status === 'proposal'
         ? h('button', { class: 'small primary', disabled: !lead || busy.has(`assign:${p.leadId}`), onclick: () => assignProjectTasks(p).then(() => renderClients()) },
@@ -1423,6 +1486,7 @@ function projectCard(p) {
       p.status === 'proposal' && lead
         ? h('button', { class: 'small', onclick: () => requestProposal(p) }, '📝 كتابة العرض') : null,
       outstanding(p) > 0 && p.status !== 'cancelled' ? h('button', { class: 'small', onclick: () => openPay(p) }, '💵 تحصيل دفعة') : null,
+      p.status !== 'cancelled' ? h('button', { class: 'small', onclick: () => openPay(p, 'expense') }, '💸 مصروف') : null,
       h('button', { class: 'small', onclick: () => openMeetingFor(p) }, '👥 اجتماع'),
       h('button', { class: 'small', onclick: () => showProjectTasks(p) }, '📋 المهام'),
       h('button', { class: 'small', onclick: () => openProjectForm(p) }, '✏️ تعديل')));
@@ -1457,6 +1521,8 @@ function renderClients() {
         c.contact ? h('div', { class: 'client' }, `👤 ${c.contact}`) : null,
         c.notes ? h('p', { class: 'brief' }, c.notes) : null,
         h('div', { class: 'money' }, h('span', {}, `${countOf(tot.projects, PROJECTS_WORD)} · ${money(tot.fee)}`), h('span', { class: 'muted' }, `متبقٍ ${fmt(tot.owed)}`)),
+        tot.projects ? (() => { const cp = clientProfit(state, c.id); return h('div', { class: `money ${cp.profit >= 0 ? 'gain' : 'loss'}` },
+          h('span', {}, `الربح حتى الآن ${money(cp.profit)}`), h('span', {}, cp.margin === null ? '' : `هامش ${cp.margin}%`)); })() : null,
         h('div', { class: 'actions' },
           h('button', { class: 'small primary', onclick: () => openProjectForm(null, c.id) }, '＋ مشروع'),
           h('button', { class: 'small', onclick: () => openClientForm(c) }, '✏️ تعديل')));
@@ -1543,20 +1609,31 @@ $('#pj-delete').addEventListener('click', async () => {
 });
 
 let payingProject = null;
-function openPay(p) {
+let payMode = 'pay';
+// One small form for both money in (a client payment) and money out (a project expense).
+function openPay(p, mode = 'pay') {
   payingProject = p.id;
+  payMode = mode;
   $('#pay-form').reset();
-  $('#pay-info').textContent = `${clientOf(p)?.name} · ${p.name} — المتبقي ${money(outstanding(p))}`;
-  $('#pay-amount').max = String(outstanding(p));
-  $('#pay-amount').value = String(outstanding(p));
+  $('#pay-title').textContent = mode === 'expense' ? 'مصروف على المشروع' : 'تحصيل دفعة';
+  $('#pay-info').textContent = mode === 'expense'
+    ? `${clientOf(p)?.name} · ${p.name} — يُسجَّل في الدفتر ويُخصم من ربح المشروع`
+    : `${clientOf(p)?.name} · ${p.name} — المتبقي ${money(outstanding(p))}`;
+  $('#pay-amount').max = mode === 'expense' ? '' : String(outstanding(p));
+  $('#pay-amount').value = mode === 'expense' ? '' : String(outstanding(p));
+  $('#pay-note').placeholder = mode === 'expense' ? 'مثال: ميزانية إعلانات ممولة، تصوير، أدوات' : 'مثال: الدفعة الأولى 40%';
   $('#dlg-pay').showModal();
 }
 $('#dlg-pay').addEventListener('close', () => {
   if ($('#dlg-pay').returnValue !== 'ok' || !payingProject) return;
   try {
-    const entry = recordPayment(state, payingProject, Number($('#pay-amount').value), { note: $('#pay-note').value.trim() });
+    const amount = Number($('#pay-amount').value);
+    const note = $('#pay-note').value.trim();
+    const entry = payMode === 'expense'
+      ? recordProjectExpense(state, payingProject, amount, { note })
+      : recordPayment(state, payingProject, amount, { note });
     save();
-    toast(`💵 سُجّلت دفعة ${money(entry.amount)} في الدفتر`);
+    toast(payMode === 'expense' ? `💸 سُجّل مصروف ${money(entry.amount)} على المشروع` : `💵 سُجّلت دفعة ${money(entry.amount)} في الدفتر`);
   } catch (err) { toast(err.message); }
   payingProject = null;
   renderClients();
@@ -1571,6 +1648,7 @@ function requestProposal(p) {
   addTask(lead.id, `عرض فني ومالي: ${p.name}`.slice(0, 200),
     `اكتب عرضاً للعميل يتضمن: فهمنا لاحتياجه، الأهداف، نطاق العمل والمخرجات، الجدول الزمني، الفريق، والتكلفة (${fmt(p.fee)} ${state.finance?.currency || ''})، ثم الخطوات التالية.`,
     'high', null, p.id);
+  runWhenFree(state.tasks.at(-1).id); // high priority from the owner: start now
   toast(`📝 كُلّف ${lead.name} بكتابة عرض ${p.name}`);
   renderClients();
 }
@@ -1692,6 +1770,23 @@ function renderFinance() {
         h('td', {}, a.by === 'owner' ? 'المالك' : emp(a.by)?.name || '—'),
         h('td', {}, a.type === 'raise' || a.type === 'cut' ? `${fmt(a.from)} ← ${fmt(a.to)}` : a.paid ? `صُرفت (${periodLabel(a.period)})` : 'مفتوحة'))))))
       : h('div', { class: 'empty' }, 'لا توجد حركات بعد.'));
+  } else if (finTab === 'profit') {
+    const rows = (state.projects || []).filter((p) => p.status !== 'cancelled').map((p) => ({ p, r: projectProfit(state, p) }))
+      .sort((a, b) => b.r.profit - a.r.profit);
+    const tot = rows.reduce((t, { p, r }) => ({ fee: t.fee + p.fee, paid: t.paid + (p.paid || 0), cost: t.cost + r.cost, profit: t.profit + r.profit }), { fee: 0, paid: 0, cost: 0, profit: 0 });
+    fill(body,
+      h('div', { class: 'tiles' },
+        tile('قيمة المشاريع', money(tot.fee)), tile('المحصّل منها', money(tot.paid), 'good'),
+        tile('التكلفة حتى الآن', money(tot.cost), 'bad'), tile('الربح المتوقع', money(tot.profit), tot.profit >= 0 ? 'good' : 'bad')),
+      h('p', { class: 'muted' }, `التكلفة = وقت الفريق (ساعات كل مهمة منجزة حسب أولويتها × أجر ساعة صاحبها، ونصف ساعة من وقت المراجِع لكل مراجعة) + المصروفات المسجلة على المشروع. تقدير مبني على الرواتب الحالية؛ عدّل ساعات المهام من الإعدادات.`),
+      rows.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
+        h('thead', {}, h('tr', {}, ...['العميل', 'المشروع', 'الحالة', 'القيمة', 'محصّل', 'ساعات الفريق', 'تكلفة الفريق', 'مصروفات', 'الربح', 'الهامش'].map((x) => h('th', {}, x)))),
+        h('tbody', {}, ...rows.map(({ p, r }) => h('tr', {},
+          h('td', {}, clientOf(p)?.name || '—'), h('td', {}, p.name), h('td', {}, PROJECT_STATUS[p.status]),
+          h('td', { class: 'num' }, fmt(p.fee)), h('td', { class: 'num' }, fmt(p.paid || 0)), h('td', { class: 'num' }, fmt(r.laborHours)),
+          h('td', { class: 'num minus' }, fmt(r.labor)), h('td', { class: 'num minus' }, r.expenses ? fmt(r.expenses) : '—'),
+          h('td', { class: `num ${r.profit >= 0 ? 'plus' : 'minus'}` }, h('b', {}, fmt(r.profit))),
+          h('td', { class: 'num' }, r.margin === null ? '—' : `${r.margin}%`)))))) : h('div', { class: 'empty' }, 'لا توجد مشاريع بعد.'));
   } else if (finTab === 'ledger') {
     const type = h('select', { id: 'led-type' }, h('option', { value: 'income' }, 'إيراد'), h('option', { value: 'expense' }, 'مصروف'));
     const cat = h('input', { id: 'led-cat', maxlength: 60, placeholder: 'البند: دفعة عميل، إعلانات، اشتراكات…' });
@@ -1721,13 +1816,15 @@ function renderFinance() {
     const form = h('form', { class: 'form-grid card', onsubmit: (ev) => {
       ev.preventDefault();
       const num = (id) => Number($(`#${id}`).value);
-      const vals = { ob: num('fs-ob'), ot: num('fs-ot'), hrs: num('fs-hrs'), low: num('fs-low'), med: num('fs-med'), high: num('fs-high') };
+      const vals = { ob: num('fs-ob'), ot: num('fs-ot'), hrs: num('fs-hrs'), low: num('fs-low'), med: num('fs-med'), high: num('fs-high'),
+        hl: num('fs-hl'), hm: num('fs-hm'), hh: num('fs-hh') };
       if (Object.values(vals).some((v) => !Number.isFinite(v) || v < 0) || vals.ot < 1 || vals.hrs < 1) return toast('تحقق من الأرقام: يجب أن تكون موجبة.');
       fin.currency = $('#fs-cur').value.trim().slice(0, 8) || fin.currency;
       fin.openingBalance = vals.ob;
       fin.overtimeRate = vals.ot;
       fin.monthlyHours = vals.hrs;
       fin.taskBonus = { low: vals.low, medium: vals.med, high: vals.high };
+      fin.taskHours = { low: vals.hl, medium: vals.hm, high: vals.hh };
       save();
       renderFinance();
       toast('تم حفظ الإعدادات المالية');
@@ -1736,6 +1833,9 @@ function renderFinance() {
     field('الرصيد الافتتاحي', 'fs-ob', fin.openingBalance, { type: 'number', min: '0', step: 'any' }),
     field('معامل العمل الإضافي', 'fs-ot', fin.overtimeRate, { type: 'number', min: '1', step: '0.25' }),
     field('ساعات العمل الشهرية', 'fs-hrs', fin.monthlyHours, { type: 'number', min: '1' }),
+    field('ساعات مهمة منخفضة (لحساب التكلفة)', 'fs-hl', (fin.taskHours || {}).low ?? 2, { type: 'number', min: '0', step: 'any' }),
+    field('ساعات مهمة متوسطة', 'fs-hm', (fin.taskHours || {}).medium ?? 4, { type: 'number', min: '0', step: 'any' }),
+    field('ساعات مهمة عالية', 'fs-hh', (fin.taskHours || {}).high ?? 8, { type: 'number', min: '0', step: 'any' }),
     field('المكافأة المقترحة لعمل متميز (أولوية منخفضة)', 'fs-low', fin.taskBonus.low, { type: 'number', min: '0' }),
     field('المكافأة المقترحة لعمل متميز (أولوية متوسطة)', 'fs-med', fin.taskBonus.medium, { type: 'number', min: '0' }),
     field('المكافأة المقترحة لعمل متميز (أولوية عالية)', 'fs-high', fin.taskBonus.high, { type: 'number', min: '0' }),

@@ -39,6 +39,7 @@ export function createFinance(now = Date.now()) {
     taskBonus: { low: 50, medium: 100, high: 200 },
     overtimeRate: 1.5,
     monthlyHours: 160,
+    taskHours: { low: 2, medium: 4, high: 8 }, // estimated effort, for project costing
     period: periodOf(now),
     nextId: 1,
     adjustments: [],
@@ -129,7 +130,7 @@ export function runPayroll(state, { by = 'owner', memo = '', at = Date.now() } =
   return record;
 }
 
-export function addLedger(state, { type, category, amount, note = '', at = Date.now(), auto = false }) {
+export function addLedger(state, { type, category, amount, note = '', at = Date.now(), auto = false, projectId = null }) {
   const fin = state.finance;
   if (type !== 'income' && type !== 'expense') throw new Error('نوع القيد غير معروف');
   const entry = {
@@ -137,6 +138,7 @@ export function addLedger(state, { type, category, amount, note = '', at = Date.
     category: String(category || (type === 'income' ? 'إيرادات' : 'مصروفات')).trim().slice(0, 60),
     amount: positive(amount, FIN_LIMITS.amount * 10, 'المبلغ'),
     note: String(note).trim().slice(0, FIN_LIMITS.reason),
+    ...(projectId ? { projectId } : {}),
   };
   fin.ledger.push(entry);
   trim(fin);
