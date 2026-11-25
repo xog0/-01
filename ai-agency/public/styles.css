@@ -2,6 +2,7 @@
   --bg: #0f1220;
   --panel: rgba(22, 26, 46, 0.92);
   --panel-solid: #161a2e;
+  --field: #10132a;
   --line: rgba(255, 255, 255, 0.1);
   --text: #eef0ff;
   --muted: #9aa3c7;
@@ -49,6 +50,20 @@ input, select, textarea {
   border-radius: 10px;
   padding: 9px 12px;
 }
+/* Drop-down lists: browsers paint the open list from the control's own
+   background, so a see-through background shows up as a pale list with pale
+   text. Give the control and every option a solid dark background. */
+html, body, select { color-scheme: dark; }
+select { background-color: var(--field); color: var(--text); }
+select option, select optgroup { background-color: var(--panel-solid); color: var(--text); }
+select option:checked { background-color: var(--accent); color: #fff; }
+select option:disabled { color: var(--muted); }
+/* Scrollbars in dark too (lists, panels, dialogs). */
+* { scrollbar-color: rgba(255, 255, 255, 0.28) transparent; scrollbar-width: thin; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.22); border-radius: 10px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.35); background-clip: padding-box; }
 textarea { resize: vertical; }
 input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 13px; flex: 1; }
