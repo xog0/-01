@@ -421,6 +421,8 @@ export function createInitialState() {
     evaluations: [],
     clientChats: {},
     deals: [],
+    reports: [],
+    calendar: { workDays: [0, 1, 2, 3, 4], holidays: [] },
     leaves: [],
     attendance: {},
     hiring: null,

@@ -295,6 +295,22 @@ table.fin tfoot td { font-weight: 700; }
 .deal .brief { font-size: 12px; color: var(--muted); margin: 0; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .deal .notice { margin: 0; font-size: 12px; }
 .deal .actions { display: flex; gap: 4px; flex-wrap: wrap; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; flex-shrink: 0; }
+.cal-head { text-align: center; color: var(--muted); font-size: 12px; padding: 4px 0; }
+.cal-cell { min-height: 74px; padding: 6px; border-radius: 10px; border: 1px solid var(--line); background: rgba(255,255,255,0.04); display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: start; color: inherit; font: inherit; cursor: pointer; min-width: 0; }
+.cal-cell b { font-size: 14px; }
+.cal-cell small { font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.cal-cell small.hol { color: #fca5a5; }
+.cal-cell.off { background: repeating-linear-gradient(135deg, rgba(255,255,255,0.035) 0 6px, transparent 6px 12px); color: var(--muted); border-style: dashed; }
+.cal-cell.today { border-color: var(--warn); }
+.cal-cell.picked { box-shadow: 0 0 0 2px var(--accent); }
+.cal-cell.blank { border: 0; background: transparent; cursor: default; }
+.cal-workdays { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; font-size: 13px; }
+.cal-workdays label.check { display: inline-flex; gap: 4px; align-items: center; }
+#cal-day h3 { margin: 0; font-size: 15px; }
+.cal-sec h4 { margin: 10px 0 4px; font-size: 13px; }
+.cal-sec ul { margin: 0; padding-inline-start: 18px; font-size: 13px; line-height: 1.8; }
+.linkish { background: none; border: 0; padding: 0; color: #c4b5fd; cursor: pointer; font: inherit; text-align: start; text-decoration: underline; text-underline-offset: 3px; }
 .lib-filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; padding-bottom: 6px; }
 .lib-group { margin-bottom: 16px; }
 .lib-group h3 { font-size: 14px; margin: 4px 0 8px; }
@@ -387,7 +403,14 @@ details summary { cursor: pointer; color: var(--muted); }
 }
 .toast.show { opacity: 1; transform: translateX(-50%); }
 
+@media (max-width: 1440px) and (min-width: 761px) {
+  .actions { gap: 4px; }
+  .actions button { padding: 6px 9px; font-size: 13px; }
+  .stats { gap: 10px; }
+}
 @media (max-width: 760px) {
+  .cal-cell { min-height: 54px; padding: 4px; }
+  .cal-cell small { font-size: 10px; }
   .lib-filters { grid-template-columns: 1fr 1fr; }
   .lib-filters input { grid-column: 1 / -1; }
   body { font-size: 14px; }

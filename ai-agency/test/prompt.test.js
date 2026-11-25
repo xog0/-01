@@ -126,6 +126,13 @@ test('candidates mode asks for three distinct people as JSON; a candidate person
   assert.throws(() => validateChatRequest(base({ persona: { ...cand, duties: 'admin' } })), /مسؤوليات غير معروفة/);
 });
 
+test('report mode sticks to the data it is given', () => {
+  const sys = buildSystemPrompt(validateChatRequest(base({ mode: 'report' })));
+  assert.match(sys, /خطة الصباح/);
+  assert.match(sys, /التقرير الأسبوعي/);
+  assert.match(sys, /دون اختلاق أرقام/);
+});
+
 test('sales modes: the sales head proposes prospects; a prospect answers a proposal', () => {
   const leads = buildSystemPrompt(validateChatRequest(base({ mode: 'leads' })));
   assert.match(leads, /ثلاثة عملاء محتملين/);

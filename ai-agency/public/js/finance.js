@@ -15,7 +15,7 @@ export const ADJ_TYPES = {
   cut: { name: 'تخفيض راتب', sign: 0 }, // the owner's decision only (enforced below)
 };
 
-const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+export const MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 const FIN_LIMITS = { amount: 1_000_000, hours: 200, reason: 200, keepAdjustments: 300, keepLedger: 400, keepPayrolls: 12 };
 
 export const periodOf = (ms) => {

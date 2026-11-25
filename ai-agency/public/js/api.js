@@ -46,7 +46,7 @@ export async function askEmployee(payload) {
   return data.truncated ? `${data.reply}\n\n(…توقف الرد لأنه طويل جداً)` : data.reply;
 }
 
-const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick', bonus: 'quick', evaluation: 'quick', client_review: 'quick', candidates: 'quick', leads: 'quick', deal_review: 'quick' };
+const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick', bonus: 'quick', evaluation: 'quick', client_review: 'quick', candidates: 'quick', leads: 'quick', deal_review: 'quick', report: 'quick' };
 
 async function askViaSample(sample, payload) {
   const req = validateChatRequest(payload);
@@ -100,6 +100,11 @@ async function demoReply({ mode, persona, messages }) {
     return JSON.stringify(Math.random() < 0.35
       ? { decision: 'changes', feedback: 'العمل جيد، لكن أريد نبرة أقرب لزبائني وعرضاً أوضح للسعر.', satisfaction: 3 }
       : { decision: 'approve', feedback: 'ممتاز، هذا ما كنت أريده. شكراً لكم.', satisfaction: 5 });
+  }
+  if (mode === 'report') {
+    if (last.includes('خطة الصباح')) return `**أولويات اليوم**\n- إنهاء المهام عالية الأولوية أولاً.\n- متابعة المشاريع القريبة من التسليم.\n\n**انتباه:** راجعوا المهام المتأخرة قبل الظهر.${note}`;
+    if (last.includes('نهاية اليوم')) return `**ما أنجزناه اليوم**\n- سلّم الفريق مهامه المخطط لها.\n\n**خطة الغد**\n- استكمال المتبقي ومراجعة ملاحظات العملاء.${note}`;
+    return `**الأسبوع باختصار**\n- تقدّم جيد في المشاريع الجارية.\n\n**توصيتان**\n1. التركيز على تحصيل المستحقات.\n2. متابعة الفرص في مرحلة التفاوض.${note}`;
   }
   if (mode === 'candidates' || mode === 'leads') return ''; // the app falls back to a ready-made list
   if (mode === 'deal_review') {

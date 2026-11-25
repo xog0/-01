@@ -6,7 +6,7 @@ import {
 import { askEmployee, backendStatus } from './api.js';
 import { connectCloud } from './cloud.js';
 import {
-  ADJ_TYPES, addAdjustment, addLedger, balance, defaultSalary, financeBrief, monthTotals, parseFinanceOrders,
+  ADJ_TYPES, MONTHS, addAdjustment, addLedger, balance, defaultSalary, financeBrief, monthTotals, parseFinanceOrders,
   payrollPreview, periodLabel, runPayroll,
 } from './finance.js';
 import {
@@ -28,6 +28,9 @@ import {
 import {
   DEAL_STAGES, OPEN_STAGES, isOpen, linkProposal, moveDeal, parseDealReview, parseLeads, pipelineStats, sampleLeads, saveDeal, syncDealWithProject,
 } from './sales.js';
+import {
+  REPORT_TYPES, WEEKDAYS, addReport, dayEvents, isWorkDay, lastWorkDayOfWeek, monthGrid, reportOf, setHoliday, weekStart, weeklyStats, workDays,
+} from './calendar.js';
 
 // ------------------------------------------------------------ DOM helpers
 const $ = (sel) => document.querySelector(sel);
@@ -663,21 +666,26 @@ async function assignTasks(manager, members, perMember, focus, proj, { urgent = 
 }
 
 // Each employee works through their own queue; employees work in parallel.
+const workdayLabel = (text) => { $('#btn-workday').textContent = text; };
 async function startWorkday() {
   if (workdayRunning) return;
-  workdayRunning = true;
-  $('#btn-workday').disabled = true;
-  $('#btn-workday').textContent = '⏳ الفريق يعمل…';
+  const today = dayKey();
   if (!state.tasks.some((t) => t.status === 'todo' && !meeting?.attendees.includes(t.empId) && !awayNow(emp(t.empId)))) {
-    workdayRunning = false;
-    $('#btn-workday').disabled = false;
-    $('#btn-workday').textContent = '▶ ابدأ يوم العمل';
     return toast('لا توجد مهام في الانتظار. اطلب من سارة تكليف الفريق، أو أضف مهاماً من لوحة المهام.');
   }
+  if (!isWorkDay(state, today)) {
+    const off = dayEvents(state, today).holiday;
+    if (!(await confirmBox(`اليوم ${WEEKDAYS[new Date().getDay()]} ${off ? `عطلة (${off.name})` : 'عطلة نهاية الأسبوع'}. هل تريد أن يعمل الفريق اليوم؟`, 'نعم، يوم عمل'))) return;
+  }
+  workdayRunning = true;
+  $('#btn-workday').disabled = true;
   const order = { high: 0, medium: 1, low: 2 };
   syncAway();
-  markAttendance(state, dayKey(), atWork(state.employees).map((e) => e.id));
+  markAttendance(state, today, atWork(state.employees).map((e) => e.id));
   save();
+  workdayLabel('☀️ اجتماع الصباح…');
+  await morningStandup(today);
+  workdayLabel('⏳ الفريق يعمل…');
   await Promise.all(atWork(state.employees).map(async (e) => {
     for (;;) {
       if (meeting?.attendees.includes(e.id)) return;
@@ -688,10 +696,127 @@ async function startWorkday() {
       if (next.status !== 'done') return; // stop this employee's queue on error
     }
   }));
+  workdayLabel('📝 تقارير نهاية اليوم…');
+  const eod = await endOfDayReports(today);
+  const weekly = lastWorkDayOfWeek(state, today) && !reportOf(state, 'weekly', today) ? await weeklyReport(today) : null;
   workdayRunning = false;
   $('#btn-workday').disabled = false;
-  $('#btn-workday').textContent = '▶ ابدأ يوم العمل';
-  toast('🏁 انتهى يوم العمل');
+  workdayLabel('▶ ابدأ يوم العمل');
+  toast(`🏁 انتهى يوم العمل${eod ? ` · ${countOf(eod, REPORTS_WORD)} في التقويم` : ''}${weekly ? ' · 📊 التقرير الأسبوعي جاهز' : ''}`);
+  refresh();
+}
+
+// ---- reports: the morning plan, each manager's end of day, the weekly report
+const REPORTS_WORD = ['تقرير واحد', 'تقريران', 'تقارير', 'تقريراً'];
+const reportTitle = (r) => `${REPORT_TYPES[r.type]} · ${r.day}${emp(r.by) ? ` · ${emp(r.by).name}` : ''}`;
+const showReport = (r) => { r.seen = true; save(); renderApprovalsBadge(); showOutput({ title: reportTitle(r), output: r.text, doneAt: r.at }); };
+function upsertReport(type, day, by, text) {
+  const old = reportOf(state, type, day, by);
+  if (old) Object.assign(old, { text: text.slice(0, 6000), at: Date.now(), seen: false });
+  return old || addReport(state, { type, day, by, text }, { newId });
+}
+const listTasks = (list) => list.map((t) => `- ${emp(t.empId)?.name || '—'}: ${t.title}${t.priority === 'high' ? ' (عالية)' : ''}`).join('\n');
+
+async function morningStandup(today) {
+  if (reportOf(state, 'standup', today)) return null;
+  const heads = atWork(state.employees.filter((e) => e.level >= MANAGER_LEVEL)).sort(byRank);
+  const lead = heads[0];
+  if (!lead) return null;
+  const room = heads.length > ROOMS.b.seats ? 'a' : 'b';
+  const walkers = heads.slice(0, ROOMS[room].seats).filter((e) => !busy.has(e.id) && !meeting?.attendees.includes(e.id));
+  walkers.forEach((e) => setStatus(e, 'meeting', '☀️ اجتماع الصباح'));
+  const walk = meeting ? Promise.resolve() : office.sendToMeeting(walkers.map((e) => e.id), room);
+  const todo = state.tasks.filter((t) => t.status === 'todo' && !awayNow(emp(t.empId)));
+  const soon = (state.projects || []).filter((p) => p.status === 'active' && p.due && p.due >= today && p.due <= addDays(today, 3));
+  const talks = (state.deals || []).filter((d) => d.stage === 'negotiation' || d.stage === 'proposal');
+  const away = state.employees.filter(awayNow);
+  let text = '';
+  try {
+    text = await ask(lead, 'report', [{ role: 'user', content: (
+      `نوع التقرير: خطة الصباح، بعد اجتماع قصير مع ${walkers.map((e) => e.name).join('، ') || 'الفريق'}. في حدود 150 كلمة.\n` +
+      `اليوم: ${WEEKDAYS[new Date().getDay()]} ${today}\n` +
+      `المهام المنتظرة (${todo.length}):\n${listTasks(todo.slice(0, 25)) || '- لا شيء'}\n` +
+      `في إجازة: ${away.map((e) => e.name).join('، ') || 'لا أحد'}\n` +
+      `مشاريع تسليمها خلال 3 أيام: ${soon.map((p) => `${p.name} (${p.due})`).join('، ') || 'لا شيء'}\n` +
+      `فرص بيع في مرحلة العرض أو التفاوض: ${talks.map((d) => `${d.title} (${fmt(d.value)})`).join('، ') || 'لا شيء'}`).slice(0, 5800) }]);
+  } catch (err) {
+    toast(err.message);
+  }
+  await walk;
+  await sleep(1200);
+  if (!meeting) await office.returnToDesks(walkers.map((e) => e.id));
+  walkers.forEach((e) => setStatus(e, 'idle'));
+  if (!text) return null;
+  const r = upsertReport('standup', today, lead.id, text);
+  save();
+  toast(`☀️ ${lead.name}: خطة اليوم جاهزة في التقويم`);
+  return r;
+}
+
+async function endOfDayReports(today) {
+  const doneToday = state.tasks.filter((t) => t.status === 'done' && t.doneAt && dayKey(t.doneAt) === today);
+  if (!doneToday.length) return 0;
+  const direct = (m) => state.employees.filter((x) => x.managerId === m.id);
+  const managers = atWork(state.employees)
+    .map((m) => ({ m, done: doneToday.filter((t) => direct(m).some((x) => x.id === t.empId)) }))
+    .filter((x) => x.done.length)
+    .sort((a, b) => b.done.length - a.done.length || byRank(a.m, b.m))
+    .slice(0, 4);
+  let n = 0;
+  for (const { m, done } of managers) {
+    const left = state.tasks.filter((t) => t.status !== 'done' && direct(m).some((x) => x.id === t.empId));
+    const prev = m.status;
+    setStatus(m, 'working', '📝 تقرير نهاية اليوم');
+    try {
+      const text = await ask(m, 'report', [{ role: 'user', content: (
+        `نوع التقرير: تقرير نهاية اليوم عن فريقك المباشر، ${today}. في حدود 120 كلمة.\n` +
+        `ما أنجزه فريقك اليوم:\n${done.map((t) => `- ${emp(t.empId)?.name}: ${t.title}${t.reviews?.length ? (t.reviews[0].decision === 'approve' ? ' (اعتُمد من أول مراجعة)' : ` (اعتُمد بعد ${t.reviews.length - 1} تعديل)`) : ''}`).join('\n')}\n` +
+        `المتبقي على فريقك:\n${listTasks(left.slice(0, 15)) || '- لا شيء'}\n` +
+        `في إجازة من فريقك: ${direct(m).filter(awayNow).map((e) => e.name).join('، ') || 'لا أحد'}`).slice(0, 5800) }]);
+      if (text) { upsertReport('eod', today, m.id, text); n++; }
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      setStatus(m, prev === 'working' ? 'idle' : prev || 'idle');
+    }
+  }
+  save();
+  return n;
+}
+
+async function weeklyReport(today) {
+  const ceo = atWork([positionHolder(POSITIONS[0]), topManager(), ...state.employees.filter((e) => e.level >= MANAGER_LEVEL).sort(byRank)].filter(Boolean))[0];
+  if (!ceo || busy.has('weekly')) return null;
+  busy.add('weekly');
+  const from = weekStart(today);
+  const st = weeklyStats(state, from, today);
+  const live = (state.projects || []).filter((p) => p.status === 'active');
+  const prev = ceo.status;
+  setStatus(ceo, 'working', '📊 التقرير الأسبوعي');
+  let r = null;
+  try {
+    const text = await ask(ceo, 'report', [{ role: 'user', content: (
+      `نوع التقرير: التقرير الأسبوعي إلى المالك عن الأسبوع من ${from} إلى ${today}. في حدود 250 كلمة.\n` +
+      `مهام منجزة: ${st.tasksDone}، منها ${st.firstPass} اعتُمدت من أول مراجعة\n` +
+      `الأكثر إنجازاً: ${st.top.map((x) => `${emp(x.empId)?.name || '—'} (${x.n})`).join('، ') || 'لا أحد'}\n` +
+      `المالية هذا الأسبوع (${state.finance.currency}): إيرادات ${fmt(st.income)}، مصروفات ${fmt(st.expense)}، الرصيد الحالي ${fmt(balance(state))}، مستحقات العملاء ${fmt(receivables(state))}\n` +
+      `صفقات فزنا بها: ${st.won.map((d) => `${d.title} (${fmt(d.value)})`).join('، ') || 'لا شيء'}\n` +
+      `صفقات خسرناها: ${st.lost.map((d) => `${d.title}${d.lostReason ? ` — ${d.lostReason}` : ''}`).join('، ') || 'لا شيء'}\n` +
+      `مسار المبيعات المفتوح: ${pipelineStats(state).open} فرص بقيمة ${fmt(pipelineStats(state).value)}\n` +
+      `المشاريع الجارية: ${live.map((p) => `${p.name} (${projectProgress(state, p).pct}%${isLate(p) ? '، متأخر' : ''})`).join('، ') || 'لا شيء'}\n` +
+      `تسليمات الأسبوع القادم: ${st.projectsDue.map((p) => `${p.name} (${p.due})`).join('، ') || 'لا شيء'}\n` +
+      `الفريق: ${state.employees.length} موظفاً، ${st.workdays} أيام عمل مسجلة بمتوسط حضور ${st.presence}، وأيام إجازة ${st.leaveDays}، واجتماعات ${st.meetings}`).slice(0, 5800) }]);
+    if (text) {
+      r = upsertReport('weekly', today, ceo.id, text);
+      save();
+    }
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    setStatus(ceo, prev === 'working' ? 'idle' : prev || 'idle');
+    busy.delete('weekly');
+  }
+  return r;
 }
 $('#btn-workday').addEventListener('click', startWorkday);
 
@@ -834,6 +959,82 @@ $('#lib-q').addEventListener('input', (ev) => { libFilter.q = ev.target.value.sl
 $('#lib-download-all').addEventListener('click', () => {
   const items = libraryItems(state, libFilter);
   if (items.length) saveFile(`مكتبة الأعمال ${today()}`, 'md', libraryMd(items));
+});
+
+// ------------------------------------------------------------ calendar
+let calMonth = null; // [year, month]
+let calDay = null;
+function openCalendar() {
+  const now = new Date();
+  calMonth ||= [now.getFullYear(), now.getMonth()];
+  calDay ||= dayKey();
+  renderCalendar();
+  if (!$('#dlg-calendar').open) $('#dlg-calendar').showModal();
+}
+function renderCalendar() {
+  const [y, m] = calMonth;
+  const today = dayKey();
+  $('#cal-title').textContent = `📅 ${MONTHS[m]} ${y}`;
+  const cell = (key) => {
+    if (!key) return h('div', { class: 'cal-cell blank' });
+    const ev = dayEvents(state, key);
+    const badges = [
+      ev.leave.length ? `🌴${ev.leave.length}` : '', ev.due.length ? `📌${ev.due.length}` : '', ev.meetings.length ? `👥${ev.meetings.length}` : '',
+      ev.done.length ? `✅${ev.done.length}` : '', ev.reports.length ? `📝${ev.reports.length}` : '',
+    ].filter(Boolean);
+    return h('button', {
+      class: `cal-cell${ev.work ? '' : ' off'}${key === today ? ' today' : ''}${key === calDay ? ' picked' : ''}`,
+      title: ev.holiday ? ev.holiday.name : undefined,
+      onclick: () => { calDay = key; renderCalendar(); },
+    }, h('b', {}, String(Number(key.slice(8)))), ev.holiday ? h('small', { class: 'hol' }, ev.holiday.name) : null, h('small', {}, badges.join(' ')));
+  };
+  fill($('#cal-grid'),
+    WEEKDAYS.map((d) => h('div', { class: 'cal-head' }, d)),
+    monthGrid(y, m).flat().map(cell));
+  renderCalendarDay();
+  fill($('#cal-workdays'), h('span', { class: 'muted' }, 'أيام العمل: '), WEEKDAYS.map((name, i) => h('label', { class: 'check' },
+    h('input', { type: 'checkbox', checked: workDays(state).includes(i), onchange: (ev) => {
+      const set = new Set(workDays(state));
+      if (ev.target.checked) set.add(i); else set.delete(i);
+      if (!set.size) { ev.target.checked = true; return toast('يجب أن يبقى يوم عمل واحد على الأقل'); }
+      state.calendar = { ...(state.calendar || {}), workDays: [...set].sort(), holidays: state.calendar?.holidays || [] };
+      save();
+      renderCalendar();
+    } }), name)));
+}
+function renderCalendarDay() {
+  const key = calDay;
+  const ev = dayEvents(state, key);
+  const d = new Date(`${key}T12:00:00`);
+  const section = (title, items) => (items.length ? h('div', { class: 'cal-sec' }, h('h4', {}, title), h('ul', {}, items.map((x) => h('li', {}, x)))) : null);
+  fill($('#cal-day'),
+    h('div', { class: 'row', style: 'justify-content: space-between' },
+      h('h3', {}, `${WEEKDAYS[d.getDay()]} ${key}${ev.work ? '' : ev.holiday ? ` · عطلة: ${ev.holiday.name}` : ' · عطلة نهاية الأسبوع'}`),
+      ev.holiday
+        ? h('button', { class: 'small', onclick: () => { setHoliday(state, key, ''); save(); renderCalendar(); } }, 'إلغاء العطلة')
+        : ev.work ? h('button', { class: 'small', onclick: async () => {
+          const name = await promptBox(`اسم العطلة في ${key}`, 'مثال: اليوم الوطني');
+          if (!name) return;
+          try { setHoliday(state, key, name); save(); renderCalendar(); } catch (err) { toast(err.message); }
+        } }, '🏖️ اجعله عطلة') : null),
+    ev.attendance ? h('p', { class: 'muted' }, `الحضور: ${ev.attendance.present.length}${ev.attendance.leave.length ? ` · في إجازة ${ev.attendance.leave.length}` : ''}`) : null,
+    section('📝 التقارير', ev.reports.map((r) => h('button', { class: 'linkish', onclick: () => showReport(r) }, `${REPORT_TYPES[r.type]}${emp(r.by) ? ` — ${emp(r.by).name}` : ''}`))),
+    section('📌 تسليمات', ev.due.map((p) => `${p.name} — ${clientOf(p)?.name || ''}${isLate(p) ? ' (متأخر)' : ''}`)),
+    section('🌴 إجازات', ev.leave.map((x) => `${x.emp.name} (${LEAVE_TYPES[x.leave.type].name})`)),
+    section('👥 اجتماعات', ev.meetings.map((mt) => h('button', { class: 'linkish', onclick: () => showOutput({ title: `محضر: ${mt.topic}`, output: `${mt.summary || ''}\n\n${(mt.log || []).map((l) => `${l.who}: ${l.text}`).join('\n\n')}`, doneAt: mt.at }) }, mt.topic))),
+    section('✅ أعمال أُنجزت', ev.done.map((t) => h('button', { class: 'linkish', onclick: () => showOutput(t) }, `${t.title} — ${emp(t.empId)?.name || ''}`))),
+    !ev.reports.length && !ev.due.length && !ev.leave.length && !ev.meetings.length && !ev.done.length
+      ? h('p', { class: 'empty' }, key > dayKey() ? 'لا شيء مجدول لهذا اليوم.' : 'لم يُسجَّل شيء في هذا اليوم.') : null);
+}
+$('#btn-calendar').addEventListener('click', openCalendar);
+$('#cal-prev').addEventListener('click', () => { const [y, m] = calMonth; calMonth = m ? [y, m - 1] : [y - 1, 11]; renderCalendar(); });
+$('#cal-next').addEventListener('click', () => { const [y, m] = calMonth; calMonth = m === 11 ? [y + 1, 0] : [y, m + 1]; renderCalendar(); });
+$('#cal-today').addEventListener('click', () => { const n = new Date(); calMonth = [n.getFullYear(), n.getMonth()]; calDay = dayKey(); renderCalendar(); });
+$('#cal-weekly').addEventListener('click', async () => {
+  $('#cal-weekly').disabled = true;
+  const r = await weeklyReport(dayKey());
+  $('#cal-weekly').disabled = false;
+  if (r) { calDay = r.day; renderCalendar(); showReport(r); }
 });
 
 // ------------------------------------------------------------ sales pipeline
@@ -2047,7 +2248,8 @@ const readyProposals = () => (state.projects || []).filter((p) => p.status === '
 const lateProjects = () => (state.projects || []).filter((p) => isLate(p) && p.lateAck !== p.due);
 const dueForPromotion = () => state.employees.filter((e) => LADDER[e.level + 1] && e.xp >= LADDER[e.level + 1].xp && e.promoAck !== e.level
   && !pendingPromotions().some((ev) => ev.empId === e.id));
-const inboxCount = () => (state.hiring ? 1 : 0) + pendingForOwner(state).length + pendingPromotions().length + readyProposals().length + lateProjects().length + dueForPromotion().length;
+const unreadWeekly = () => (state.reports || []).filter((r) => r.type === 'weekly' && !r.seen);
+const inboxCount = () => unreadWeekly().length + (state.hiring ? 1 : 0) + pendingForOwner(state).length + pendingPromotions().length + readyProposals().length + lateProjects().length + dueForPromotion().length;
 function renderApprovalsBadge() {
   const n = inboxCount();
   const badge = $('#approvals-count');
@@ -2124,6 +2326,10 @@ function inboxCard(title, badge, sub, text, actions) {
 
 function otherInboxCards() {
   const cards = [];
+  for (const r of unreadWeekly()) {
+    cards.push(inboxCard(`📊 التقرير الأسبوعي من ${emp(r.by)?.name || 'الإدارة'}`, 'تقرير', `أسبوع ${weekStart(r.day)} — ${r.day}`, '',
+      [['📄 قراءة التقرير', () => { $('#dlg-approvals').close(); showReport(r); }, 'primary'], ['تمت القراءة', () => { r.seen = true; }]]));
+  }
   if (state.hiring) {
     const r = state.hiring;
     cards.push(inboxCard(`🎤 مقابلات: ${r.title}`, 'توظيف', `${countOf(r.candidates.length, ['مرشح واحد', 'مرشحان', 'مرشحين', 'مرشحاً'])}${emp(r.by) ? ` · رشّحهم ${emp(r.by).name}` : ''}`,

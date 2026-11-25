@@ -34,8 +34,9 @@
     <nav class="actions">
       <button id="btn-workday" class="primary">▶ ابدأ يوم العمل</button>
       <button id="btn-board">📋 المهام</button>
+      <button id="btn-calendar">📅 التقويم</button>
       <button id="btn-meeting">👥 اجتماع</button>
-      <button id="btn-org">🏛️ الهيكل والسلم</button>
+      <button id="btn-org" title="الهيكل التنظيمي والسلم الوظيفي">🏛️ الهيكل</button>
       <button id="btn-performance">📊 الأداء</button>
       <button id="btn-approvals">📥 الموافقات <span id="approvals-count" class="count" hidden>0</span></button>
       <button id="btn-clients">🤝 العملاء</button>
@@ -290,6 +291,25 @@
     </div>
     <p class="muted" id="lib-count"></p>
     <div id="lib-list" class="fin-body"></div>
+  </dialog>
+
+  <dialog id="dlg-calendar" class="wide">
+    <div class="dlg-head">
+      <h2 id="cal-title">📅 التقويم</h2>
+      <div class="row">
+        <button id="cal-weekly" title="يكتب المدير التنفيذي تقرير هذا الأسبوع حتى اليوم">📊 التقرير الأسبوعي الآن</button>
+        <button id="cal-prev" aria-label="الشهر السابق">→</button>
+        <button id="cal-today">اليوم</button>
+        <button id="cal-next" aria-label="الشهر التالي">←</button>
+        <button class="icon" data-close aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <div class="fin-body">
+      <div id="cal-grid" class="cal-grid"></div>
+      <div id="cal-workdays" class="cal-workdays"></div>
+      <p class="muted">كل يوم عمل يبدأ باجتماع صباحي قصير يكتب بعده أعلى المدراء خطة اليوم، وينتهي بتقرير من كل مدير أنجز فريقه عملاً، وفي آخر يوم عمل من الأسبوع يكتب المدير التنفيذي التقرير الأسبوعي. 🌴 إجازة · 📌 تسليم · 👥 اجتماع · ✅ عمل منجز · 📝 تقرير</p>
+      <div id="cal-day" class="card"></div>
+    </div>
   </dialog>
 
   <dialog id="dlg-deal">
