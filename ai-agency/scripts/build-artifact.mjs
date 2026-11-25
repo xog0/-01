@@ -9,7 +9,7 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = (p) => readFileSync(path.join(root, p), 'utf8');
 const THREE_VERSION = JSON.parse(read('package.json')).dependencies.three;
 
-const MODULES = ['prompt.js', 'finance.js', 'data.js', 'crm.js', 'approvals.js', 'performance.js', 'scene.js', 'api.js', 'cloud.js', 'app.js'];
+const MODULES = ['prompt.js', 'finance.js', 'data.js', 'crm.js', 'approvals.js', 'performance.js', 'docs.js', 'scene.js', 'api.js', 'cloud.js', 'app.js'];
 const code = MODULES.map((name) => {
   const src = read(`public/js/${name}`)
     .replace(/^import\s[^;]*?from\s+'\.\/[^']+';\n/gm, '') // local imports become shared scope (never spans statements)

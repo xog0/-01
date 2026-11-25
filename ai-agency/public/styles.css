@@ -273,6 +273,15 @@ table.fin tfoot td { font-weight: 700; }
 .project .money.gain { color: var(--ok); }
 .project .money.loss { color: #ff9db3; }
 .project .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.lib-filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; padding-bottom: 6px; }
+.lib-group { margin-bottom: 16px; }
+.lib-group h3 { font-size: 14px; margin: 4px 0 8px; }
+.lib-items { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.lib-item { padding: 12px; border-radius: 12px; background: rgba(255,255,255,0.04); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lib-item h4 { margin: 0; font-size: 14px; }
+.lib-item > .muted { font-size: 12px; }
+.lib-item p { margin: 0; font-size: 12px; line-height: 1.7; color: var(--muted); overflow-wrap: anywhere; }
+.lib-item .actions { display: flex; gap: 6px; margin-top: auto; }
 .client-log { height: min(55vh, 460px); border: 1px solid var(--line); border-radius: 12px; }
 #dlg-client-chat { width: min(620px, calc(100vw - 32px)); }
 .sat { color: #f6d365; letter-spacing: 1px; }
@@ -357,6 +366,8 @@ details summary { cursor: pointer; color: var(--muted); }
 .toast.show { opacity: 1; transform: translateX(-50%); }
 
 @media (max-width: 760px) {
+  .lib-filters { grid-template-columns: 1fr 1fr; }
+  .lib-filters input { grid-column: 1 / -1; }
   body { font-size: 14px; }
   .topbar { padding: 8px 12px; gap: 8px; }
   .stats { display: none; }

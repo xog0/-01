@@ -39,6 +39,7 @@
       <button id="btn-performance">📊 الأداء</button>
       <button id="btn-approvals">📥 الموافقات <span id="approvals-count" class="count" hidden>0</span></button>
       <button id="btn-clients">🤝 العملاء</button>
+      <button id="btn-library">📚 الأعمال</button>
       <button id="btn-finance">💰 المالية</button>
       <button id="btn-hire">➕ توظيف</button>
       <button id="btn-settings" title="الإعدادات" aria-label="الإعدادات">⚙️</button>
@@ -208,6 +209,7 @@
       <h2 id="out-title"></h2>
       <div class="row">
         <button id="out-copy">نسخ</button>
+        <button id="out-download" hidden>⬇️ تنزيل</button>
         <button class="icon" data-close aria-label="إغلاق">✕</button>
       </div>
     </div>
@@ -260,6 +262,28 @@
       <button role="tab" data-crm="clients">العملاء</button>
     </div>
     <div id="crm-body" class="fin-body"></div>
+  </dialog>
+
+  <dialog id="dlg-library" class="wide">
+    <div class="dlg-head">
+      <h2>📚 مكتبة الأعمال</h2>
+      <div class="row">
+        <button id="lib-download-all" hidden>⬇️ تنزيل المعروض</button>
+        <button class="icon" data-close aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <div class="lib-filters">
+      <input id="lib-q" type="search" maxlength="80" placeholder="ابحث في العناوين والنصوص…" aria-label="بحث في الأعمال">
+      <select id="lib-client" aria-label="العميل"></select>
+      <select id="lib-emp" aria-label="الموظف"></select>
+      <select id="lib-kind" aria-label="النوع">
+        <option value="">كل الأعمال</option>
+        <option value="task">مخرجات المهام</option>
+        <option value="meeting">محاضر الاجتماعات</option>
+      </select>
+    </div>
+    <p class="muted" id="lib-count"></p>
+    <div id="lib-list" class="fin-body"></div>
   </dialog>
 
   <dialog id="dlg-client-chat">
@@ -357,6 +381,7 @@
       <button role="tab" data-fin="payroll">الرواتب</button>
       <button role="tab" data-fin="moves">الحركات</button>
       <button role="tab" data-fin="profit">الربحية</button>
+      <button role="tab" data-fin="invoices">الفواتير</button>
       <button role="tab" data-fin="ledger">الدفتر</button>
       <button role="tab" data-fin="settings">الإعدادات</button>
     </div>

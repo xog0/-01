@@ -20,6 +20,7 @@ import {
 import {
   RECOMMENDATIONS, employeeOfMonth, evaluatorOf, lastEvaluation, metricsOf, parseEvaluation, recordEvaluation, teamPerformance,
 } from './performance.js';
+import { invoiceHtml, invoiceNumber, itemsMarkdown, ledgerCsv, libraryItems, statementHtml } from './docs.js';
 
 // ------------------------------------------------------------ DOM helpers
 const $ = (sel) => document.querySelector(sel);
@@ -671,8 +672,130 @@ function showOutput(t) {
     $('#out-body').prepend(stars);
   }
   $('#out-copy').onclick = () => navigator.clipboard?.writeText(t.output).then(() => toast('تم النسخ'), () => toast('تعذّر النسخ'));
-  $('#dlg-output').showModal();
+  $('#out-download').hidden = !canDownload();
+  $('#out-download').onclick = () => saveFile(t.title, 'md', libraryMd([{ title: t.title, text: t.output || '', at: t.doneAt || Date.now(),
+    empId: t.empId, projectId: t.projectId, rating: t.rating }]));
+  if (!$('#dlg-output').open) $('#dlg-output').showModal();
 }
+
+// ------------------------------------------------------------ files
+// In claude.ai the runtime hands the file to the viewer, who confirms the
+// save; on the local server an ordinary browser download does the job.
+// Every save starts inside the click that asked for it.
+let downloads = window.claude?.use ? null : 'local';
+window.claude?.use?.('downloads').then((d) => { downloads = d; }, () => {});
+const canDownload = () => Boolean(downloads);
+const safeName = (s) => String(s).replace(/[\\/:*?"<>|\u0000-\u001f]+/g, '-').replace(/\s+/g, ' ').trim().slice(0, 80) || 'ملف';
+const MIME = { html: 'text/html', csv: 'text/csv', md: 'text/markdown' };
+const DL_ERRORS = {
+  declined: 'أُلغي التنزيل.',
+  rate_limited: 'هناك طلب تنزيل مفتوح بالفعل، حاول بعد قليل.',
+  too_large: 'الملف أكبر من المسموح.',
+  rejected_extension: 'صيغة الملف غير مسموحة هنا.',
+  extension_not_enabled: 'صيغة الملف غير متاحة في هذا العرض.',
+  bad_request: 'تعذّر تجهيز الملف.',
+  transform_error: 'تعذّر تجهيز الملف.',
+  host_unavailable: 'هذا التطبيق لا يحفظ الملفات. افتح الوكالة من المتصفح أو الحاسوب لتنزيلها.',
+};
+const KEEP_OFFERING = new Set(['declined', 'rate_limited', 'too_large', 'rejected_extension', 'extension_not_enabled', 'bad_request', 'transform_error']);
+
+function saveFile(name, ext, data) {
+  const filename = `${safeName(name)}.${ext}`;
+  if (downloads === 'local') {
+    const url = URL.createObjectURL(new Blob([data], { type: `${MIME[ext]};charset=utf-8` }));
+    const a = h('a', { href: url, download: filename, hidden: true });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    toast(`⬇️ ${filename}`);
+    return;
+  }
+  if (!downloads) { toast('التنزيل غير متاح في هذا العرض.'); return; }
+  downloads.save({ filename, data }).then((r) => {
+    if (r?.status === 'saved') toast(`⬇️ حُفظ ${filename}`);
+  }, (err) => {
+    const code = err?.code;
+    toast(DL_ERRORS[code] || 'التنزيل غير متاح في هذا العرض.');
+    if (KEEP_OFFERING.has(code)) return;
+    // unavailable, host_unavailable or a runtime lifecycle code: stop offering files here
+    downloads = null;
+    $('#out-download').hidden = true;
+    if ($('#dlg-library').open) renderLibrary();
+    if ($('#dlg-finance').open) renderFinance();
+    if ($('#dlg-clients').open) renderClients();
+  });
+}
+const dlButton = (label, make, cls = 'small') => (canDownload()
+  ? h('button', { class: cls, onclick: () => saveFile(...make()) }, label) : null);
+const today = () => new Date().toISOString().slice(0, 10);
+
+// ------------------------------------------------------------ works library
+const libFilter = { clientId: '', empId: '', kind: '', q: '' };
+const WORKS_WORD = ['عمل واحد', 'عملان', 'أعمال', 'عملاً'];
+const projectLabel = (id) => { const p = project(id); return p ? { client: clientOf(p)?.name || '—', name: p.name } : null; };
+const libraryMd = (items) => itemsMarkdown(items, { nameOf: (id) => emp(id)?.name || '', projectOf: projectLabel, agency: state.company.name });
+
+function openLibrary(preset = {}) {
+  Object.assign(libFilter, { clientId: '', empId: '', kind: '', q: '' }, preset);
+  fill($('#lib-client'), h('option', { value: '' }, 'كل العملاء'), (state.clients || []).map((c) => h('option', { value: c.id }, c.name)));
+  fill($('#lib-emp'), h('option', { value: '' }, 'كل الموظفين'), [...state.employees].sort(byRank).map((e) => h('option', { value: e.id }, e.name)));
+  $('#lib-client').value = libFilter.clientId;
+  $('#lib-emp').value = libFilter.empId;
+  $('#lib-kind').value = libFilter.kind;
+  $('#lib-q').value = libFilter.q;
+  renderLibrary();
+  if (!$('#dlg-library').open) $('#dlg-library').showModal();
+}
+
+function libraryCard(it) {
+  const plain = it.text.replace(/^\s{0,3}(#{1,6}|>|[-*+]|\d+\.)\s+/gm, '').replace(/\*\*|__|`/g, '').replace(/\s+/g, ' ').trim();
+  return h('article', { class: 'lib-item' },
+    h('h4', {}, it.title),
+    h('div', { class: 'muted' }, [emp(it.empId)?.name, new Date(it.at).toLocaleDateString('ar'), it.rating ? '★'.repeat(it.rating) : ''].filter(Boolean).join(' · ')),
+    h('p', {}, plain.length > 180 ? `${plain.slice(0, 180)}…` : plain),
+    h('div', { class: 'actions' },
+      h('button', { class: 'small', onclick: () => (it.kind === 'task'
+        ? showOutput(state.tasks.find((t) => t.id === it.id))
+        : showOutput({ title: it.title, output: it.text, doneAt: it.at })) }, '👁 عرض'),
+      dlButton('⬇️ تنزيل', () => [it.title, 'md', libraryMd([it])])));
+}
+
+function renderLibrary() {
+  const items = libraryItems(state, libFilter);
+  const shown = items.slice(0, 150);
+  $('#lib-count').textContent = items.length
+    ? `${countOf(items.length, WORKS_WORD)}${items.length > shown.length ? ` · يظهر أحدث ${shown.length}` : ''}` : '';
+  $('#lib-download-all').hidden = !canDownload() || !items.length;
+  const groups = new Map();
+  for (const it of shown) {
+    const p = project(it.projectId);
+    const key = it.kind === 'meeting' ? 'meetings' : p ? p.id : 'general';
+    if (!groups.has(key)) {
+      groups.set(key, { title: it.kind === 'meeting' ? '👥 محاضر الاجتماعات' : p ? `${clientOf(p)?.name || '—'} · ${p.name}` : '🗂️ أعمال عامة', items: [] });
+    }
+    groups.get(key).items.push(it);
+  }
+  const filtered = libFilter.q || libFilter.clientId || libFilter.empId || libFilter.kind;
+  fill($('#lib-list'), items.length
+    ? [...groups.values()].map((g) => h('section', { class: 'lib-group' },
+      h('h3', {}, g.title, h('span', { class: 'muted' }, ` (${g.items.length})`)),
+      h('div', { class: 'lib-items' }, g.items.map(libraryCard))))
+    : h('div', { class: 'empty' }, filtered ? 'لا توجد أعمال مطابقة.' : 'لا توجد أعمال منجزة بعد. ابدأ يوم العمل ليُنجز الفريق مهامه.'));
+}
+$('#btn-library').addEventListener('click', () => openLibrary());
+$('#lib-q').addEventListener('input', (ev) => { libFilter.q = ev.target.value.slice(0, 80); renderLibrary(); });
+[['#lib-client', 'clientId'], ['#lib-emp', 'empId'], ['#lib-kind', 'kind']].forEach(([sel, key]) =>
+  $(sel).addEventListener('change', (ev) => { libFilter[key] = ev.target.value; renderLibrary(); }));
+$('#lib-download-all').addEventListener('click', () => {
+  const items = libraryItems(state, libFilter);
+  if (items.length) saveFile(`مكتبة الأعمال ${today()}`, 'md', libraryMd(items));
+});
+
+// ------------------------------------------------------------ invoices and statements
+const isClientPayment = (l) => l.type === 'income' && (l.projectId || l.category === 'دفعة عميل');
+const invoiceButton = (l, label = '🧾 فاتورة') => dlButton(label, () => [`فاتورة ${invoiceNumber(l)}`, 'html', invoiceHtml(state, l)]);
+const statementButton = (c, label = '📄 كشف حساب') => dlButton(label, () => [`كشف حساب ${c.name} ${today()}`, 'html', statementHtml(state, c.id)]);
 
 // ---- profile, promotion, termination
 function renderProfile(e) {
@@ -724,6 +847,7 @@ function renderProfile(e) {
         refresh();
         toast('تم حفظ التعديلات');
       } }, 'حفظ')),
+    done ? h('button', { onclick: () => openLibrary({ empId: e.id }) }, `📚 أعمال ${e.name} (${done})`) : null,
     reports.length ? h('button', { class: 'primary', disabled: busy.has(`assign:${e.id}`), onclick: () => assignTeamTasks(e) },
       `📋 كلّف فريقك بمهام (${teamOf(e.id).length})`) : null,
     h('button', { class: 'danger', onclick: () => fire(e) }, 'إنهاء خدمة الموظف'));
@@ -1530,6 +1654,8 @@ function renderClients() {
         h('div', { class: 'actions' },
           h('button', { class: 'small', onclick: () => openClientChat(c) }, `💬 محادثة ${contactOf(c).name}`),
           h('button', { class: 'small primary', onclick: () => openProjectForm(null, c.id) }, '＋ مشروع'),
+          tot.projects ? h('button', { class: 'small', onclick: () => openLibrary({ clientId: c.id }) }, '📚 الأعمال') : null,
+          tot.projects ? statementButton(c) : null,
           h('button', { class: 'small', onclick: () => openClientForm(c) }, '✏️ تعديل')));
     })) : h('div', { class: 'empty' }, 'لا يوجد عملاء بعد.'));
   }
@@ -1764,7 +1890,8 @@ $('#dlg-pay').addEventListener('close', () => {
       ? recordProjectExpense(state, payingProject, amount, { note })
       : recordPayment(state, payingProject, amount, { note });
     save();
-    toast(payMode === 'expense' ? `💸 سُجّل مصروف ${money(entry.amount)} على المشروع` : `💵 سُجّلت دفعة ${money(entry.amount)} في الدفتر`);
+    toast(payMode === 'expense' ? `💸 سُجّل مصروف ${money(entry.amount)} على المشروع`
+      : `💵 سُجّلت دفعة ${money(entry.amount)} في الدفتر برقم ${invoiceNumber(entry)} (الفاتورة في المالية ← الفواتير)`);
   } catch (err) { toast(err.message); }
   payingProject = null;
   renderClients();
@@ -1918,6 +2045,32 @@ function renderFinance() {
           h('td', { class: 'num minus' }, fmt(r.labor)), h('td', { class: 'num minus' }, r.expenses ? fmt(r.expenses) : '—'),
           h('td', { class: `num ${r.profit >= 0 ? 'plus' : 'minus'}` }, h('b', {}, fmt(r.profit))),
           h('td', { class: 'num' }, r.margin === null ? '—' : `${r.margin}%`)))))) : h('div', { class: 'empty' }, 'لا توجد مشاريع بعد.'));
+  } else if (finTab === 'invoices') {
+    const pays = fin.ledger.filter(isClientPayment).reverse();
+    const billed = (state.clients || []).filter((c) => clientTotals(state, c.id).projects);
+    fill(body,
+      h('div', { class: 'tiles' },
+        tile('فواتير صادرة', String(pays.length)),
+        tile('إجمالي المحصّل', money(pays.reduce((s, l) => s + l.amount, 0)), 'good'),
+        tile('مستحقات العملاء', money(receivables(state)), receivables(state) ? 'bad' : 'good')),
+      canDownload() ? null : h('p', { class: 'muted' }, 'تنزيل الملفات غير متاح في هذا العرض.'),
+      h('h3', {}, 'كشوف حساب العملاء'),
+      billed.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
+        h('thead', {}, h('tr', {}, ...['العميل', 'المشاريع', 'القيمة', 'المدفوع', 'المتبقي', ''].map((x) => h('th', {}, x)))),
+        h('tbody', {}, ...billed.map((c) => {
+          const t = clientTotals(state, c.id);
+          return h('tr', {}, h('td', {}, c.name), h('td', { class: 'num' }, String(t.projects)), h('td', { class: 'num' }, fmt(t.fee)),
+            h('td', { class: 'num plus' }, fmt(t.paid)), h('td', { class: `num ${t.owed ? 'minus' : ''}` }, fmt(t.owed)), h('td', {}, statementButton(c, '📄 تنزيل')));
+        })))) : h('div', { class: 'empty' }, 'لا يوجد عملاء لهم مشاريع بعد.'),
+      h('h3', {}, 'الفواتير'),
+      pays.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
+        h('thead', {}, h('tr', {}, ...['رقم الفاتورة', 'التاريخ', 'العميل', 'المشروع', 'المبلغ', ''].map((x) => h('th', {}, x)))),
+        h('tbody', {}, ...pays.map((l) => {
+          const p = project(l.projectId);
+          return h('tr', {}, h('td', {}, invoiceNumber(l)), h('td', {}, new Date(l.at).toLocaleDateString('ar')),
+            h('td', {}, clientOf(p)?.name || l.note.split(' — ')[0] || '—'), h('td', {}, p?.name || '—'),
+            h('td', { class: 'num plus' }, fmt(l.amount)), h('td', {}, invoiceButton(l, '🧾 تنزيل')));
+        })))) : h('div', { class: 'empty' }, 'لا توجد دفعات من العملاء بعد. سجّل دفعة من «العملاء ← تحصيل دفعة»، أو تُسجَّل تلقائياً حين يعتمد العميل تسليماً.'));
   } else if (finTab === 'ledger') {
     const type = h('select', { id: 'led-type' }, h('option', { value: 'income' }, 'إيراد'), h('option', { value: 'expense' }, 'مصروف'));
     const cat = h('input', { id: 'led-cat', maxlength: 60, placeholder: 'البند: دفعة عميل، إعلانات، اشتراكات…' });
@@ -1936,11 +2089,14 @@ function renderFinance() {
     const rows = [...fin.ledger].reverse().map((l) => h('tr', {},
       h('td', {}, new Date(l.at).toLocaleDateString('ar')),
       h('td', {}, l.type === 'income' ? 'إيراد' : 'مصروف'), h('td', {}, l.category), h('td', {}, l.note || '—'),
-      h('td', { class: `num ${l.type === 'income' ? 'plus' : 'minus'}` }, (l.type === 'income' ? '+' : '−') + fmt(l.amount))));
+      h('td', { class: `num ${l.type === 'income' ? 'plus' : 'minus'}` }, (l.type === 'income' ? '+' : '−') + fmt(l.amount)),
+      h('td', {}, isClientPayment(l) ? invoiceButton(l, '🧾') : null)));
     fill(body, form,
-      h('p', { class: 'muted' }, `الرصيد الافتتاحي ${money(fin.openingBalance)} · الرصيد الحالي ${money(balance(state))}`),
+      h('div', { class: 'row', style: 'justify-content: space-between' },
+        h('p', { class: 'muted' }, `الرصيد الافتتاحي ${money(fin.openingBalance)} · الرصيد الحالي ${money(balance(state))}`),
+        fin.ledger.length ? dlButton('⬇️ تنزيل الدفتر (CSV)', () => [`دفتر ${state.company.name} ${today()}`, 'csv', ledgerCsv(state)]) : null),
       rows.length ? h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
-        h('thead', {}, h('tr', {}, ...['التاريخ', 'النوع', 'البند', 'ملاحظة', 'المبلغ'].map((x) => h('th', {}, x)))),
+        h('thead', {}, h('tr', {}, ...['التاريخ', 'النوع', 'البند', 'ملاحظة', 'المبلغ', ''].map((x) => h('th', {}, x)))),
         h('tbody', {}, ...rows))) : h('div', { class: 'empty' }, 'لا توجد قيود بعد. سجّل دفعات العملاء والمصروفات هنا.'));
   } else {
     const field = (label, id, value, attrs = {}) => h('label', {}, label, h('input', { id, value: String(value), ...attrs }));
