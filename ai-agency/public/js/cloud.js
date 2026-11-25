@@ -40,6 +40,9 @@ function splitState(state) {
   const byEmp = {};
   for (const ev of state.evaluations || []) (byEmp[ev.empId] ||= []).push(ev);
   for (const [empId, items] of Object.entries(byEmp)) docs.set(`evaluations/${empId}`, { items: items.slice(-6) });
+  for (const [clientId, messages] of Object.entries(state.clientChats || {})) {
+    if (messages?.length) docs.set(`clientchats/${clientId}`, { messages: messages.slice(-60).map((m) => ({ ...m, content: m.content.slice(0, 3000) })) });
+  }
   for (const t of state.tasks) {
     if (t.output) docs.set(`outputs/${t.id}`, { text: t.output.slice(0, MAX_DOC_CHARS) });
   }
@@ -90,8 +93,8 @@ export async function connectCloud() {
       return null;
     }
     const c = snap.data();
-    const [outputs, chats, meetings, finance, crm, evaluations] = await withTimeout(Promise.all(
-      ['outputs', 'chats', 'meetings', 'finance', 'crm', 'evaluations'].map((name) => core.collection(name).get()),
+    const [outputs, chats, meetings, finance, crm, evaluations, clientchats] = await withTimeout(Promise.all(
+      ['outputs', 'chats', 'meetings', 'finance', 'crm', 'evaluations', 'clientchats'].map((name) => core.collection(name).get()),
     ), LOAD_TIMEOUT_MS);
     const byId = (qs) => Object.fromEntries(qs.docs.map((d) => [d.id, d.data()]));
     const out = byId(outputs);
@@ -111,6 +114,7 @@ export async function connectCloud() {
     const books = byId(finance);
     if (books.books) state.finance = { ...books.books, ledger: books.ledger?.entries || [] };
     state.bonusRequests = books.approvals?.requests || [];
+    state.clientChats = Object.fromEntries(Object.entries(byId(clientchats)).map(([k, v]) => [k, v.messages || []]));
     state.evaluations = Object.values(byId(evaluations)).flatMap((d) => d.items || []).sort((a, b) => a.at - b.at);
     const book = byId(crm).book;
     if (book) Object.assign(state, { clients: book.clients || [], projects: book.projects || [] });
@@ -120,6 +124,7 @@ export async function connectCloud() {
     for (const d of chats.docs) written.set(`chats/${d.id}`, written.get(`chats/${d.id}`) ?? '?');
     for (const d of meetings.docs) written.set(`meetings/${d.id}`, written.get(`meetings/${d.id}`) ?? '?');
     for (const d of evaluations.docs) written.set(`evaluations/${d.id}`, written.get(`evaluations/${d.id}`) ?? '?');
+    for (const d of clientchats.docs) written.set(`clientchats/${d.id}`, written.get(`clientchats/${d.id}`) ?? '?');
     enabled = true;
     return state;
   }

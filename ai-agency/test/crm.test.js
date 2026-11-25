@@ -115,3 +115,23 @@ test('project profit counts team time at hourly rates, review time and expenses'
   assert.deepEqual(clientProfit(s, c.id), { fee: 10000, cost: 2000, profit: 8000, margin: 80 });
   assert.throws(() => recordProjectExpense(s, 'nope', 10), /غير موجود/);
 });
+
+test('client reviews: approval pays a milestone, changes do not, satisfaction averages', async () => {
+  const { pendingDeliveries, recordClientReview, clientSatisfaction, milestoneAmount } = await import('../public/js/crm.js');
+  const s = agency();
+  const c = saveClient(s, { name: 'مقهى الركن' }, { newId });
+  const p = saveProject(s, { clientId: c.id, name: 'حملة', fee: 10000, status: 'active' }, { newId });
+  s.tasks.push({ id: 't1', projectId: p.id, status: 'done' }, { id: 't2', projectId: p.id, status: 'done' }, { id: 't3', projectId: p.id, status: 'todo' });
+  assert.deepEqual(pendingDeliveries(s, p).map((t) => t.id), ['t1', 't2']);
+  const r1 = recordClientReview(s, p, { decision: 'changes', feedback: 'نبرة أدفأ', satisfaction: 3, taskIds: ['t1'] });
+  assert.equal(r1.payment, null);
+  assert.equal(p.paid, 0);
+  assert.deepEqual(pendingDeliveries(s, p).map((t) => t.id), ['t2']);
+  const r2 = recordClientReview(s, p, { decision: 'approve', feedback: 'ممتاز', satisfaction: 5, taskIds: ['t2'] });
+  assert.equal(r2.payment.amount, 3000);
+  assert.equal(p.paid, 3000);
+  assert.equal(clientSatisfaction(s, c.id), 4);
+  p.paid = 9000;
+  assert.equal(milestoneAmount(p), 1000); // never more than what is still owed
+  assert.equal(recordClientReview(s, p, { decision: 'approve', satisfaction: 9, taskIds: [] }).review.satisfaction, 5);
+});

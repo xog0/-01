@@ -12,7 +12,7 @@ import {
 import {
   CLIENT_STATUS, PROJECT_STATUS, PROJECT_TYPES, clientTotals, deleteClient, deleteProject, isLate, outstanding,
   portfolioBrief, projectContext, projectProgress, receivables, recordPayment, saveClient, saveProject,
-  projectProfit, clientProfit, recordProjectExpense,
+  projectProfit, clientProfit, recordProjectExpense, pendingDeliveries, recordClientReview, clientSatisfaction,
 } from './crm.js';
 import {
   REQUEST_STATUS, ROLE_NAMES, createBonusRequest, currentStage, decideStage, inReview, ownerDecision, pendingForOwner, skipStage,
@@ -1487,6 +1487,8 @@ function projectCard(p) {
         ? h('button', { class: 'small', onclick: () => requestProposal(p) }, '📝 كتابة العرض') : null,
       outstanding(p) > 0 && p.status !== 'cancelled' ? h('button', { class: 'small', onclick: () => openPay(p) }, '💵 تحصيل دفعة') : null,
       p.status !== 'cancelled' ? h('button', { class: 'small', onclick: () => openPay(p, 'expense') }, '💸 مصروف') : null,
+      pendingDeliveries(state, p).length && p.status !== 'cancelled'
+        ? h('button', { class: 'small primary', disabled: busy.has(`client:${p.clientId}`), onclick: () => sendToClient(p) }, `📤 إرسال للعميل (${pendingDeliveries(state, p).length})`) : null,
       h('button', { class: 'small', onclick: () => openMeetingFor(p) }, '👥 اجتماع'),
       h('button', { class: 'small', onclick: () => showProjectTasks(p) }, '📋 المهام'),
       h('button', { class: 'small', onclick: () => openProjectForm(p) }, '✏️ تعديل')));
@@ -1523,7 +1525,10 @@ function renderClients() {
         h('div', { class: 'money' }, h('span', {}, `${countOf(tot.projects, PROJECTS_WORD)} · ${money(tot.fee)}`), h('span', { class: 'muted' }, `متبقٍ ${fmt(tot.owed)}`)),
         tot.projects ? (() => { const cp = clientProfit(state, c.id); return h('div', { class: `money ${cp.profit >= 0 ? 'gain' : 'loss'}` },
           h('span', {}, `الربح حتى الآن ${money(cp.profit)}`), h('span', {}, cp.margin === null ? '' : `هامش ${cp.margin}%`)); })() : null,
+        clientSatisfaction(state, c.id) !== null ? h('div', { class: 'money' }, h('span', {}, 'رضا العميل'),
+          h('span', { class: 'sat' }, `${'★'.repeat(Math.round(clientSatisfaction(state, c.id)))}${'☆'.repeat(5 - Math.round(clientSatisfaction(state, c.id)))} ${clientSatisfaction(state, c.id)}`)) : null,
         h('div', { class: 'actions' },
+          h('button', { class: 'small', onclick: () => openClientChat(c) }, `💬 محادثة ${contactOf(c).name}`),
           h('button', { class: 'small primary', onclick: () => openProjectForm(null, c.id) }, '＋ مشروع'),
           h('button', { class: 'small', onclick: () => openClientForm(c) }, '✏️ تعديل')));
     })) : h('div', { class: 'empty' }, 'لا يوجد عملاء بعد.'));
@@ -1607,6 +1612,132 @@ $('#pj-delete').addEventListener('click', async () => {
   renderClients();
   toast('تم حذف المشروع');
 });
+
+// ---- the client as a person: chat, reviewing deliveries, satisfaction
+function contactOf(c) {
+  const m = (c.contact || '').match(/^(.*?)\s*\((.*)\)\s*$/);
+  if (m) return { name: m[1].trim() || 'ممثل العميل', title: m[2].trim() || 'صاحب القرار' };
+  return { name: c.contact?.trim() || 'ممثل العميل', title: 'صاحب القرار' };
+}
+
+function clientMemory(c) {
+  const ps = (state.projects || []).filter((p) => p.clientId === c.id);
+  const lines = ps.map((p) => {
+    const last = (p.clientReviews || []).at(-1);
+    return `مشروع «${p.name}» (${PROJECT_STATUS[p.status]}، القيمة ${fmt(p.fee)}، دفعت منها ${fmt(p.paid || 0)})` +
+      (last ? `، وآخر رد منك على أعماله: ${last.decision === 'approve' ? 'اعتماد' : 'طلب تعديلات'} — «${last.feedback}»` : '');
+  });
+  const sat = clientSatisfaction(state, c.id);
+  return `${lines.join('؛ ')}${sat !== null ? `. رضاك عن الوكالة حالياً ${sat} من 5.` : ''}`.slice(0, 1150);
+}
+
+function askClient(c, mode, messages) {
+  const who = contactOf(c);
+  return askEmployee({
+    mode,
+    persona: { name: who.name, title: who.title, level: 'عميل', department: c.name, skills: [c.industry, c.city].filter(Boolean).join('، '),
+      personality: c.notes || '', memory: clientMemory(c), duties: 'client' },
+    company: { name: state.company.name, about: state.company.about || '' },
+    messages,
+  });
+}
+
+let chattingClient = null;
+function openClientChat(c) {
+  chattingClient = c.id;
+  const who = contactOf(c);
+  $('#cc-title').textContent = `💬 ${who.name} · ${c.name}`;
+  const sat = clientSatisfaction(state, c.id);
+  $('#cc-sub').textContent = `${who.title}${c.industry ? ` · ${c.industry}` : ''}${sat !== null ? ` · رضا العميل ${sat} من 5` : ''}`;
+  renderClientChat();
+  if (!$('#dlg-client-chat').open) $('#dlg-client-chat').showModal();
+}
+function renderClientChat() {
+  const c = state.clients.find((x) => x.id === chattingClient);
+  if (!c) return;
+  const history = (state.clientChats ||= {})[c.id] || [];
+  const who = contactOf(c);
+  fill($('#cc-log'), history.length ? history.map((m) => h('div', { class: `msg ${m.role}` },
+    h('span', { class: 'who' }, m.role === 'user' ? 'أنت' : who.name), richText(m.content)))
+    : h('div', { class: 'empty' }, `ابدأ محادثة مع ${who.name}. يعرف مشاريعه معكم وما سلّمتموه له.`),
+  busy.has(`client:${c.id}`) ? h('div', { class: 'msg assistant typing' }, `${who.name} يكتب…`) : null);
+  $('#cc-log').scrollTop = $('#cc-log').scrollHeight;
+}
+$('#cc-form').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const c = state.clients.find((x) => x.id === chattingClient);
+  const text = $('#cc-input').value.trim();
+  if (!c || !text || busy.has(`client:${c.id}`)) return;
+  $('#cc-input').value = '';
+  const history = ((state.clientChats ||= {})[c.id] ||= []);
+  history.push({ role: 'user', content: text });
+  busy.add(`client:${c.id}`);
+  renderClientChat();
+  try {
+    history.push({ role: 'assistant', content: await askClient(c, 'chat', history.slice(-30)) });
+    state.clientChats[c.id] = history.slice(-60);
+    save();
+  } catch (err) {
+    history.pop();
+    $('#cc-input').value = text;
+    toast(err.message);
+  } finally {
+    busy.delete(`client:${c.id}`);
+    renderClientChat();
+  }
+});
+$('#cc-input').addEventListener('keydown', (ev) => {
+  if (ev.key === 'Enter' && !ev.shiftKey) { ev.preventDefault(); $('#cc-form').requestSubmit(); }
+});
+
+// Finished project work goes to the client, who approves it (and pays a
+// milestone) or asks for changes, which become revision tasks.
+async function sendToClient(p) {
+  const c = clientOf(p);
+  const items = pendingDeliveries(state, p).slice(0, 4);
+  if (!c || !items.length) return;
+  const key = `client:${c.id}`;
+  if (busy.has(key)) return;
+  busy.add(key);
+  renderClients();
+  const who = contactOf(c);
+  const per = Math.floor(4200 / items.length);
+  const content = [
+    `المشروع: ${p.name} (${p.type}).`, p.brief ? `موجز المشروع كما اتفقتم: ${p.brief}` : '',
+    'الأعمال المرسلة لك:', ...items.map((t, i) => `${i + 1}) ${t.title}:\n${(t.output || '').slice(0, per)}`),
+  ].filter(Boolean).join('\n\n').slice(0, 5800);
+  try {
+    const reply = await askClient(c, 'client_review', [{ role: 'user', content }]);
+    let v;
+    try { v = JSON.parse(reply.slice(reply.indexOf('{'), reply.lastIndexOf('}') + 1)); } catch { v = null; }
+    if (!v) throw new Error(`تعذّر قراءة رد ${who.name}، أعد الإرسال`);
+    const { review, payment } = recordClientReview(state, p, { decision: v.decision, feedback: v.feedback, satisfaction: v.satisfaction, taskIds: items.map((t) => t.id) });
+    ((state.clientChats ||= {})[c.id] ||= []).push(
+      { role: 'user', content: `أرسلنا لك ${countOf(items.length, TASKS_WORD)} من مشروع «${p.name}»: ${items.map((t) => t.title).join('، ')}` },
+      { role: 'assistant', content: review.feedback || (review.decision === 'approve' ? 'معتمد.' : 'أريد تعديلات.') });
+    if (review.decision === 'changes') {
+      const lead = emp(p.leadId);
+      for (const t of items) {
+        const author = emp(t.empId) || lead;
+        if (!author) continue;
+        addTask(author.id, `تعديلات ${who.name}: ${t.title}`.slice(0, 200),
+          `ملاحظات العميل: ${review.feedback}\n\nالعمل السابق (مختصر):\n${(t.output || '').slice(0, 900)}`.slice(0, 1500),
+          'medium', lead ? lead.id : null, p.id);
+      }
+      toast(`↩️ ${who.name} طلب تعديلات (رضا ${review.satisfaction}/5)، وأُنشئت مهام التعديل`);
+    } else {
+      toast(`✅ ${who.name} اعتمد الأعمال (رضا ${review.satisfaction}/5)${payment ? ` ودفع ${money(payment.amount)}` : ''}`);
+    }
+    save();
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    busy.delete(key);
+    refresh();
+    renderClients();
+    if ($('#dlg-client-chat').open) renderClientChat();
+  }
+}
 
 let payingProject = null;
 let payMode = 'pay';

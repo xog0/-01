@@ -8,8 +8,8 @@ export const LIMITS = Object.freeze({
   maxLongFieldChars: 1200,
 });
 
-const MODES = new Set(['chat', 'task', 'meeting', 'summary', 'assign', 'review', 'memo', 'bonus', 'evaluation']);
-const DUTIES = new Set(['', 'finance']);
+const MODES = new Set(['chat', 'task', 'meeting', 'summary', 'assign', 'review', 'memo', 'bonus', 'evaluation', 'client_review']);
+const DUTIES = new Set(['', 'finance', 'client']);
 
 export class ValidationError extends Error {}
 
@@ -124,7 +124,30 @@ const MODE_INSTRUCTIONS = {
     'لا تتجاوز 200 كلمة.',
 };
 
+// A client of the agency: a business owner or marketing lead, not staff.
+function clientPrompt({ mode, persona, company }) {
+  const lines = [
+    `أنت ${persona.name}، ${persona.title} في «${persona.department}»${persona.skills ? ` (${persona.skills})` : ''}. ` +
+      `أنت عميل لوكالة التسويق «${company.name}» ولست موظفاً فيها.`,
+  ];
+  if (persona.personality) lines.push(`عنك وعن نشاطك: ${persona.personality}`);
+  if (persona.memory) lines.push(`ما تعرفه عن تعاملك مع الوكالة: ${persona.memory}`);
+  lines.push(
+    'تحدث بالعربية بأسلوب صاحب عمل حقيقي: تهتم بميزانيتك ونتائج نشاطك وجمهورك، وتقدّر العمل الجيد، وتطلب تعديلات محددة عندما لا يناسبك شيء.',
+    'لا تختلق أرقاماً عن الوكالة أو اتفاقات لم تُذكر لك. إذا سُئلت مباشرة هل أنت ذكاء اصطناعي فأجب بصدق أنك شخصية افتراضية تمثّل العميل.',
+  );
+  if (mode === 'client_review') {
+    lines.push('وصلتك أعمال من الوكالة لمشروعك. راجعها كما يراجع عميل حقيقي: هل تناسب نشاطك وجمهورك وما طلبته في موجز المشروع؟ ' +
+      'اعتمدها إن كانت مناسبة حتى لو لم تكن مثالية، واطلب تعديلات محددة فقط عند نقص حقيقي. ' +
+      'أعد JSON فقط دون أي نص قبله أو بعده: {"decision":"approve أو changes","feedback":"ردك على الوكالة بصوتك في جملتين أو ثلاث","satisfaction":رقم من 1 إلى 5}');
+  } else {
+    lines.push('أنت الآن في محادثة مع مالك الوكالة. رد بإيجاز وبشخصيتك، في حدود 120 كلمة.');
+  }
+  return lines.join('\n');
+}
+
 export function buildSystemPrompt({ mode, persona, company }) {
+  if (persona.duties === 'client') return clientPrompt({ mode, persona, company });
   const lines = [
     `أنت ${persona.name}، تعمل بمسمى "${persona.title}" (المستوى الوظيفي: ${persona.level}) ` +
       `في قسم ${persona.department} لدى "${company.name}"، وهي وكالة تسويق يعمل فيها فريق من الموظفين.`,

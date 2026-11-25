@@ -100,3 +100,14 @@ test('evaluation mode asks for a fair JSON assessment with a fixed set of recomm
   assert.match(sys, /"recommendation":"promote أو bonus أو improve أو none"/);
   assert.match(sys, /دون اختلاق/);
 });
+
+test('a client persona is framed as a customer of the agency, not staff', () => {
+  const client = { name: 'أبو فادي', title: 'المالك', level: 'عميل', department: 'مطعم بيت الزعتر', skills: 'مطاعم', duties: 'client', personality: 'ميزانيته محدودة' };
+  const chat = buildSystemPrompt(validateChatRequest(base({ persona: client })));
+  assert.match(chat, /أنت عميل لوكالة التسويق «آفاق» ولست موظفاً فيها/);
+  assert.match(chat, /ميزانيته محدودة/);
+  assert.doesNotMatch(chat, /تعمل بمسمى/);
+  const review = buildSystemPrompt(validateChatRequest(base({ persona: client, mode: 'client_review' })));
+  assert.match(review, /"decision":"approve أو changes"/);
+  assert.match(review, /"satisfaction"/);
+});

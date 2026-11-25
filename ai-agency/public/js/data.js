@@ -393,6 +393,7 @@ export function createInitialState() {
     projects: [],
     bonusRequests: [],
     evaluations: [],
+    clientChats: {},
     migrations: MIGRATIONS.map((m) => m.key), // a fresh agency already has these
   };
   for (const e of STARTING_TEAM) {

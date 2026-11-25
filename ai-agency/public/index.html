@@ -262,6 +262,21 @@
     <div id="crm-body" class="fin-body"></div>
   </dialog>
 
+  <dialog id="dlg-client-chat">
+    <div class="dlg-head">
+      <div>
+        <h2 id="cc-title">محادثة العميل</h2>
+        <p class="muted" id="cc-sub"></p>
+      </div>
+      <button class="icon" data-close aria-label="إغلاق">✕</button>
+    </div>
+    <div id="cc-log" class="chat-log client-log"></div>
+    <form id="cc-form" class="chat-form">
+      <textarea id="cc-input" rows="2" maxlength="3000" placeholder="اكتب رسالتك للعميل…" required></textarea>
+      <button class="primary" type="submit">إرسال</button>
+    </form>
+  </dialog>
+
   <dialog id="dlg-project">
     <form method="dialog" id="project-form" class="stack">
       <h2 id="project-form-title">مشروع جديد</h2>

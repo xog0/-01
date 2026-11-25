@@ -195,6 +195,39 @@ export function portfolioBrief(state, nameOf = (id) => id) {
   }).join('؛ ').slice(0, 1150);
 }
 
+// ---- the client's side: deliveries, their verdict, satisfaction ------------
+/** Finished project work not yet sent to the client. */
+export const pendingDeliveries = (state, p) => state.tasks.filter((t) => t.projectId === p.id && t.status === 'done' && !t.sentToClient);
+
+/** The milestone a client pays when approving a delivery: 30% of the fee, at most what is still owed. */
+export const milestoneAmount = (p) => Math.min(outstanding(p), Math.round((p.fee || 0) * 0.3));
+
+/**
+ * Records the client's verdict on a batch of delivered tasks. Approval
+ * books a milestone payment; satisfaction (1-5) feeds the client's score.
+ */
+export function recordClientReview(state, p, { decision, feedback = '', satisfaction, taskIds, at = Date.now() }) {
+  const d = decision === 'changes' ? 'changes' : 'approve';
+  const sat = Math.min(5, Math.max(1, Math.round(Number(satisfaction) || (d === 'approve' ? 4 : 3))));
+  const review = { at, decision: d, feedback: String(feedback).trim().slice(0, 600), satisfaction: sat, taskIds: [...taskIds] };
+  p.clientReviews ||= [];
+  p.clientReviews.push(review);
+  p.clientReviews = p.clientReviews.slice(-20);
+  for (const t of state.tasks) if (taskIds.includes(t.id)) Object.assign(t, { sentToClient: true, clientDecision: d });
+  let payment = null;
+  if (d === 'approve' && milestoneAmount(p) > 0 && p.status !== 'cancelled') {
+    payment = recordPayment(state, p.id, milestoneAmount(p), { at, note: 'دفعة عند اعتماد العميل للأعمال' });
+  }
+  return { review, payment };
+}
+
+/** Average satisfaction over the client's last five reviews, or null. */
+export function clientSatisfaction(state, clientId) {
+  const all = (state.projects || []).filter((p) => p.clientId === clientId).flatMap((p) => p.clientReviews || [])
+    .sort((a, b) => a.at - b.at).slice(-5);
+  return all.length ? Math.round((all.reduce((s, r) => s + r.satisfaction, 0) / all.length) * 10) / 10 : null;
+}
+
 /** Removes a project; its tasks stay but lose the link. Payments stay in the ledger. */
 export function deleteProject(state, projectId) {
   state.projects = state.projects.filter((p) => p.id !== projectId);
