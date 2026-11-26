@@ -23,7 +23,7 @@ import {
 import { invoiceHtml, invoiceNumber, itemsMarkdown, ledgerCsv, libraryItems, statementHtml } from './docs.js';
 import {
   LEAVE_TYPES, MAX_LEAVE_DAYS, addDays, attendanceOf, dayKey, daysWord, endLeave, grantLeave, leaveBalance, leaveOn, markAttendance,
-  parseCandidates, salaryRange, sampleCandidates, upcomingLeaves,
+  parseCandidates, parseHrOrders, salaryRange, sampleCandidates, upcomingLeaves,
 } from './hr.js';
 import {
   DEAL_STAGES, OPEN_STAGES, isOpen, linkProposal, moveDeal, parseDealReview, parseLeads, pipelineStats, sampleLeads, saveDeal, syncDealWithProject,
@@ -165,6 +165,23 @@ function memoryOf(e) {
   return parts.join(' ').slice(0, 1100);
 }
 
+// What the HR manager knows about everyone today: leave, attendance, evaluations, hiring.
+function hrBrief() {
+  const today = dayKey();
+  const away = state.employees.filter(awayNow).map((e) => `${e.name} (${LEAVE_TYPES[awayNow(e).type].name} حتى ${awayNow(e).to})`);
+  const coming = upcomingLeaves(state, today).filter((l) => l.from > today).slice(0, 5).map((l) => `${emp(l.empId)?.name} من ${l.from} إلى ${l.to}`);
+  const absent = state.employees.map((e) => ({ e, a: attendanceOf(state, e.id) })).filter((x) => x.a.absent > 0).map((x) => `${x.e.name} ${x.a.absent}`);
+  const evals = state.employees.map((e) => ({ e, ev: lastEvaluation(state, e.id) })).filter((x) => x.ev).slice(-8).map((x) => `${x.e.name}: ${x.ev.grade}`);
+  return [
+    `اليوم ${today}. عدد الموظفين ${state.employees.length}.`,
+    `في إجازة الآن: ${away.join('، ') || 'لا أحد'}.`,
+    coming.length ? `إجازات قادمة: ${coming.join('، ')}.` : '',
+    absent.length ? `أيام غياب آخر 30 يوماً: ${absent.join('، ')}.` : 'لا غياب مسجل آخر 30 يوماً.',
+    evals.length ? `آخر التقييمات: ${evals.join('، ')}.` : 'لم يُقيَّم أحد بعد.',
+    state.hiring ? `جولة توظيف مفتوحة لوظيفة ${state.hiring.title} (${state.hiring.candidates.length} مرشحين).` : '',
+  ].filter(Boolean).join(' ');
+}
+
 function personaOf(e) {
   const mgr = e.managerId ? emp(e.managerId) : null;
   const bio = bioFor(e);
@@ -177,11 +194,11 @@ function personaOf(e) {
     personality: e.personality || '',
     manager: mgr ? `${mgr.name} (${titleFor(mgr)})` : 'مالك الوكالة مباشرة',
     reports: teamOf(e.id).map((m) => `${m.name} (${titleFor(m)})`).join('، '),
-    duties: e.id === cfo()?.id ? 'finance' : '',
+    duties: e.id === cfo()?.id ? 'finance' : e.id === hrHead()?.id ? 'hr' : '',
     bio: `عمرك ${bio.age} سنة، وخبرتك ${bio.years} ${bio.years > 10 ? 'سنة' : 'سنوات'}. ${bio.background} أسلوبك في التواصل: ${bio.style}`.slice(0, 1100),
     memory: e.id === cfo()?.id
       ? `${financeBrief(state, fmt)} مستحقات العملاء غير المحصّلة: ${fmt(receivables(state))} ${state.finance.currency}. ${memoryOf(e)}`.slice(0, 1150)
-      : memoryOf(e),
+      : e.id === hrHead()?.id ? `${hrBrief()} ${memoryOf(e)}`.slice(0, 1150) : memoryOf(e),
   };
 }
 function companyOf(except) {
@@ -305,9 +322,17 @@ $('#chat-form').addEventListener('submit', async (ev) => {
       raw = parsed.text;
       financeNote = applyFinanceOrders(parsed.orders, e);
     }
+    let hrJobs = null;
+    if (e.id === hrHead()?.id) {
+      const parsed = parseHrOrders(raw, state.employees, { departments: DEPARTMENTS, ladder: LADDER });
+      raw = parsed.text;
+      hrJobs = applyHrOrders(parsed.orders, e);
+      if (hrJobs.note) financeNote = hrJobs.note;
+    }
     const { text: reply, order } = extractAssignOrder(raw, e, text);
     history.push({ role: 'assistant', content: reply || 'حاضر.' });
     if (financeNote) history.push({ role: 'assistant', content: financeNote });
+    if (hrJobs?.later.length) hrJobs.later.forEach((job) => job()); // evaluations and hiring run after the reply is shown
     if (order) {
       save();
       const added = await assignTeamTasks(e, order.ids, order.perMember, order.focus, { urgent: order.urgent });
@@ -691,7 +716,7 @@ async function startWorkday() {
   syncAway();
   markAttendance(state, today, atWork(state.employees).map((e) => e.id));
   save();
-  workdayLabel('☀️ اجتماع الصباح…');
+  workdayLabel('☀️ خطة الصباح…');
   await morningStandup(today);
   workdayLabel('⏳ الفريق يعمل…');
   await Promise.all(atWork(state.employees).map(async (e) => {
@@ -769,22 +794,17 @@ $('#light-toggle').addEventListener('click', () => {
 });
 
 // A client who comes in: through the front door to a meeting room, with their contact at the agency.
+// Employees never join the client in the meeting room on their own: only meetings the owner sets up seat staff there.
 const visitorKey = (c) => `v:${c.id}`;
 const FEMALE_NAMES = ['نوف', 'ريم', 'لين', 'هيا', 'لمى', 'جود', 'أمل', 'غدير', 'رهف', 'شهد', 'دانة', 'منيرة', 'سارة', 'ليلى'];
 const guessGender = (name) => { const n = name.replace(/^(د\.|م\.|أ\.)\s*/, '').trim(); return n.startsWith('أم ') || FEMALE_NAMES.includes(n.split(' ')[0]) || /[ةى]$/.test(n.split(' ')[0]) ? 'f' : 'm'; };
-function clientVisit(c, host = null) {
+function clientVisit(c) {
   if (!officeOpen || !c || office.whereIs(visitorKey(c))) return null;
   const who = contactOf(c);
   const room = meeting?.room === 'b' ? 'a' : 'b';
   const arrival = office.visitorArrive({ id: visitorKey(c), name: who.name, title: `عميل · ${c.name}`, color: 0x64748b,
     look: lookFor({ id: c.id, name: who.name, gender: guessGender(who.name), level: 7 }) }, room);
-  let hosted = null;
-  if (host && office.whereIs(host.id) === 'desk' && !busy.has(host.id) && !awayNow(host) && !meeting?.attendees.includes(host.id)) {
-    hosted = host;
-    setStatus(host, 'meeting', `🤝 مع ${who.name}`);
-    office.sendToMeeting([host.id], room);
-  }
-  return { c, room, host: hosted, arrival };
+  return { c, room, host: null, arrival };
 }
 async function endVisit(visit) {
   if (!visit) return;
@@ -811,10 +831,8 @@ async function morningStandup(today) {
   const heads = atWork(state.employees.filter((e) => e.level >= MANAGER_LEVEL)).sort(byRank);
   const lead = heads[0];
   if (!lead) return null;
-  const room = heads.length > ROOMS.b.seats ? 'a' : 'b';
-  const walkers = heads.slice(0, ROOMS[room].seats).filter((e) => !busy.has(e.id) && !meeting?.attendees.includes(e.id));
-  walkers.forEach((e) => setStatus(e, 'meeting', '☀️ اجتماع الصباح'));
-  const walk = meeting ? Promise.resolve() : office.sendToMeeting(walkers.map((e) => e.id), room);
+  const prevStatus = lead.status;
+  setStatus(lead, 'working', '☀️ يكتب خطة اليوم');
   const todo = state.tasks.filter((t) => t.status === 'todo' && !awayNow(emp(t.empId)));
   const soon = (state.projects || []).filter((p) => p.status === 'active' && p.due && p.due >= today && p.due <= addDays(today, 3));
   const talks = (state.deals || []).filter((d) => d.stage === 'negotiation' || d.stage === 'proposal');
@@ -822,7 +840,7 @@ async function morningStandup(today) {
   let text = '';
   try {
     text = await ask(lead, 'report', [{ role: 'user', content: (
-      `نوع التقرير: خطة الصباح، بعد اجتماع قصير مع ${walkers.map((e) => e.name).join('، ') || 'الفريق'}. في حدود 150 كلمة.\n` +
+      `نوع التقرير: خطة الصباح. في حدود 150 كلمة.\n` +
       `اليوم: ${WEEKDAYS[new Date().getDay()]} ${today}\n` +
       `المهام المنتظرة (${todo.length}):\n${listTasks(todo.slice(0, 25)) || '- لا شيء'}\n` +
       `في إجازة: ${away.map((e) => e.name).join('، ') || 'لا أحد'}\n` +
@@ -831,10 +849,7 @@ async function morningStandup(today) {
   } catch (err) {
     toast(err.message);
   }
-  await walk;
-  await sleep(1200);
-  if (!meeting) await office.returnToDesks(walkers.map((e) => e.id));
-  walkers.forEach((e) => setStatus(e, 'idle'));
+  setStatus(lead, prevStatus === 'working' ? 'idle' : prevStatus || 'idle');
   if (!text) return null;
   const r = upsertReport('standup', today, lead.id, text);
   save();
@@ -1267,7 +1282,7 @@ async function sendDealToClient(d) {
   const pt = dealProposal(d);
   busy.add(`client:${c.id}`);
   renderClients();
-  const visit = clientVisit(c, emp(d.ownerId));
+  const visit = clientVisit(c);
   toast(`📨 أُرسل العرض إلى ${contactOf(c).name}…`);
   try {
     const talk = (d.history || []).filter((x) => x.note).slice(-6).map((x) => `- ${DEAL_STAGES[x.stage].name}: ${x.note}`).join('\n');
@@ -1377,6 +1392,43 @@ $('#dlg-deal').addEventListener('close', () => {
     toast(editingDeal ? 'حُفظت الفرصة' : `💼 أُضيفت «${d.title}» إلى مسار المبيعات`);
   } catch (err) { toast(err.message); }
 });
+
+// ------------------------------------------------------------ the HR manager's orders
+// Leave is recorded at once; evaluations and hiring rounds start after her reply.
+function applyHrOrders(orders, hr) {
+  const lines = [];
+  const later = [];
+  for (const o of orders) {
+    const e = emp(o.empId);
+    try {
+      if (o.kind === 'leave') {
+        const l = grantLeave(state, { empId: o.empId, type: o.type, from: o.from, days: o.days, reason: o.reason || `بطلب من المالك عبر ${hr.name}` }, { newId, by: hr.id });
+        lines.push(`✅ إجازة ${LEAVE_TYPES[l.type].name} لـ${e.name}: ${daysWord(l.days)} من ${l.from} إلى ${l.to}`);
+      } else if (o.kind === 'endLeave') {
+        const l = upcomingLeaves(state).find((x) => x.empId === o.empId);
+        if (!l) throw new Error(`${e.name} ليس في إجازة`);
+        const r = endLeave(state, l.id);
+        lines.push(r.cancelled ? `✅ أُلغيت إجازة ${e.name}` : `✅ عاد ${e.name} من إجازته اليوم`);
+      } else if (o.kind === 'evaluate') {
+        const people = o.empIds.map(emp).filter((x) => x && x.id !== hr.id && metricsOf(state, x.id).done > 0);
+        const skipped = o.empIds.length - people.length;
+        if (!people.length) throw new Error('لا يوجد من لديه أعمال منجزة لتقييمه بعد');
+        lines.push(`📝 بدأت تقييم ${people.map((x) => x.name).join('، ')}${skipped ? ` (تُرك ${skipped} بلا أعمال منجزة بعد أو لأنه أنا)` : ''}`);
+        later.push(() => evaluateAll({ by: hr, people }));
+      } else if (o.kind === 'hire') {
+        if (state.hiring) throw new Error('هناك جولة توظيف مفتوحة بالفعل');
+        const ceo = positionHolder(POSITIONS[0]) || topManager();
+        const head = state.employees.filter((x) => x.dept === o.dept).sort(byRank)[0];
+        lines.push(`🎤 بدأت البحث عن مرشحين لوظيفة ${titleFor({ dept: o.dept, level: o.level })}`);
+        later.push(() => startHiringRound({ dept: o.dept, level: o.level, managerId: (head && head.level > o.level ? head : ceo)?.id || null, position: '', takeover: false }));
+      }
+    } catch (err) {
+      lines.push(`❌ ${e ? `${e.name}: ` : ''}${err.message}`);
+    }
+  }
+  if (lines.length) { save(); refresh(); }
+  return { note: lines.join('\n'), later };
+}
 
 // ------------------------------------------------------------ leave and attendance
 let leaveFor = null;
@@ -1992,10 +2044,10 @@ $('#btn-org').addEventListener('click', () => { renderOrg(); $('#dlg-org').showM
 // ------------------------------------------------------------ meetings
 function fillMeetingForm() {
   fill($('#meet-room'), ...Object.entries(ROOMS).map(([k, r]) => h('option', { value: k }, `${r.name} (${r.seats} مقاعد)`)));
-  // Preselect the most senior people, few enough to fit the smaller room.
-  const fits = Math.min(...Object.values(ROOMS).map((r) => r.seats));
-  fill($('#meet-people'), ...atWork([...state.employees].sort(byRank)).map((e, i) =>
-    h('label', { title: titleFor(e) }, h('input', { type: 'checkbox', value: e.id, checked: i < fits, onchange: updateSeatCount }), `${e.name}`)),
+  // Nobody is ticked: only the people the owner adds go into the meeting.
+  $('#meet-suggest').hidden = true;
+  fill($('#meet-people'), ...atWork([...state.employees].sort(byRank)).map((e) =>
+    h('label', { title: titleFor(e) }, h('input', { type: 'checkbox', value: e.id, onchange: updateSeatCount }), `${e.name}`)),
   ...state.employees.filter(awayNow).map((e) => h('label', { class: 'muted', title: awayNote(e) }, h('input', { type: 'checkbox', disabled: true }), `🌴 ${e.name}`)));
   updateSeatCount();
   const hist = state.meetings.slice().reverse();
@@ -2028,9 +2080,9 @@ $('#dlg-meeting').addEventListener('close', async () => {
   const picked = [...document.querySelectorAll('#meet-people input:checked')].map((i) => i.value);
   const attendees = picked.filter((id) => !busy.has(id)).map(emp).sort(byRank).map((e) => e.id);
   if (!topic) return;
-  if (attendees.length < 1) return toast('اختر موظفاً واحداً على الأقل (غير مشغول بمهمة)');
+  if (attendees.length < 1) return toast(picked.length ? 'من اخترتهم مشغولون بمهام الآن. اختر غيرهم أو انتظر.' : 'أضف من تريد حضوره: لا يدخل الاجتماع إلا من تضيفه.');
   if (attendees.length > ROOMS[room].seats) return toast(`${ROOMS[room].name} تتسع لـ${ROOMS[room].seats} فقط`);
-  if (attendees.length < picked.length) toast('بعض الموظفين مشغولون بمهام وسيلحقون لاحقاً');
+  if (attendees.length < picked.length) toast(`لن يدخل ${picked.filter((id) => busy.has(id)).map((id) => emp(id)?.name).join('، ')} لأنه مشغول بمهمة الآن`);
   $('#meeting-form').reset();
   meeting = { room, topic, attendees, log: [], busy: true, at: Date.now() };
   closePanel();
@@ -2167,8 +2219,8 @@ function performanceCard(e) {
 
 // The evaluator writes an assessment from the numbers and recent manager notes,
 // with a recommendation the agency then acts on.
-async function evaluate(e, { quiet = false } = {}) {
-  const evaluator = evaluatorOf(state, e);
+async function evaluate(e, { quiet = false, by = null } = {}) {
+  const evaluator = by && by.id !== e.id ? by : evaluatorOf(state, e);
   if (!evaluator) { if (!quiet) toast(`${e.name} يتبعك مباشرة، فلا يوجد مدير يقيّمه`); return null; }
   const row = teamPerformance(state).find((r) => r.emp.id === e.id);
   if (row.score === null) { if (!quiet) toast(`لا توجد أعمال منجزة لـ${e.name} لتقييمها بعد`); return null; }
@@ -2223,13 +2275,13 @@ function actOnRecommendation(e, evaluator, ev) {
   if (ev.recommendation === 'promote' && LADDER[e.level + 1]) ev.pendingPromotion = true;
 }
 
-async function evaluateAll() {
-  const people = state.employees.filter((e) => evaluatorOf(state, e) && metricsOf(state, e.id).done > 0);
+async function evaluateAll({ by = null, people: only = null } = {}) {
+  const people = (only || state.employees).filter((e) => (by ? e.id !== by.id || evaluatorOf(state, e) : evaluatorOf(state, e)) && metricsOf(state, e.id).done > 0);
   if (!people.length) return toast('لا يوجد من لديه أعمال منجزة لتقييمه بعد');
-  toast(`📝 بدأ المدراء تقييم ${people.length} من الموظفين`);
+  toast(by ? `📝 ${by.name} بدأت تقييم ${people.length} من الموظفين` : `📝 بدأ المدراء تقييم ${people.length} من الموظفين`);
   let n = 0;
   for (const e of people) {
-    if (await evaluate(e, { quiet: true })) n++;
+    if (await evaluate(e, { quiet: true, by })) n++;
     if ($('#dlg-performance').open) renderPerformance();
   }
   toast(`✅ اكتملت ${n} تقييمات. التوصيات بالمكافآت دخلت سلسلة الموافقات، والترقيات في صندوق موافقاتك`);
@@ -2246,7 +2298,9 @@ function renderPerformance() {
     eom ? h('div', { class: 'card eom' }, h('b', {}, `⭐ موظف الشهر: ${eom.emp.name}`), h('span', { class: 'muted' }, `${titleFor(eom.emp)} · ${eom.score} من 100`)) : null,
     h('p', { class: 'muted' }, 'الدرجة من 100 تُحسب من آخر 90 يوماً: الجودة (اعتماد العمل من أول مراجعة) 35%، وتقييمك بالنجوم 25%، والإنتاجية مقارنة بالأكثر إنجازاً 25%، والالتزام بمواعيد المشاريع 15%. ما لا تتوفر بياناته لا يُحتسب. قيّم أي عمل بالنجوم من نافذة «عرض النتيجة».'),
     h('div', { class: 'row' },
-      h('button', { class: 'primary', disabled: [...busy].some((k) => k.startsWith('eval:')), onclick: evaluateAll }, '📝 اطلب من المدراء تقييم فرقهم')),
+      h('button', { class: 'primary', disabled: [...busy].some((k) => k.startsWith('eval:')), onclick: () => evaluateAll() }, '📝 اطلب من المدراء تقييم فرقهم'),
+      hrHead() ? h('button', { disabled: [...busy].some((k) => k.startsWith('eval:')), onclick: () => evaluateAll({ by: hrHead() }) },
+        `📝 ${hrHead().name} (الموارد البشرية) تقيّم كل الموظفين`) : null),
     h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
       h('thead', {}, h('tr', {}, ...['#', 'الموظف', 'الدرجة', 'التقدير', 'منجزة', 'من أول مرة', 'نجومك', 'آخر تقييم', ''].map((x) => h('th', {}, x)))),
       h('tbody', {}, ...rows.map((r, i) => {
@@ -2762,7 +2816,7 @@ async function sendToClient(p) {
   busy.add(key);
   renderClients();
   const who = contactOf(c);
-  const visit = clientVisit(c, emp(p.leadId));
+  const visit = clientVisit(c);
   const per = Math.floor(4200 / items.length);
   const content = [
     `المشروع: ${p.name} (${p.type}).`, p.brief ? `موجز المشروع كما اتفقتم: ${p.brief}` : '',
@@ -2860,9 +2914,16 @@ function openMeetingFor(p) {
   if (meeting) return toast('هناك اجتماع جارٍ بالفعل');
   $('#dlg-clients').close();
   fillMeetingForm();
-  const people = [p.leadId, ...p.team].filter((id) => emp(id)).slice(0, Math.max(...Object.values(ROOMS).map((r) => r.seats)));
-  document.querySelectorAll('#meet-people input').forEach((i) => { i.checked = people.includes(i.value); });
-  if (people.length > ROOMS.b.seats) $('#meet-room').value = 'a';
+  // The project team is offered, not added: the owner decides who comes in.
+  const people = atWork([p.leadId, ...p.team].map(emp).filter(Boolean)).slice(0, Math.max(...Object.values(ROOMS).map((r) => r.seats)));
+  if (people.length) {
+    $('#meet-suggest').hidden = false;
+    fill($('#meet-suggest'), h('button', { type: 'button', class: 'small', onclick: () => {
+      document.querySelectorAll('#meet-people input').forEach((i) => { if (people.some((x) => x.id === i.value)) i.checked = true; });
+      if (people.length > ROOMS.b.seats) $('#meet-room').value = 'a';
+      updateSeatCount();
+    } }, `＋ أضف فريق المشروع: ${people.map((x) => x.name).join('، ')}`));
+  }
   updateSeatCount();
   $('#meet-topic').value = `مشروع «${p.name}» لـ${clientOf(p)?.name}: ${p.brief || p.type}`.slice(0, 600);
   $('#dlg-meeting').showModal();

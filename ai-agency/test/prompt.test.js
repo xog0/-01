@@ -142,3 +142,13 @@ test('sales modes: the sales head proposes prospects; a prospect answers a propo
   assert.match(review, /"decision":"accept أو negotiate أو reject"/);
   assert.match(review, /ولست موظفاً فيها/);
 });
+
+test('the HR manager can grant leave, evaluate and hire on request, but not touch pay', () => {
+  const hr = { name: 'نورة', title: 'مدير الموارد البشرية', level: 'مدير', department: 'الموارد البشرية', duties: 'hr' };
+  const sys = buildSystemPrompt(validateChatRequest(base({ persona: hr })));
+  assert.match(sys, /\[\[إجازة: اسم الموظف/);
+  assert.match(sys, /\[\[تقييم:/);
+  assert.match(sys, /\[\[توظيف:/);
+  assert.match(sys, /تخفيض الراتب للمالك وحده/);
+  assert.doesNotMatch(buildSystemPrompt(validateChatRequest(base({ persona: { ...hr, duties: '' } }))), /\[\[إجازة:/);
+});

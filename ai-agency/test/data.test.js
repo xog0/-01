@@ -155,6 +155,7 @@ test('a new agency seats Hamo and Sara in private offices', () => {
   assert.equal(byName('حمو').desk, 25);
   assert.equal(byName('شيكا').desk, 26);
   assert.equal(byName('سارة').desk, 27);
+  assert.equal(byName('نورة').desk, 28);
   assert.ok(byName('خالد').desk < 25);
 });
 
@@ -178,8 +179,8 @@ test('current managers move into offices once, by rank, until the wing is full',
 test('seats: non-managers never get offices; managers fall back to open desks when the wing is full', () => {
   const s = createInitialState();
   assert.ok(freeSeat(s, 0) < 25);
-  assert.equal(freeSeat(s, 6), 28);
-  for (let k = 28; k < 34; k++) s.employees.push({ id: `o${k}`, level: 5, desk: k });
+  assert.equal(freeSeat(s, 6), 29);
+  for (let k = 29; k < 34; k++) s.employees.push({ id: `o${k}`, level: 5, desk: k });
   assert.ok(freeSeat(s, 6) < 25);
   assert.equal(freeSeat(s, 6, { officeOnly: true }), undefined);
   assert.deepEqual(moveManagersToOffices(s), []);
@@ -220,4 +221,32 @@ test('generated looks always pick a real skin and hair colour', () => {
     assert.ok(l.hairColor >= 0 && l.hairColor < 4, `hair ${l.hairColor}`);
     assert.ok(l.height >= 0.95 && l.height < 1.06);
   }
+});
+
+test('the HR manager leads HR in new agencies and joins older ones once', () => {
+  const s = createInitialState();
+  const noura = s.employees.find((e) => e.name === 'نورة');
+  assert.equal(noura.dept, 'hr');
+  assert.equal(noura.managerId, s.employees.find((e) => e.name === 'حمو').id);
+  assert.ok(s.employees.filter((e) => e.dept === 'hr' && e.id !== noura.id).every((e) => e.managerId === noura.id));
+  assert.equal(s.tasks.filter((t) => t.empId === noura.id).length, 2);
+  // An agency saved before her: she is added once, and the HR intern moves under her.
+  const old = createInitialState();
+  old.employees = old.employees.filter((e) => e.name !== 'نورة');
+  old.tasks = old.tasks.filter((t) => t.empId !== 'e7');
+  const intern = old.employees.find((e) => e.dept === 'hr');
+  intern.managerId = 'e5';
+  old.migrations = old.migrations.filter((k) => k !== 'add-hr-manager');
+  assert.equal(applyMigrations(old), true);
+  const added = old.employees.find((e) => e.name === 'نورة');
+  assert.ok(added.desk >= 25);
+  assert.equal(intern.managerId, added.id);
+  assert.equal(applyMigrations(old), false);
+  // An agency that already has someone leading HR keeps them.
+  const own = createInitialState();
+  own.employees = own.employees.filter((e) => e.name !== 'نورة');
+  own.employees.push({ id: 'h1', name: 'فهد', dept: 'hr', level: 6, desk: 30 });
+  own.migrations = own.migrations.filter((k) => k !== 'add-hr-manager');
+  applyMigrations(own);
+  assert.ok(!own.employees.some((e) => e.name === 'نورة'));
 });

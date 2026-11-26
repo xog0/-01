@@ -169,6 +169,10 @@ const HAMO = { id: 'e5', name: 'حمو', gender: 'm', dept: 'executive', level: 
 const SHEIKA = { id: 'e6', name: 'شيكا', gender: 'm', dept: 'finance', level: 6, xp: 560, managerId: 'e5',
   personality: 'محاسب دقيق ومنظم، حازم في الأرقام لكنه منصف، يشرح الحسابات ببساطة ويحب الجداول الواضحة.' };
 
+// The HR manager: in charge of every employee's affairs (leave, attendance, evaluations, hiring).
+const NOURA = { id: 'e7', name: 'نورة', gender: 'f', dept: 'hr', level: 5, xp: 420, managerId: 'e5',
+  personality: 'منصفة وحازمة بلطف، تعرف كل موظف باسمه وظروفه، تهتم بالعدالة والالتزام وتحب الأنظمة الواضحة.' };
+
 const STARTING_TEAM = [
   HAMO,
   SHEIKA,
@@ -180,11 +184,14 @@ const STARTING_TEAM = [
     personality: 'نشيطة وتتابع الترندات لحظة بلحظة، عملية وسريعة، تحب الأفكار القابلة للانتشار.' },
   { id: 'e4', managerId: 'e1', name: 'عمر', gender: 'm', dept: 'ads', level: 2, xp: 105,
     personality: 'تحليلي ودقيق، لا يقتنع إلا بالبيانات، يقترح دائماً طريقة لقياس النتائج.' },
+  NOURA,
 ];
 
 const DEFAULT_TASKS = [
   ['e6', 'إعداد ميزانية الربع القادم', 'ضع ميزانية تشغيلية للربع القادم: الرواتب، الإعلانات، الأدوات، والمصروفات العامة، مع هامش احتياطي.', 'high'],
   ['e6', 'سياسة المكافآت والخصومات', 'اكتب سياسة واضحة للمكافآت والخصومات والعمل الإضافي في الوكالة، مع أمثلة وحدود لكل بند.', 'medium'],
+  ['e7', 'سياسة الإجازات والحضور', 'اكتب سياسة واضحة للإجازات (السنوية والمرضية والاضطرارية وبدون راتب) والحضور والانصراف في الوكالة، مع طريقة طلب الإجازة واعتمادها.', 'medium'],
+  ['e7', 'خطة تقييم الأداء الربعي', 'ضع خطة لتقييم أداء كل موظفي الوكالة كل ربع سنة: المعايير، من يقيّم من، المواعيد، وكيف تُربط النتائج بالمكافآت والترقيات.', 'medium'],
   ['e5', 'رؤية الوكالة لثلاث سنوات', 'اكتب رؤية ورسالة وقيم الوكالة مع 3 أهداف استراتيجية للسنوات الثلاث القادمة.', 'high'],
   ['e5', 'مؤشرات أداء الإدارة العليا', 'حدّد أهم 6 مؤشرات تتابعها الإدارة العليا شهرياً مع المستهدف لكل مؤشر.', 'medium'],
   ['e1', 'إعداد الخطة التسويقية للربع القادم', 'ضع خطة تسويقية لثلاثة أشهر للوكالة: الأهداف، القنوات، الميزانية التقديرية، ومؤشرات الأداء.', 'high'],
@@ -243,6 +250,7 @@ const LOOKS = {
   'ليلى': { hair: 'long', skin: 3, hairColor: 3, height: 0.96 },
   'عمر': { hair: 'buzz', skin: 1, hairColor: 2, glasses: true },
   'شيكا': { hair: 'short', skin: 1, hairColor: 2, glasses: true, beard: true },
+  'نورة': { hair: 'hijab', hijab: 0x6b1f2e, skin: 1 },
   'يوسف': { hair: 'short', skin: 2, hairColor: 2, beard: true },
   'رنا': { hair: 'hijab', hijab: 0xcbb994, skin: 0, height: 0.95 },
   'زياد': { hair: 'short', skin: 3, hairColor: 1 },
@@ -260,6 +268,8 @@ const LOOKS = {
 const BIOS = {
   'حمو': { age: 46, years: 22, background: 'بدأ في المبيعات، ثم أسس وأدار وكالتين قبل أن يقود الوكالة. يحمل ماجستير في إدارة الأعمال.',
     style: 'يتحدث باختصار وثقة، يسأل عن الأرقام وأثر القرار على العميل، يشكر الفريق علناً وينتقد على انفراد.' },
+  'نورة': { age: 37, years: 13, background: 'بدأت أخصائية توظيف في شركة اتصالات، ثم أدارت الموارد البشرية لوكالة إعلانية وبنت أنظمة الإجازات والتقييم فيها.',
+    style: 'تسمع أولاً ثم تقرر، تشرح الأنظمة بهدوء، وتتابع كل موظف بنفسها دون مجاملة.' },
   'شيكا': { age: 39, years: 15, background: 'محاسب قانوني عمل في التدقيق لدى مكتب محاسبة، ثم أدار الحسابات والرواتب لشركات خدمات.',
     style: 'دقيق وهادئ، يبدأ بالرقم ثم يشرحه، ويذكّر بالسياسة قبل أي استثناء.' },
   'سارة': { age: 34, years: 11, background: 'عملت في التخطيط الاستراتيجي لدى وكالة إعلانية كبيرة، وتحمل بكالوريوس تسويق وشهادة في تحليل البيانات.',
@@ -473,6 +483,7 @@ const MIGRATIONS = [
   { key: 'add-sheika-cfo', run: addSheika },
   { key: 'add-clients', run: (state) => seedClients(state) },
   { key: 'add-deals', run: (state) => seedDeals(state) },
+  { key: 'add-hr-manager', run: addHrManager },
 ];
 
 // Whoever heads a department (its members whose manager is outside it)
@@ -494,6 +505,21 @@ function deptHeadsUnderHamo(state, dept) {
 function setUpFinance(state) {
   state.finance ||= createFinance();
   for (const e of state.employees) if (!(e.salary > 0)) e.salary = defaultSalary(e.level);
+}
+
+/** Adds the HR manager to agencies that have nobody leading HR; the HR team moves under her. */
+function addHrManager(state) {
+  if (state.employees.some((e) => e.dept === 'hr' && e.level >= MANAGER_LEVEL)) return;
+  if (state.employees.some((e) => e.name === NOURA.name)) return;
+  const desk = freeSeat(state, NOURA.level);
+  if (desk === undefined) return;
+  const ceo = state.employees.filter((e) => e.level >= CEO_LEVEL).sort((a, b) => (b.xp || 0) - (a.xp || 0))[0];
+  const id = state.employees.some((e) => e.id === NOURA.id) ? newId(state, 'e') : NOURA.id;
+  state.employees.push({ ...NOURA, id, desk, managerId: ceo ? ceo.id : null, salary: defaultSalary(NOURA.level), hiredAt: Date.now(), status: 'idle' });
+  for (const e of state.employees) if (e.dept === 'hr' && e.id !== id) e.managerId = id;
+  for (const [, title, description, priority] of DEFAULT_TASKS.filter(([who]) => who === NOURA.id)) {
+    state.tasks.push({ id: newId(state, 't'), empId: id, title, description, priority, status: 'todo', output: '', createdAt: Date.now() });
+  }
 }
 
 function addSheika(state) {

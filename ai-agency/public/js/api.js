@@ -85,6 +85,12 @@ async function demoReply({ mode, persona, messages }) {
   }
   if (mode === 'assign') return ''; // the app falls back to each department's task library
   if (mode === 'memo') return `مذكرة الرواتب: تم إعداد المسير وفق الأرقام المرفقة. أوصي بمراجعة بند العمل الإضافي الشهر القادم.${note}`;
+  if (persona.duties === 'hr' && /إجاز|اجاز/.test(last)) {
+    const who = (last.match(/(?:لـ|ل)\s*([\u0600-\u06FF]{2,})/) || [])[1];
+    const days = (last.replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).match(/\d+/) || ['1'])[0];
+    return who ? `حاضر، سأسجّلها الآن.\n[[إجازة: ${who} | ${/مرض/.test(last) ? 'مرضية' : 'سنوية'} | ${days} | اليوم | بطلب من المالك]]` : `حدد لي اسم الموظف وعدد الأيام من فضلك.${note}`;
+  }
+  if (persona.duties === 'hr' && /قيّم|قيم|تقييم/.test(last)) return 'حاضر، سأبدأ تقييم الفريق الآن.\n[[تقييم: الكل]]';
   if (persona.duties === 'finance' && /خصم|مكافأة|مكافاة|أوفرتايم|اوفرتايم|زيادة/.test(last)) {
     const m = last.match(/(خصم|مكافأة|مكافاة|أوفرتايم|اوفرتايم|زيادة)[^\d٠-٩]*([\d٠-٩]+)/);
     return m ? `حاضر، سأسجّلها الآن.\n[[مالية: ${m[1]} | ${(last.match(/(?:ل|من|على)\s*([\u0600-\u06FF]+)/) || [])[1] || 'الكل'} | ${m[2]} | بطلب من المالك]]` : `حدد لي الموظف والمبلغ من فضلك.${note}`;

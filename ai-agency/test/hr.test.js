@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   LEAVE_TYPES, addDays, attendanceOf, dayKey, endLeave, grantLeave, leaveBalance, leaveOn, markAttendance, parseCandidates,
-  sampleCandidates, upcomingLeaves, validDay,
+  sampleCandidates, upcomingLeaves, validDay, parseHrOrders,
 } from '../public/js/hr.js';
 import { createFinance, payrollPreview } from '../public/js/finance.js';
 import { newId } from '../public/js/data.js';
@@ -113,4 +113,24 @@ test('candidates from the HR manager are sanitised; a fallback shortlist exists'
   assert.equal(f.candidates.length, 3);
   assert.equal(new Set(f.candidates.map((c) => c.name)).size, 3);
   assert.ok(f.candidates.every((c) => c.salary >= 8000 && c.salary <= 14000 && c.background.includes('التسويق')));
+});
+
+test('the HR manager\'s orders are read from her reply and removed from it', () => {
+  const staff = [{ id: 'e1', name: 'خالد' }, { id: 'e2', name: 'ليلى' }, { id: 'e3', name: 'عمر' }];
+  const departments = { content: { name: 'المحتوى' }, design: { name: 'التصميم' } };
+  const ladder = [{ name: 'متدرب' }, { name: 'أخصائي مبتدئ' }, { name: 'أخصائي' }, { name: 'أخصائي أول' }];
+  const reply = 'حاضر، سأسجلها الآن.\n[[إجازة: ليلى | مرضية | ٣ | اليوم | زكام]]\n[[إجازة: عمر | بدون راتب | 2 | 2026-12-01 | ظرف خاص]]\n' +
+    '[[إجازة: خالد | سنوية | 1 | غداً | ]]\n[[إنهاء إجازة: خالد]]\n[[تقييم: الكل]]\n[[تقييم: خالد وليلى]]\n[[توظيف: قسم التصميم | أخصائي أول]]\n' +
+    '[[إجازة: شخص غير موجود | سنوية | 2 | اليوم | ]]\n[[توظيف: قسم الفضاء | متدرب]]';
+  const { text, orders } = parseHrOrders(reply, staff, { today: '2026-11-25', departments, ladder });
+  assert.equal(text, 'حاضر، سأسجلها الآن.');
+  assert.deepEqual(orders, [
+    { kind: 'leave', empId: 'e2', type: 'sick', days: 3, from: '2026-11-25', reason: 'زكام' },
+    { kind: 'leave', empId: 'e3', type: 'unpaid', days: 2, from: '2026-12-01', reason: 'ظرف خاص' },
+    { kind: 'leave', empId: 'e1', type: 'annual', days: 1, from: '2026-11-26', reason: '' },
+    { kind: 'endLeave', empId: 'e1' },
+    { kind: 'evaluate', empIds: ['e1', 'e2', 'e3'] },
+    { kind: 'evaluate', empIds: ['e1', 'e2'] },
+    { kind: 'hire', dept: 'design', level: 3 },
+  ]);
 });

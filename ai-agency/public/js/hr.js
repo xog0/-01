@@ -208,3 +208,47 @@ export function sampleCandidates({ deptName, years, base, taken = [], seed = 0 }
   }
   return { candidates: out, note: '' };
 }
+
+// ---- the HR manager's orders --------------------------------------------------
+// In chat the owner can ask the HR manager to grant or end leave, evaluate
+// people, or open a hiring round. She confirms and writes one line per order:
+//   [[إجازة: الاسم | النوع | الأيام | من (YYYY-MM-DD أو اليوم أو غداً) | السبب]]
+//   [[إنهاء إجازة: الاسم]]
+//   [[تقييم: الأسماء أو الكل]]
+//   [[توظيف: القسم | المستوى]]
+const LEAVE_WORDS = { 'سنوية': 'annual', 'مرضية': 'sick', 'اضطرارية': 'emergency', 'طارئة': 'emergency', 'بدون راتب': 'unpaid' };
+const arabicDigits = (s) => String(s).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
+const matchPeople = (text, employees) => {
+  const names = String(text).split(/[،,]| و/).map((x) => x.trim()).filter(Boolean);
+  if (names.some((n) => /^(ال)?كل|الجميع|جميع الموظفين|الفريق/.test(n))) return employees.map((e) => e.id);
+  return employees.filter((e) => names.some((n) => n === e.name || n.includes(e.name))).map((e) => e.id);
+};
+
+export function parseHrOrders(reply, employees, { today = dayKey(), departments = {}, ladder = [] } = {}) {
+  const orders = [];
+  const text = reply.replace(/\[\[\s*(إنهاء إجازة|إجازة|تقييم|توظيف)\s*:([^\]]*)\]\]/g, (_, kind, body) => {
+    const parts = body.split('|').map((x) => x.trim());
+    if (kind === 'إجازة') {
+      const [who = '', typeWord = '', days = '', from = '', reason = ''] = parts;
+      const empIds = matchPeople(who, employees).slice(0, 1);
+      const type = Object.entries(LEAVE_WORDS).find(([w]) => typeWord.includes(w))?.[1] || 'annual';
+      const n = Number.parseInt(arabicDigits(days), 10);
+      const f = arabicDigits(from);
+      const start = /^\d{4}-\d{2}-\d{2}$/.test(f) ? f : /غد/.test(from) ? addDays(today, 1) : today;
+      if (empIds.length && n > 0) orders.push({ kind: 'leave', empId: empIds[0], type, days: n, from: start, reason: reason.slice(0, 200) });
+    } else if (kind === 'إنهاء إجازة') {
+      const empIds = matchPeople(parts[0] || '', employees).slice(0, 1);
+      if (empIds.length) orders.push({ kind: 'endLeave', empId: empIds[0] });
+    } else if (kind === 'تقييم') {
+      const empIds = matchPeople(parts[0] || '', employees);
+      if (empIds.length) orders.push({ kind: 'evaluate', empIds });
+    } else {
+      const [deptWord = '', levelWord = ''] = parts;
+      const dept = Object.entries(departments).find(([k, d]) => deptWord && (deptWord.includes(d.name) || d.name.includes(deptWord) || deptWord === k))?.[0];
+      const byName = ladder.map((l, i) => [l.name, i]).sort((a, b) => b[0].length - a[0].length).find(([name]) => levelWord.includes(name));
+      if (dept) orders.push({ kind: 'hire', dept, level: byName ? byName[1] : 2 });
+    }
+    return '';
+  }).trim();
+  return { text, orders };
+}
