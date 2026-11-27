@@ -24,6 +24,7 @@ import { invoiceHtml, invoiceNumber, itemsMarkdown, ledgerCsv, libraryItems, sta
 import {
   LEAVE_TYPES, MAX_LEAVE_DAYS, addDays, attendanceOf, dayKey, daysWord, endLeave, grantLeave, leaveBalance, leaveOn, markAttendance,
   parseCandidates, parseHrOrders, salaryRange, sampleCandidates, upcomingLeaves,
+  promisePromotion, openPromise, closePromise, parseOfferReply, nextOffer, parsePick, parseRewards,
 } from './hr.js';
 import {
   DEAL_STAGES, OPEN_STAGES, isOpen, linkProposal, moveDeal, parseDealReview, parseLeads, pipelineStats, sampleLeads, saveDeal, syncDealWithProject,
@@ -159,6 +160,8 @@ function memoryOf(e) {
   if (live.length) {
     parts.push(`مشاريعك: ${live.map((p) => `${p.name} لـ${clientOf(p)?.name || 'عميل'} (${p.leadId === e.id ? 'أنت قائده' : 'عضو في الفريق'})`).join('، ')}.`);
   }
+  const promise = openPromise(state, e.id);
+  if (promise) parts.push(`وعدتك ${emp(promise.by)?.name || 'الإدارة'} بالترقية إلى «${LADDER[promise.toLevel]?.name}»${promise.condition ? ` إذا: ${promise.condition}` : ''}، والقرار النهائي للمالك.`);
   if (!officeOpen && !awayNow(e)) parts.unshift('الوقت الآن خارج الدوام وأنت في منزلك، فترد على رسالة المالك من هاتفك باختصار.');
   const l = awayNow(e);
   if (l) parts.unshift(`أنت الآن في إجازة ${LEAVE_TYPES[l.type].name} حتى ${l.to}، وتعود يوم ${addDays(l.to, 1)}. ترد على المالك من إجازتك باختصار.`);
@@ -178,7 +181,8 @@ function hrBrief() {
     coming.length ? `إجازات قادمة: ${coming.join('، ')}.` : '',
     absent.length ? `أيام غياب آخر 30 يوماً: ${absent.join('، ')}.` : 'لا غياب مسجل آخر 30 يوماً.',
     evals.length ? `آخر التقييمات: ${evals.join('، ')}.` : 'لم يُقيَّم أحد بعد.',
-    state.hiring ? `جولة توظيف مفتوحة لوظيفة ${state.hiring.title} (${state.hiring.candidates.length} مرشحين).` : '',
+    state.hiring ? `جولة توظيف مفتوحة لوظيفة ${state.hiring.title} (${state.hiring.candidates.length} مرشحين${state.hiring.cap ? `، الحد الأقصى للراتب ${state.hiring.cap}` : ''}).` : '',
+    (state.promises || []).some((p) => p.status === 'open') ? `وعود ترقية مفتوحة: ${(state.promises || []).filter((p) => p.status === 'open').map((p) => emp(p.empId)?.name).filter(Boolean).join('، ')}.` : '',
   ].filter(Boolean).join(' ');
 }
 
@@ -1417,10 +1421,20 @@ function applyHrOrders(orders, hr) {
         later.push(() => evaluateAll({ by: hr, people }));
       } else if (o.kind === 'hire') {
         if (state.hiring) throw new Error('هناك جولة توظيف مفتوحة بالفعل');
+        if (!(o.cap > 0)) throw new Error('حدّد لي الحد الأقصى للراتب قبل أن أبدأ');
         const ceo = positionHolder(POSITIONS[0]) || topManager();
         const head = state.employees.filter((x) => x.dept === o.dept).sort(byRank)[0];
-        lines.push(`🎤 بدأت البحث عن مرشحين لوظيفة ${titleFor({ dept: o.dept, level: o.level })}`);
-        later.push(() => startHiringRound({ dept: o.dept, level: o.level, managerId: (head && head.level > o.level ? head : ceo)?.id || null, position: '', takeover: false }));
+        lines.push(`🎤 بدأت البحث عن مرشحين لوظيفة ${titleFor({ dept: o.dept, level: o.level })}، وسأقابلهم وأفاوضهم دون تجاوز ${money(o.cap)}، ثم أرفع لك توصيتي`);
+        later.push(() => startHiringRound({ dept: o.dept, level: o.level, managerId: (head && head.level > o.level ? head : ceo)?.id || null, position: '', takeover: false, cap: o.cap, auto: true }));
+      } else if (o.kind === 'bonus') {
+        if (o.empId === hr.id) throw new Error('لا أقترح مكافأة لنفسي');
+        const amount = Math.min(o.amount, Math.round(e.salary * 0.5));
+        createBonusRequest(state, { empId: e.id, recommenderId: hr.id, amount, reason: o.reason || `مكافأة اقترحتها ${hr.name}`, newId });
+        later.push(() => processBonusQueue());
+        lines.push(`💰 اقترحت مكافأة ${money(amount)} لـ${e.name}${amount < o.amount ? ' (خُفّضت إلى نصف راتبه)' : ''}. تمر على المدير المالي ثم المدير التنفيذي، ولا تُصرف إلا باعتمادك`);
+      } else if (o.kind === 'promise') {
+        const p = promisePromotion(state, { empId: e.id, by: hr.id, condition: o.condition, reason: o.reason, toLevel: e.level + 1 }, { newId, maxLevel: LADDER.length - 1 });
+        lines.push(`🤝 وعدت ${e.name} بالترقية إلى «${LADDER[p.toLevel].name}»${p.condition ? ` إذا: ${p.condition}` : ''}. الترقية نفسها قرارك، وتجد الوعد في صندوق الموافقات`);
       }
     } catch (err) {
       lines.push(`❌ ${e ? `${e.name}: ` : ''}${err.message}`);
@@ -1584,14 +1598,16 @@ async function startHiringRound(spec) {
   }
   if (!list?.candidates.length) list = sampleCandidates({ deptName: DEPARTMENTS[spec.dept].name, years, base, taken, seed: state.nextId });
   busy.delete('hiring');
+  const { auto, ...kept } = spec;
   state.hiring = {
-    id: newId(state, 'h'), ...spec, title, by: recruiter?.id || null, at: Date.now(), note: list.note || '',
-    candidates: list.candidates.map((c, i) => ({ ...c, id: `c${i + 1}`, offer: c.salary, chat: [] })),
+    id: newId(state, 'h'), ...kept, title, by: recruiter?.id || null, at: Date.now(), note: list.note || '',
+    candidates: list.candidates.map((c, i) => ({ ...c, id: `c${i + 1}`, offer: Math.min(c.salary, spec.cap || c.salary), chat: [] })),
   };
   ivActive = null;
   save();
   refresh();
-  openInterviews();
+  if (auto && hrHead()) hrInterviews();
+  else openInterviews();
 }
 
 function openInterviews() {
@@ -1600,9 +1616,10 @@ function openInterviews() {
   if (!$('#dlg-interviews').open) $('#dlg-interviews').showModal();
 }
 
-function candidatePersona(c, r) {
+function candidatePersona(c, r, interviewer = null) {
   const mgr = emp(r.managerId);
   return {
+    manager: interviewer ? `${interviewer.name} (${titleFor(interviewer)})` : '',
     name: c.name, title: r.title, level: LADDER[r.level].name, department: DEPARTMENTS[r.dept].name, skills: DEPARTMENTS[r.dept].skills,
     personality: [c.personality, c.style && `أسلوبك في العمل: ${c.style}`, c.strengths && `نقاط قوتك: ${c.strengths}`, c.weakness && `نقطة ضعفك: ${c.weakness}`]
       .filter(Boolean).join(' ').slice(0, 1100),
@@ -1620,9 +1637,27 @@ function renderInterviews() {
   const [lo] = salaryRange(defaultSalary(r.level));
   $('#iv-title').textContent = `🎤 مقابلات: ${r.title}`;
   $('#iv-sub').textContent = `${DEPARTMENTS[r.dept].name} · المدير المباشر: ${emp(r.managerId)?.name || 'أنت'} · ${rec ? `رشّحهم ${rec.name} (${titleFor(rec)})` : 'قائمة مرشحين جاهزة'}`;
-  fill($('#iv-note'), r.note ? h('p', { class: 'notice' }, h('b', {}, `${rec?.name || 'الموارد البشرية'}: `), r.note) : null);
+  const hr = hrHead();
+  const pickC = r.pick && r.candidates.find((x) => x.id === r.pick.candId);
+  fill($('#iv-note'),
+    r.note ? h('p', { class: 'notice' }, h('b', {}, `${rec?.name || 'الموارد البشرية'}: `), r.note) : null,
+    pickC ? h('p', { class: 'notice' }, h('b', {}, `✅ ${emp(r.pick.by)?.name || 'الموارد البشرية'} توصي بتوظيف ${pickC.name} براتب ${money(r.pick.salary)}: `), r.pick.reason,
+      ' ', h('button', { class: 'small primary', onclick: () => hireCandidate(pickC, { salary: r.pick.salary }) }, '✅ اعتماد التوظيف')) : null,
+    r.hrNote ? h('p', { class: 'notice' }, r.hrNote) : null);
+  fill($('#iv-controls'),
+    h('label', {}, 'الحد الأقصى للراتب ', h('input', { type: 'number', min: String(lo), step: 'any', value: r.cap ? String(r.cap) : '', placeholder: 'حدده أنت', style: 'width:130px',
+      onchange: (ev) => {
+        const v = Math.round(Number(ev.target.value));
+        if (!(v > 0)) { ev.target.value = r.cap ? String(r.cap) : ''; return; }
+        r.cap = v;
+        save();
+        toast(`الحد الأقصى للراتب الآن ${money(v)}`);
+      } })),
+    hr ? h('button', { class: 'primary', disabled: busy.has('ivhr') || awayNow(hr), onclick: hrInterviews },
+      busy.has('ivhr') ? `⏳ ${hr.name} تجري المقابلات…` : `🤝 ${hr.name} تقابلهم وتفاوض على الراتب`) : null);
   fill($('#iv-cards'), r.candidates.map((c) => {
-    const asked = c.chat.filter((m) => m.role === 'user').length;
+    const asked = c.chat.filter((m) => m.role === 'user' && !m.who).length;
+    const outcome = c.agreed ? `✅ اتفقنا على ${money(c.agreed)}` : c.declined ? '✖ لم نتفق على الراتب' : '';
     return h('article', { class: `iv-card${ivActive === c.id ? ' active' : ''}` },
       h('div', { class: 'row', style: 'justify-content: space-between' },
         h('h3', {}, c.name), h('span', { class: 'muted' }, `${c.gender === 'f' ? 'أنثى' : 'ذكر'} · ${c.age} سنة · خبرة ${c.years}`)),
@@ -1630,7 +1665,8 @@ function renderInterviews() {
       c.style ? h('p', { class: 'muted' }, `الأسلوب: ${c.style}`) : null,
       c.strengths ? h('p', {}, `💪 ${c.strengths}`) : null,
       c.weakness ? h('p', {}, `⚠️ ${c.weakness}`) : null,
-      h('p', { class: 'muted' }, `يطلب ${money(c.salary)} · ${asked ? `سألته ${countOf(asked, QUESTIONS_WORD)}` : 'لم تقابله بعد'}`),
+      h('p', { class: 'muted' }, `يطلب ${money(c.salary)} · ${asked ? `سألته ${countOf(asked, QUESTIONS_WORD)}` : c.chat.some((m) => m.who) ? `قابلته ${c.chat.find((m) => m.who).who}` : 'لم تقابله بعد'}`),
+      outcome ? h('p', {}, h('b', {}, outcome)) : null,
       h('label', {}, 'الراتب المعروض', h('input', {
         type: 'number', min: String(lo), step: 'any', value: String(c.offer), 'aria-label': `الراتب المعروض على ${c.name}`,
         onchange: (ev) => {
@@ -1651,7 +1687,7 @@ function renderInterviews() {
   $('#iv-chat-title').textContent = `💬 مقابلة مع ${c.name}`;
   const log = $('#iv-log');
   fill(log,
-    c.chat.length ? c.chat.map((m) => h('div', { class: `msg ${m.role}` }, h('span', { class: 'who' }, m.role === 'user' ? 'أنت' : c.name), richText(m.content)))
+    c.chat.length ? c.chat.map((m) => h('div', { class: `msg ${m.role}` }, h('span', { class: 'who' }, m.role === 'user' ? m.who || 'أنت' : c.name), richText(m.content)))
       : h('div', { class: 'empty' }, `اسأل ${c.name} عن خبرته، أو كيف يتصرف في موقف من العمل، أو عن الراتب.`),
     busy.has(`iv:${c.id}`) ? h('div', { class: 'msg assistant typing' }, `${c.name} يكتب…`) : null);
   log.scrollTop = log.scrollHeight;
@@ -1669,7 +1705,7 @@ $('#iv-form').addEventListener('submit', async (ev) => {
   renderInterviews();
   try {
     const reply = await askEmployee({ mode: 'chat', persona: candidatePersona(c, r),
-      company: { name: state.company.name, about: state.company.about || '' }, messages: c.chat.slice(-20) });
+      company: { name: state.company.name, about: state.company.about || '' }, messages: c.chat.slice(-20).map(({ role, content }) => ({ role, content })) });
     c.chat.push({ role: 'assistant', content: reply });
   } catch (err) {
     c.chat.pop();
@@ -1689,9 +1725,98 @@ $('#iv-input').addEventListener('keydown', (ev) => {
   }
 });
 
-async function hireCandidate(c) {
+// The HR manager interviews each candidate (two questions), negotiates the
+// salary without passing the owner's cap, then recommends one. Hiring waits
+// for the owner's approval.
+const plainLine = (text) => String(text || '').replace(/^["«]|["»]$/g, '').trim();
+async function hrInterviews() {
   const r = state.hiring;
-  if (!r || !(await confirmBox(`توظيف ${c.name} بمسمى «${r.title}» براتب ${money(c.offer)} شهرياً؟`, 'توظيف'))) return;
+  const hr = hrHead();
+  if (!r || !hr || busy.has('ivhr')) return;
+  if (awayNow(hr)) return toast(awayNote(hr));
+  if (!(r.cap > 0)) return toast('حدّد الحد الأقصى للراتب أولاً');
+  busy.add('ivhr');
+  r.hrNote = '';
+  r.pick = null;
+  const cur = state.finance.currency;
+  const company = { name: state.company.name, about: state.company.about || '' };
+  const rerender = () => { if ($('#dlg-interviews').open) renderInterviews(); };
+  const prev = hr.status;
+  setStatus(hr, 'talking', '🎤 تقابل المرشحين');
+  toast(`🎤 ${hr.name} بدأت المقابلات (الحد الأقصى ${money(r.cap)})`);
+  rerender();
+  const transcript = (c) => c.chat.map((m) => `${m.role === 'user' ? m.who || 'المالك' : c.name}: ${m.content}`).join('\n');
+  const candidateSays = async (c, mode) => askEmployee({ mode, persona: candidatePersona(c, r, hr), company,
+    messages: c.chat.slice(-20).map(({ role, content }) => ({ role, content })) });
+  try {
+    for (const c of r.candidates) {
+      if (state.hiring !== r) return;
+      if (c.agreed || c.declined) continue;
+      ivActive = c.id;
+      for (let q = 0; q < 2; q++) {
+        const question = await ask(hr, 'interview', [{ role: 'user', content: (
+          `المرشح: ${c.name}، ${c.age} سنة، خبرة ${c.years}. ${c.background}\nالوظيفة: ${r.title}\n` +
+          (c.chat.length ? `المقابلة حتى الآن:\n${transcript(c)}` : 'لم تبدأ المقابلة بعد.')).slice(0, 5800) }]);
+        c.chat.push({ role: 'user', content: plainLine(question).slice(0, 600) || 'حدثني عن خبرتك.', who: hr.name });
+        rerender();
+        c.chat.push({ role: 'assistant', content: await candidateSays(c, 'chat') });
+        save();
+        rerender();
+      }
+      c.offers = [];
+      let step = nextOffer({ asking: c.salary, cap: r.cap });
+      for (let i = 0; i < 3 && step?.offer; i++) {
+        c.offers.push(step.offer);
+        c.chat.push({ role: 'user', who: hr.name, content: `العرض: ${step.offer} ${cur} شهرياً${step.final ? '، وهو أقصى ما نستطيعه' : ''}.` });
+        rerender();
+        const ans = parseOfferReply(await candidateSays(c, 'offer_reply')) || { decision: 'counter', value: c.salary, reply: '' };
+        c.chat.push({ role: 'assistant', content: ans.reply || (ans.decision === 'accept' ? 'أقبل العرض.' : ans.decision === 'reject' ? 'أعتذر، العرض لا يناسبني.' : `أطلب ${ans.value} ${cur}.`) });
+        step = nextOffer({ asking: c.salary, cap: r.cap, offers: c.offers, answer: ans });
+        if (step?.agreed) {
+          c.agreed = step.agreed;
+          c.offer = step.agreed;
+          c.chat.push({ role: 'user', who: hr.name, content: `اتفقنا على ${step.agreed} ${cur} شهرياً. سأرفع توصيتي للمالك، والقرار النهائي له.` });
+        }
+        if (step?.failed) c.declined = true;
+        save();
+        rerender();
+      }
+    }
+    if (state.hiring !== r) return;
+    const agreed = r.candidates.filter((c) => c.agreed);
+    if (!agreed.length) {
+      r.hrNote = `${hr.name}: لم نتفق مع أي مرشح ضمن الحد الأقصى (${money(r.cap)}). ارفع الحد ثم أعد المقابلات، أو ألغِ الجولة.`;
+      toast(r.hrNote);
+      return;
+    }
+    let pick = null;
+    try {
+      pick = parsePick(await ask(hr, 'hire_pick', [{ role: 'user', content: (`الوظيفة: ${r.title}. الحد الأقصى للراتب: ${r.cap} ${cur}.\n\n` +
+        r.candidates.map((c) => `المرشح: ${c.name} (${c.age} سنة، خبرة ${c.years})\n${c.agreed ? `اتفقنا على ${c.agreed} ${cur}` : 'لم نتفق على الراتب'}\n${transcript(c).slice(0, 1400)}`).join('\n\n')).slice(0, 5800) }]), r.candidates);
+    } catch (err) {
+      toast(err.message);
+    }
+    if (!pick) {
+      const best = [...agreed].sort((a, b) => b.years - a.years || a.agreed - b.agreed)[0];
+      pick = { candId: best.id, reason: 'اتفقنا معه على راتب ضمن الحد، وخبرته الأعلى بين من اتفقنا معهم.' };
+    }
+    r.pick = { ...pick, salary: r.candidates.find((c) => c.id === pick.candId).agreed, by: hr.id, at: Date.now() };
+    toast(`🎤 ${hr.name} أنهت المقابلات وتوصي بتوظيف ${r.candidates.find((c) => c.id === pick.candId).name} براتب ${money(r.pick.salary)}. القرار لك في صندوق الموافقات.`);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    busy.delete('ivhr');
+    setStatus(hr, prev === 'talking' ? 'idle' : prev || 'idle');
+    save();
+    refresh();
+    rerender();
+  }
+}
+
+async function hireCandidate(c, { salary = null, confirm = true } = {}) {
+  const r = state.hiring;
+  if (salary) c.offer = salary;
+  if (!r || (confirm && !(await confirmBox(`توظيف ${c.name} بمسمى «${r.title}» براتب ${money(c.offer)} شهرياً؟`, 'توظيف')))) return;
   const e = hireEmployee({
     name: c.name, gender: c.gender, dept: r.dept, level: r.level, managerId: emp(r.managerId) ? r.managerId : null,
     salary: c.offer, personality: c.personality || c.style || '',
@@ -1700,7 +1825,7 @@ async function hireCandidate(c) {
   });
   if (!e) return;
   // The interview is where they first met: it stays in their chat history.
-  if (c.chat.length) state.chats[e.id] = [...c.chat];
+  if (c.chat.length) state.chats[e.id] = c.chat.map((m) => ({ role: m.role, content: m.who ? `${m.who}: ${m.content}` : m.content }));
   state.hiring = null;
   ivActive = null;
   $('#dlg-interviews').close();
@@ -1772,6 +1897,7 @@ function renderProfile(e) {
       h('p', { class: 'muted' }, next
         ? `${e.xp} نقطة خبرة · الترقية إلى "${next.name}" عند ${next.xp} نقطة${eligible ? ' — ✅ مستحق للترقية' : ''}`
         : `${e.xp} نقطة خبرة · وصل إلى قمة السلم الوظيفي`),
+      openPromise(state, e.id) ? h('p', { class: 'notice' }, `🤝 وعد بالترقية إلى «${LADDER[openPromise(state, e.id).toLevel]?.name}» من ${emp(openPromise(state, e.id).by)?.name || 'الموارد البشرية'}${openPromise(state, e.id).condition ? ` · الشرط: ${openPromise(state, e.id).condition}` : ''}`) : null,
       h('div', { class: 'row' },
         h('button', { class: eligible ? 'primary' : '', disabled: !next, onclick: () => changeLevel(e, 1) }, '⬆️ ترقية'),
         h('button', { disabled: e.level === 0, onclick: () => changeLevel(e, -1) }, '⬇️ تخفيض'))),
@@ -1808,6 +1934,8 @@ function changeLevel(e, delta) {
   if (to < 0 || to >= LADDER.length) return;
   e.level = to;
   if (delta > 0 && e.xp < LADDER[to].xp) e.xp = LADDER[to].xp;
+  const promise = openPromise(state, e.id);
+  if (promise && delta > 0 && to >= promise.toLevel) closePromise(state, promise.id, 'kept');
   // A promotion lifts the salary to at least the new level's starting pay.
   if (delta > 0 && state.finance && e.salary < defaultSalary(to)) {
     addAdjustment(state, { empId: e.id, type: 'raise', amount: defaultSalary(to) - e.salary, reason: `ترقية إلى ${LADDER[to].name}`, by: 'owner' });
@@ -1947,8 +2075,15 @@ $('#dlg-hire').addEventListener('close', () => {
   const choice = $('#dlg-hire').returnValue;
   if (choice === 'interview') {
     const level = Number($('#hire-level').value);
+    const cap = Math.round(Number($('#hire-cap').value));
+    if (!state.hiring && !(cap > 0)) {
+      toast('حدّد الحد الأقصى للراتب أولاً: لن تتجاوزه الموارد البشرية في التفاوض.');
+      $('#dlg-hire').showModal();
+      $('#hire-cap').focus();
+      return;
+    }
     const spec = { dept: $('#hire-dept').value, level, managerId: $('#hire-manager').value || null, position: $('#hire-position').value || '',
-      takeover: $('#hire-takeover').checked && takeoverCandidates().length > 0 };
+      takeover: $('#hire-takeover').checked && takeoverCandidates().length > 0, cap };
     $('#hire-form').reset();
     $('#hire-takeover-row').hidden = true;
     startHiringRound(spec);
@@ -2288,6 +2423,51 @@ async function evaluateAll({ by = null, people: only = null } = {}) {
   if ($('#dlg-performance').open) renderPerformance();
 }
 
+// The HR manager reviews completed work and evaluations, then proposes bonuses
+// (they enter the approval chain) and promises of promotion (they wait for the owner).
+async function hrRewards() {
+  const hr = hrHead();
+  if (!hr || busy.has('rewards')) return;
+  if (awayNow(hr)) return toast(awayNote(hr));
+  busy.add('rewards');
+  if ($('#dlg-performance').open) renderPerformance();
+  const prev = hr.status;
+  setStatus(hr, 'working', '🏅 تراجع المكافآت');
+  const pendingBonus = new Set((state.bonusRequests || []).filter((q) => q.status === 'in_review' || q.status === 'awaiting_owner').map((q) => q.empId));
+  const rows = teamPerformance(state).filter((row) => row.emp.id !== hr.id);
+  const lines = rows.map(({ emp: e, score, grade, m }) => {
+    const ev = lastEvaluation(state, e.id);
+    return `- ${e.name} (${titleFor(e)}): درجة ${score === null ? 'لا بيانات' : `${score} (${grade.name})`} · منجزة ${m.done} · من أول مراجعة ${m.firstPass} من ${m.reviewed}` +
+      ` · آخر تقييم: ${ev ? `${ev.grade}، توصية ${RECOMMENDATIONS[ev.recommendation]}` : 'لا يوجد'} · الراتب ${e.salary} · حد المكافأة ${Math.round(e.salary * 0.25)}` +
+      `${LADDER[e.level + 1] ? '' : ' · في أعلى السلم'}${openPromise(state, e.id) ? ' · لديه وعد ترقية مفتوح' : ''}${pendingBonus.has(e.id) ? ' · لديه مكافأة قيد المراجعة' : ''}`;
+  });
+  let made = { bonuses: 0, promises: 0 };
+  try {
+    const parsed = parseRewards(await ask(hr, 'rewards', [{ role: 'user', content: `أداء الموظفين في آخر 90 يوماً (${state.finance.currency}):\n${lines.join('\n')}`.slice(0, 5800) }]),
+      state.employees, { exclude: [hr.id, ...pendingBonus] });
+    if (!parsed) throw new Error(`تعذّر قراءة مقترحات ${hr.name}، حاول مرة أخرى`);
+    for (const b of parsed.bonuses) {
+      try { createBonusRequest(state, { empId: b.empId, recommenderId: hr.id, amount: b.amount, reason: b.reason || `اقتراح ${hr.name}`, newId }); made.bonuses++; } catch { /* skip */ }
+    }
+    for (const p of parsed.promotions) {
+      const e = emp(p.empId);
+      try { promisePromotion(state, { empId: e.id, by: hr.id, condition: p.condition, reason: p.reason, toLevel: e.level + 1 }, { newId, maxLevel: LADDER.length - 1 }); made.promises++; } catch { /* skip */ }
+    }
+    save();
+    if (made.bonuses) processBonusQueue();
+    toast(made.bonuses || made.promises
+      ? `🏅 ${hr.name}: ${made.bonuses ? `${made.bonuses} مكافأة دخلت سلسلة الموافقات` : ''}${made.bonuses && made.promises ? '، و' : ''}${made.promises ? `${made.promises} وعد بالترقية في صندوق موافقاتك` : ''}${parsed.note ? ` · «${parsed.note}»` : ''}`
+      : `🏅 ${hr.name} لا ترى من يستحق مكافأة أو وعداً الآن${parsed.note ? `: «${parsed.note}»` : ''}`);
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    busy.delete('rewards');
+    setStatus(hr, prev === 'working' ? 'idle' : prev || 'idle');
+    refresh();
+    if ($('#dlg-performance').open) renderPerformance();
+  }
+}
+
 let perfTab = 'score';
 function renderPerformance() {
   document.querySelectorAll('[data-perf]').forEach((b) => b.classList.toggle('active', b.dataset.perf === perfTab));
@@ -2300,7 +2480,9 @@ function renderPerformance() {
     h('div', { class: 'row' },
       h('button', { class: 'primary', disabled: [...busy].some((k) => k.startsWith('eval:')), onclick: () => evaluateAll() }, '📝 اطلب من المدراء تقييم فرقهم'),
       hrHead() ? h('button', { disabled: [...busy].some((k) => k.startsWith('eval:')), onclick: () => evaluateAll({ by: hrHead() }) },
-        `📝 ${hrHead().name} (الموارد البشرية) تقيّم كل الموظفين`) : null),
+        `📝 ${hrHead().name} (الموارد البشرية) تقيّم كل الموظفين`) : null,
+      hrHead() ? h('button', { disabled: busy.has('rewards'), onclick: hrRewards },
+        busy.has('rewards') ? `⏳ ${hrHead().name} تراجع…` : `🏅 ${hrHead().name} تقترح مكافآت ووعود ترقية`) : null),
     h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
       h('thead', {}, h('tr', {}, ...['#', 'الموظف', 'الدرجة', 'التقدير', 'منجزة', 'من أول مرة', 'نجومك', 'آخر تقييم', ''].map((x) => h('th', {}, x)))),
       h('tbody', {}, ...rows.map((r, i) => {
@@ -2397,7 +2579,8 @@ const lateProjects = () => (state.projects || []).filter((p) => isLate(p) && p.l
 const dueForPromotion = () => state.employees.filter((e) => LADDER[e.level + 1] && e.xp >= LADDER[e.level + 1].xp && e.promoAck !== e.level
   && !pendingPromotions().some((ev) => ev.empId === e.id));
 const unreadWeekly = () => (state.reports || []).filter((r) => r.type === 'weekly' && !r.seen);
-const inboxCount = () => unreadWeekly().length + (state.hiring ? 1 : 0) + pendingForOwner(state).length + pendingPromotions().length + readyProposals().length + lateProjects().length + dueForPromotion().length;
+const openPromisesForOwner = () => (state.promises || []).filter((p) => p.status === 'open' && !p.ack && emp(p.empId));
+const inboxCount = () => openPromisesForOwner().length + unreadWeekly().length + (state.hiring ? 1 : 0) + pendingForOwner(state).length + pendingPromotions().length + readyProposals().length + lateProjects().length + dueForPromotion().length;
 function renderApprovalsBadge() {
   const n = inboxCount();
   const badge = $('#approvals-count');
@@ -2480,8 +2663,27 @@ function otherInboxCards() {
   }
   if (state.hiring) {
     const r = state.hiring;
-    cards.push(inboxCard(`🎤 مقابلات: ${r.title}`, 'توظيف', `${countOf(r.candidates.length, ['مرشح واحد', 'مرشحان', 'مرشحين', 'مرشحاً'])}${emp(r.by) ? ` · رشّحهم ${emp(r.by).name}` : ''}`,
-      r.note, [['فتح المقابلات', () => { $('#dlg-approvals').close(); openInterviews(); }, 'primary']]));
+    const pc = r.pick && r.candidates.find((x) => x.id === r.pick.candId);
+    if (pc) {
+      cards.push(inboxCard(`🎤 ${emp(r.pick.by)?.name || 'الموارد البشرية'} توصي بتوظيف ${pc.name}`, 'توظيف',
+        `${r.title} · راتب ${money(r.pick.salary)} (الحد الذي حددته ${money(r.cap)}) · ${pc.age} سنة، خبرة ${pc.years}`, r.pick.reason, [
+          ['✅ اعتماد التوظيف', () => { $('#dlg-approvals').close(); hireCandidate(pc, { salary: r.pick.salary, confirm: false }); }, 'primary'],
+          ['📄 قراءة المقابلات', () => { $('#dlg-approvals').close(); ivActive = pc.id; openInterviews(); }],
+          ['❌ لا أوافق', () => { r.pick = null; r.hrNote = `رفضت توصية توظيف ${pc.name}. يمكنك مقابلة غيره أو إلغاء الجولة.`; }, 'danger'],
+        ]));
+    } else {
+      cards.push(inboxCard(`🎤 مقابلات: ${r.title}`, 'توظيف', `${countOf(r.candidates.length, ['مرشح واحد', 'مرشحان', 'مرشحين', 'مرشحاً'])}${emp(r.by) ? ` · رشّحهم ${emp(r.by).name}` : ''}`,
+        r.hrNote || r.note, [['فتح المقابلات', () => { $('#dlg-approvals').close(); openInterviews(); }, 'primary']]));
+    }
+  }
+  for (const p of openPromisesForOwner()) {
+    const e = emp(p.empId);
+    cards.push(inboxCard(`🤝 ${emp(p.by)?.name || 'الموارد البشرية'} وعدت ${e.name} بالترقية`, 'وعد ترقية',
+      `من «${titleFor(e)}» إلى «${LADDER[p.toLevel]?.name}»${p.condition ? ` · الشرط: ${p.condition}` : ''}`, p.reason, [
+        ['⬆️ رقّه الآن', () => { changeLevel(e, p.toLevel - e.level); }, 'primary'],
+        ['لاحقاً', () => { p.ack = true; }],
+        ['❌ إلغاء الوعد', () => { closePromise(state, p.id, 'cancelled'); toast(`أُلغي وعد ترقية ${e.name}`); }, 'danger'],
+      ]));
   }
   for (const p of readyProposals()) {
     const t = proposalTask(p);

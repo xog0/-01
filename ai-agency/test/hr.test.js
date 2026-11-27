@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   LEAVE_TYPES, addDays, attendanceOf, dayKey, endLeave, grantLeave, leaveBalance, leaveOn, markAttendance, parseCandidates,
-  sampleCandidates, upcomingLeaves, validDay, parseHrOrders,
+  sampleCandidates, upcomingLeaves, validDay, parseHrOrders, promisePromotion, openPromise, closePromise, parseOfferReply, nextOffer, parsePick, parseRewards,
 } from '../public/js/hr.js';
 import { createFinance, payrollPreview } from '../public/js/finance.js';
 import { newId } from '../public/js/data.js';
@@ -131,6 +131,58 @@ test('the HR manager\'s orders are read from her reply and removed from it', () 
     { kind: 'endLeave', empId: 'e1' },
     { kind: 'evaluate', empIds: ['e1', 'e2', 'e3'] },
     { kind: 'evaluate', empIds: ['e1', 'e2'] },
-    { kind: 'hire', dept: 'design', level: 3 },
+    { kind: 'hire', dept: 'design', level: 3, cap: null },
   ]);
+});
+
+test('bonus proposals, promotion promises and a salary cap in her orders', () => {
+  const staff = [{ id: 'e1', name: 'خالد' }, { id: 'e2', name: 'ليلى' }];
+  const departments = { design: { name: 'التصميم' } };
+  const ladder = [{ name: 'متدرب' }, { name: 'أخصائي مبتدئ' }, { name: 'أخصائي' }];
+  const { text, orders } = parseHrOrders('تم.\n[[مكافأة: خالد | ١٥٠٠ ريال | أنجز 6 مهام بتقييم ممتاز]]\n[[وعد ترقية: ليلى | إنهاء حملة لمسة بتقييم جيد جداً | أداؤها ثابت]]\n' +
+    '[[توظيف: التصميم | أخصائي | 9,500]]\n[[مكافأة: خالد | صفر | لا شيء]]', staff, { departments, ladder });
+  assert.equal(text, 'تم.');
+  assert.deepEqual(orders, [
+    { kind: 'bonus', empId: 'e1', amount: 1500, reason: 'أنجز 6 مهام بتقييم ممتاز' },
+    { kind: 'promise', empId: 'e2', condition: 'إنهاء حملة لمسة بتقييم جيد جداً', reason: 'أداؤها ثابت' },
+    { kind: 'hire', dept: 'design', level: 2, cap: 9500 },
+  ]);
+});
+
+test('a promotion promise stays open until the owner keeps or cancels it', () => {
+  const s = { nextId: 1, employees: [{ id: 'e1', name: 'خالد', level: 3 }, { id: 'h', name: 'نورة', level: 5 }, { id: 'top', name: 'حمو', level: 8 }] };
+  assert.throws(() => promisePromotion(s, { empId: 'h', by: 'h', toLevel: 6 }, { newId }), /نفسه/);
+  assert.throws(() => promisePromotion(s, { empId: 'top', by: 'h', toLevel: 9 }, { newId }), /الموظف غير موجود|أعلى مستوى/);
+  const p = promisePromotion(s, { empId: 'e1', by: 'h', toLevel: 4, condition: 'إنهاء 5 مهام' }, { newId });
+  assert.equal(openPromise(s, 'e1'), p);
+  assert.throws(() => promisePromotion(s, { empId: 'e1', by: 'h', toLevel: 4 }, { newId }), /لم يُحسم/);
+  closePromise(s, p.id, 'kept');
+  assert.equal(openPromise(s, 'e1'), null);
+  assert.throws(() => closePromise(s, p.id, 'cancelled'), /حُسم/);
+});
+
+test('salary negotiation never goes above the owner\'s cap', () => {
+  assert.deepEqual(nextOffer({ asking: 10000, cap: 12000 }), { offer: 10000, final: false });
+  assert.deepEqual(nextOffer({ asking: 15000, cap: 12000 }), { offer: 12000, final: true });
+  assert.deepEqual(nextOffer({ asking: 10000, cap: 12000, offers: [10000], answer: { decision: 'accept' } }), { agreed: 10000 });
+  assert.deepEqual(nextOffer({ asking: 10000, cap: 12000, offers: [10000], answer: { decision: 'counter', value: 11000 } }), { agreed: 11000 });
+  assert.deepEqual(nextOffer({ asking: 10000, cap: 12000, offers: [10000], answer: { decision: 'counter', value: 14000 } }), { offer: 12000, final: true });
+  assert.deepEqual(nextOffer({ asking: 15000, cap: 12000, offers: [12000], answer: { decision: 'counter', value: 13000 } }), { failed: true });
+  assert.deepEqual(nextOffer({ asking: 10000, cap: 12000, offers: [10000], answer: { decision: 'reject' } }), { failed: true });
+  assert.deepEqual(parseOfferReply('{"decision":"counter","value":"١٢٥٠٠","reply":"أطلب أكثر قليلاً"}'), { decision: 'counter', value: 12500, reply: 'أطلب أكثر قليلاً' });
+  assert.equal(parseOfferReply('{"decision":"maybe"}'), null);
+  const cands = [{ id: 'c1', name: 'ريم العتيبي', agreed: 11000 }, { id: 'c2', name: 'طارق الحربي', agreed: null }];
+  assert.deepEqual(parsePick('{"choice":"ريم العتيبي","reason":"الأقوى"}', cands), { candId: 'c1', reason: 'الأقوى' });
+  assert.equal(parsePick('{"choice":"طارق الحربي"}', cands), null); // no agreed salary, cannot be picked
+});
+
+test('her bonus and promotion review is matched to people and kept within limits', () => {
+  const staff = [{ id: 'e1', name: 'خالد', salary: 8000 }, { id: 'e2', name: 'ليلى', salary: 6000 }, { id: 'h', name: 'نورة', salary: 15000 }];
+  const r = parseRewards(JSON.stringify({ note: 'خالد الأفضل هذا الشهر', bonuses: [
+    { name: 'خالد', amount: 5000, reason: '6 مهام بتقييم ممتاز' }, { name: 'خالد', amount: 100 }, { name: 'نورة', amount: 900 }, { name: 'سالم', amount: 300 }, { name: 'ليلى', amount: 0 },
+  ], promotions: [{ name: 'ليلى', condition: 'إنهاء حملة لمسة', reason: 'تقدم ثابت' }] }), staff, { exclude: ['h'] });
+  assert.equal(r.note, 'خالد الأفضل هذا الشهر');
+  assert.deepEqual(r.bonuses, [{ empId: 'e1', amount: 2000, reason: '6 مهام بتقييم ممتاز' }]); // capped at a quarter of the salary
+  assert.deepEqual(r.promotions, [{ empId: 'e2', condition: 'إنهاء حملة لمسة', reason: 'تقدم ثابت' }]);
+  assert.equal(parseRewards('لا أقترح شيئاً', staff), null);
 });

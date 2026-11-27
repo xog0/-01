@@ -50,8 +50,10 @@ export function buildChain(state, empId, recommenderId) {
   if (!recommender) throw new Error('المدير المرشِّح غير موجود');
   if (recommender.id === empId) throw new Error('لا يمكن ترشيح النفس لمكافأة');
   seen.add(recommender.id);
-  chain.push({ role: 'manager', empId: recommender.id, decision: null });
-  for (const role of ['hr', 'cfo', 'ceo']) push(role, roleHolder[role](state));
+  // A bonus the HR manager starts herself is hers from the first step; it then goes to the CFO.
+  const first = roleHolder.hr(state)?.id === recommender.id ? 'hr' : 'manager';
+  chain.push({ role: first, empId: recommender.id, decision: null });
+  for (const role of ['hr', 'cfo', 'ceo']) if (role !== first) push(role, roleHolder[role](state));
   chain.push({ role: 'owner', empId: null, decision: null });
   return chain;
 }

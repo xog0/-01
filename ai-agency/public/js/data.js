@@ -435,6 +435,7 @@ export function createInitialState() {
     calendar: { workDays: [0, 1, 2, 3, 4], holidays: [] },
     leaves: [],
     attendance: {},
+    promises: [],
     hiring: null,
     migrations: MIGRATIONS.map((m) => m.key), // a fresh agency already has these
   };

@@ -140,7 +140,8 @@
         <label>المستوى الوظيفي <select id="hire-level"></select></label>
         <label>المدير المباشر <select id="hire-manager"></select></label>
       </div>
-      <label>الراتب الشهري <input id="hire-salary" type="number" min="1" step="any" required></label>
+      <label>الراتب الشهري (للتوظيف المباشر) <input id="hire-salary" type="number" min="1" step="any" required></label>
+      <label>الحد الأقصى للراتب في المقابلات (تفاوض الموارد البشرية لا يتجاوزه) <input id="hire-cap" type="number" min="1" step="any" placeholder="مثال: 12000"></label>
       <label>الشخصية وأسلوب العمل (اختياري)
         <textarea id="hire-personality" rows="2" maxlength="600" placeholder="مثال: دقيق ومنظم، يحب الأرقام، صريح في رأيه"></textarea>
       </label>
@@ -383,6 +384,7 @@
       </div>
     </div>
     <div id="iv-note"></div>
+    <div id="iv-controls" class="row"></div>
     <div id="iv-cards" class="iv-cards"></div>
     <section id="iv-chat" hidden>
       <h3 id="iv-chat-title"></h3>

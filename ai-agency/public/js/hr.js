@@ -215,7 +215,9 @@ export function sampleCandidates({ deptName, years, base, taken = [], seed = 0 }
 //   [[إجازة: الاسم | النوع | الأيام | من (YYYY-MM-DD أو اليوم أو غداً) | السبب]]
 //   [[إنهاء إجازة: الاسم]]
 //   [[تقييم: الأسماء أو الكل]]
-//   [[توظيف: القسم | المستوى]]
+//   [[توظيف: القسم | المستوى | الحد الأقصى للراتب]]
+//   [[مكافأة: الاسم | المبلغ | السبب]]
+//   [[وعد ترقية: الاسم | الشرط | السبب]]
 const LEAVE_WORDS = { 'سنوية': 'annual', 'مرضية': 'sick', 'اضطرارية': 'emergency', 'طارئة': 'emergency', 'بدون راتب': 'unpaid' };
 const arabicDigits = (s) => String(s).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 const matchPeople = (text, employees) => {
@@ -226,7 +228,7 @@ const matchPeople = (text, employees) => {
 
 export function parseHrOrders(reply, employees, { today = dayKey(), departments = {}, ladder = [] } = {}) {
   const orders = [];
-  const text = reply.replace(/\[\[\s*(إنهاء إجازة|إجازة|تقييم|توظيف)\s*:([^\]]*)\]\]/g, (_, kind, body) => {
+  const text = reply.replace(/\[\[\s*(إنهاء إجازة|إجازة|تقييم|توظيف|مكافأة|مكافاة|وعد ترقية|وعد بترقية)\s*:([^\]]*)\]\]/g, (_, kind, body) => {
     const parts = body.split('|').map((x) => x.trim());
     if (kind === 'إجازة') {
       const [who = '', typeWord = '', days = '', from = '', reason = ''] = parts;
@@ -242,13 +244,112 @@ export function parseHrOrders(reply, employees, { today = dayKey(), departments 
     } else if (kind === 'تقييم') {
       const empIds = matchPeople(parts[0] || '', employees);
       if (empIds.length) orders.push({ kind: 'evaluate', empIds });
+    } else if (kind === 'مكافأة' || kind === 'مكافاة') {
+      const [who = '', amount = '', reason = ''] = parts;
+      const empIds = matchPeople(who, employees).slice(0, 1);
+      const v = Number(arabicDigits(amount).replace(/[^\d.]/g, ''));
+      if (empIds.length && v > 0) orders.push({ kind: 'bonus', empId: empIds[0], amount: Math.round(v), reason: reason.slice(0, 300) });
+    } else if (kind === 'وعد ترقية' || kind === 'وعد بترقية') {
+      const [who = '', condition = '', reason = ''] = parts;
+      const empIds = matchPeople(who, employees).slice(0, 1);
+      if (empIds.length) orders.push({ kind: 'promise', empId: empIds[0], condition: condition.slice(0, 200), reason: reason.slice(0, 300) });
     } else {
-      const [deptWord = '', levelWord = ''] = parts;
+      const [deptWord = '', levelWord = '', capWord = ''] = parts;
+      const cap = Number(arabicDigits(capWord).replace(/[^\d.]/g, '')) || null;
       const dept = Object.entries(departments).find(([k, d]) => deptWord && (deptWord.includes(d.name) || d.name.includes(deptWord) || deptWord === k))?.[0];
       const byName = ladder.map((l, i) => [l.name, i]).sort((a, b) => b[0].length - a[0].length).find(([name]) => levelWord.includes(name));
-      if (dept) orders.push({ kind: 'hire', dept, level: byName ? byName[1] : 2 });
+      if (dept) orders.push({ kind: 'hire', dept, level: byName ? byName[1] : 2, cap: cap > 0 ? Math.round(cap) : null });
     }
     return '';
   }).trim();
   return { text, orders };
+}
+
+// ---- promotion promises ---------------------------------------------------------
+// The HR manager may promise someone a promotion on a condition; only the
+// owner promotes. A promise stays open until the owner promotes or cancels it.
+export function promisePromotion(state, { empId, by, condition = '', reason = '', toLevel }, { newId, now = Date.now(), maxLevel = 8 }) {
+  const e = state.employees.find((x) => x.id === empId);
+  if (!e) throw new Error('الموظف غير موجود');
+  if (by === empId) throw new Error('لا يعد أحد نفسه بترقية');
+  if (!(toLevel > e.level) || toLevel > maxLevel) throw new Error(`${e.name} في أعلى مستوى يمكن الوعد به`);
+  state.promises ||= [];
+  if (state.promises.some((p) => p.empId === empId && p.status === 'open')) throw new Error(`لدى ${e.name} وعد بالترقية لم يُحسم بعد`);
+  const p = { id: newId(state, 'pr'), empId, by, toLevel, condition: String(condition).trim().slice(0, 200), reason: String(reason).trim().slice(0, 300), status: 'open', at: now };
+  state.promises.push(p);
+  state.promises = state.promises.slice(-100);
+  return p;
+}
+export const openPromise = (state, empId) => (state.promises || []).find((p) => p.empId === empId && p.status === 'open') || null;
+export function closePromise(state, id, status, now = Date.now()) {
+  const p = (state.promises || []).find((x) => x.id === id);
+  if (!p || p.status !== 'open') throw new Error('الوعد غير موجود أو حُسم من قبل');
+  if (status !== 'kept' && status !== 'cancelled') throw new Error('قرار غير معروف');
+  Object.assign(p, { status, closedAt: now });
+  return p;
+}
+
+// ---- interviews and salary negotiation by the HR manager -------------------------
+/** A candidate's answer to a salary offer. */
+export function parseOfferReply(reply) {
+  try {
+    const v = JSON.parse(reply.slice(reply.indexOf('{'), reply.lastIndexOf('}') + 1));
+    const decision = ['accept', 'counter', 'reject'].includes(v.decision) ? v.decision : null;
+    if (!decision) return null;
+    const value = Math.round(Number(arabicDigits(v.value ?? '')));
+    return { decision, value: decision === 'counter' && value > 0 ? value : null, reply: typeof v.reply === 'string' ? v.reply.trim().slice(0, 500) : '' };
+  } catch {
+    return null;
+  }
+}
+/**
+ * The next step of a negotiation, never above the owner's cap: the first
+ * offer meets the asking salary if it fits; a counter within the cap is
+ * accepted; otherwise the cap is the final offer, once.
+ */
+export function nextOffer({ asking, cap, offers = [], answer = null }) {
+  if (!offers.length) return { offer: Math.min(asking, cap), final: asking >= cap };
+  if (!answer) return null;
+  if (answer.decision === 'accept') return { agreed: offers.at(-1) };
+  if (answer.decision === 'reject') return { failed: true };
+  if (answer.value && answer.value <= cap) return { agreed: answer.value };
+  if (offers.at(-1) >= cap) return { failed: true };
+  return { offer: cap, final: true };
+}
+/** The HR manager's pick among the candidates who agreed on a salary. */
+export function parsePick(reply, candidates) {
+  try {
+    const v = JSON.parse(reply.slice(reply.indexOf('{'), reply.lastIndexOf('}') + 1));
+    const name = typeof v.choice === 'string' ? v.choice.trim() : '';
+    const c = candidates.find((x) => x.agreed && (x.name === name || name.includes(x.name)));
+    return c ? { candId: c.id, reason: typeof v.reason === 'string' ? v.reason.trim().slice(0, 500) : '' } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The HR manager's review of who deserves a bonus or a promise of promotion. */
+export function parseRewards(reply, employees, { maxShare = 0.25, exclude = [] } = {}) {
+  try {
+    const v = JSON.parse(reply.slice(reply.indexOf('{'), reply.lastIndexOf('}') + 1));
+    const person = (name) => employees.find((e) => typeof name === 'string' && (name.trim() === e.name || name.includes(e.name)) && !exclude.includes(e.id));
+    const seen = new Set();
+    const bonuses = (Array.isArray(v.bonuses) ? v.bonuses : []).map((b) => {
+      const e = person(b?.name);
+      const amount = Math.round(Number(arabicDigits(b?.amount ?? '')));
+      if (!e || !(amount > 0) || seen.has(e.id)) return null;
+      seen.add(e.id);
+      return { empId: e.id, amount: Math.min(amount, Math.round((e.salary || 0) * maxShare)) || amount, reason: typeof b.reason === 'string' ? b.reason.trim().slice(0, 300) : '' };
+    }).filter(Boolean).slice(0, 5);
+    const promised = new Set();
+    const promotions = (Array.isArray(v.promotions) ? v.promotions : []).map((p) => {
+      const e = person(p?.name);
+      if (!e || promised.has(e.id)) return null;
+      promised.add(e.id);
+      return { empId: e.id, condition: typeof p.condition === 'string' ? p.condition.trim().slice(0, 200) : '', reason: typeof p.reason === 'string' ? p.reason.trim().slice(0, 300) : '' };
+    }).filter(Boolean).slice(0, 3);
+    return { note: typeof v.note === 'string' ? v.note.trim().slice(0, 300) : '', bonuses, promotions };
+  } catch {
+    return null;
+  }
 }

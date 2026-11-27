@@ -84,3 +84,13 @@ test('a reviewer who left is skipped and the request moves on', () => {
   skipStage(s, req, 'غادر الوكالة');
   assert.equal(currentStage(req).role, 'cfo');
 });
+
+test('a bonus the HR manager proposes starts as hers and goes on to the CFO', async () => {
+  const { createBonusRequest } = await import('../public/js/approvals.js');
+  const s = { nextId: 1, employees: [
+    { id: 'ceo', name: 'حمو', dept: 'executive', level: 8 }, { id: 'hr', name: 'نورة', dept: 'hr', level: 5 },
+    { id: 'cfo', name: 'شيكا', dept: 'finance', level: 6 }, { id: 'e1', name: 'خالد', dept: 'content', level: 3, managerId: 'sara' },
+    { id: 'sara', name: 'سارة', dept: 'strategy', level: 5 }], bonusRequests: [], finance: { adjustments: [], nextId: 1, period: '2026-11' } };
+  const req = createBonusRequest(s, { empId: 'e1', recommenderId: 'hr', amount: 1500, reason: 'أداء ممتاز', newId: (st, p) => `${p}${++st.nextId}` });
+  assert.deepEqual(req.chain.map((c) => [c.role, c.empId, c.decision]), [['hr', 'hr', 'approve'], ['cfo', 'cfo', null], ['ceo', 'ceo', null], ['owner', null, null]]);
+});

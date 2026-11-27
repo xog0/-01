@@ -46,7 +46,7 @@ export async function askEmployee(payload) {
   return data.truncated ? `${data.reply}\n\n(…توقف الرد لأنه طويل جداً)` : data.reply;
 }
 
-const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick', bonus: 'quick', evaluation: 'quick', client_review: 'quick', candidates: 'quick', leads: 'quick', deal_review: 'quick', report: 'quick' };
+const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick', bonus: 'quick', evaluation: 'quick', client_review: 'quick', candidates: 'quick', leads: 'quick', deal_review: 'quick', report: 'quick', interview: 'quick', offer_reply: 'quick', hire_pick: 'quick', rewards: 'quick' };
 
 async function askViaSample(sample, payload) {
   const req = validateChatRequest(payload);
@@ -112,6 +112,16 @@ async function demoReply({ mode, persona, messages }) {
     if (last.includes('نهاية اليوم')) return `**ما أنجزناه اليوم**\n- سلّم الفريق مهامه المخطط لها.\n\n**خطة الغد**\n- استكمال المتبقي ومراجعة ملاحظات العملاء.${note}`;
     return `**الأسبوع باختصار**\n- تقدّم جيد في المشاريع الجارية.\n\n**توصيتان**\n1. التركيز على تحصيل المستحقات.\n2. متابعة الفرص في مرحلة التفاوض.${note}`;
   }
+  if (mode === 'interview') return pick(['حدثني عن مشروع نجحت فيه وما دورك تحديداً؟', 'كيف تتصرف إذا طلب العميل تعديلات كثيرة قبل التسليم بيوم؟', 'ما نقطة ضعفك وكيف تعمل عليها؟']);
+  if (mode === 'offer_reply') {
+    const offer = Number((last.match(/العرض:\s*([\d.]+)/) || [])[1]) || 0;
+    const ask = Number((persona.memory.match(/تطلبه\s*([\d.]+)/) || [])[1]) || offer;
+    return JSON.stringify(offer >= ask ? { decision: 'accept', reply: 'أقبل العرض، شكراً لكم.' }
+      : offer >= ask * 0.9 ? { decision: 'counter', value: Math.round((offer + ask) / 2), reply: 'أقدّر العرض، هل يمكن رفعه قليلاً؟' }
+        : { decision: 'counter', value: ask, reply: 'أطلب الراتب الذي ذكرته لأنه يناسب خبرتي.' });
+  }
+  if (mode === 'hire_pick') return JSON.stringify({ choice: (last.match(/المرشح:\s*([^\n(]+)/) || [])[1]?.trim() || '', reason: 'الأنسب خبرةً وراتباً بين من اتفقنا معهم.' });
+  if (mode === 'rewards') return JSON.stringify({ note: 'اقتراحاتي بناءً على الأرقام.', bonuses: [], promotions: [] });
   if (mode === 'candidates' || mode === 'leads') return ''; // the app falls back to a ready-made list
   if (mode === 'deal_review') {
     const r = Math.random();

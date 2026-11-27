@@ -150,5 +150,14 @@ test('the HR manager can grant leave, evaluate and hire on request, but not touc
   assert.match(sys, /\[\[تقييم:/);
   assert.match(sys, /\[\[توظيف:/);
   assert.match(sys, /تخفيض الراتب للمالك وحده/);
+  assert.match(sys, /\[\[مكافأة:/);
+  assert.match(sys, /\[\[وعد ترقية:/);
+  assert.match(sys, /الحد الأقصى يحدده المالك/);
+  const cand = { name: 'ريم', title: 'مصمم', level: 'أخصائي', department: 'التصميم', duties: 'candidate', manager: 'نورة (مدير الموارد البشرية)' };
+  assert.match(buildSystemPrompt(validateChatRequest(base({ persona: cand }))), /مقابلة عمل مع نورة \(مدير الموارد البشرية\)/);
+  assert.match(buildSystemPrompt(validateChatRequest(base({ persona: cand, mode: 'offer_reply' }))), /"decision":"accept أو counter أو reject"/);
+  assert.match(buildSystemPrompt(validateChatRequest(base({ persona: hr, mode: 'rewards' }))), /"promotions":\[/);
+  assert.match(buildSystemPrompt(validateChatRequest(base({ persona: hr, mode: 'hire_pick' }))), /"choice"/);
+  assert.match(buildSystemPrompt(validateChatRequest(base({ persona: hr, mode: 'interview' }))), /سؤالاً واحداً فقط/);
   assert.doesNotMatch(buildSystemPrompt(validateChatRequest(base({ persona: { ...hr, duties: '' } }))), /\[\[إجازة:/);
 });

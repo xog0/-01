@@ -8,7 +8,7 @@
 //   core/finance/ledger   income and expense entries
 //   core/crm/book         clients and projects
 //   core/deals/<id>       one sales opportunity
-//   core/hr/people        leave records and daily attendance
+//   core/hr/people        leave records, daily attendance and promotion promises
 //   core/reports/<id>     one manager report (morning plan, end of day, weekly)
 //   core/calendar/settings work days and holidays
 //   core/hr/hiring        the open hiring round with its interviews
@@ -45,7 +45,7 @@ function splitState(state) {
   for (const d of state.deals || []) docs.set(`deals/${d.id}`, d);
   for (const r of state.reports || []) docs.set(`reports/${r.id}`, r);
   docs.set('calendar/settings', state.calendar || {});
-  docs.set('hr/people', { leaves: state.leaves || [], attendance: state.attendance || {} });
+  docs.set('hr/people', { leaves: state.leaves || [], attendance: state.attendance || {}, promises: state.promises || [] });
   const round = state.hiring;
   docs.set('hr/hiring', { round: round ? { ...round, candidates: round.candidates.map((c) => ({ ...c,
     chat: c.chat.slice(-16).map((m) => ({ ...m, content: m.content.slice(0, 1200) })) })) } : null });
@@ -133,6 +133,7 @@ export async function connectCloud() {
     const people = byId(hr);
     state.leaves = people.people?.leaves || [];
     state.attendance = people.people?.attendance || {};
+    state.promises = people.people?.promises || [];
     state.hiring = people.hiring?.round || null;
     state.deals = Object.values(byId(deals)).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
     state.reports = Object.values(byId(reports)).sort((a, b) => (a.at || 0) - (b.at || 0));
