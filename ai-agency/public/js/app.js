@@ -1,7 +1,7 @@
 import { createOffice, ROOMS } from './scene.js';
 import {
   LADDER, DEPARTMENTS, POSITIONS, OPEN_DESKS, PRIVATE_OFFICES, MANAGER_LEVEL, freeSeat, isPrivateOffice, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
-  titleFor, lookFor, bioFor, nextLevel, prevLevel, activeLevels, STAFF_TOP, loadState, saveState, createInitialState, applyMigrations, newId,
+  titleFor, skillsFor, lookFor, bioFor, nextLevel, prevLevel, activeLevels, STAFF_TOP, loadState, saveState, createInitialState, applyMigrations, newId,
 } from './data.js';
 import { askEmployee, backendStatus } from './api.js';
 import { connectCloud } from './cloud.js';
@@ -232,7 +232,7 @@ function personaOf(e) {
     title: titleFor(e),
     level: LADDER[e.level].name,
     department: DEPARTMENTS[e.dept].name,
-    skills: DEPARTMENTS[e.dept].skills,
+    skills: skillsFor(e),
     personality: e.personality || '',
     manager: mgr ? `${mgr.name} (${titleFor(mgr)})` : 'مالك الوكالة مباشرة',
     reports: teamOf(e.id).map((m) => `${m.name} (${titleFor(m)})`).join('، '),
@@ -721,7 +721,7 @@ async function assignTasks(manager, members, perMember, focus, proj, { urgent = 
   refresh();
   const brief = members.map((m) => {
     const open = openTitles(m.id);
-    return `- empId: ${m.id} | ${m.name} | ${titleFor(m)} | قسم ${DEPARTMENTS[m.dept].name} | المهارات: ${DEPARTMENTS[m.dept].skills}` +
+    return `- empId: ${m.id} | ${m.name} | ${titleFor(m)} | قسم ${DEPARTMENTS[m.dept].name} | المهارات: ${skillsFor(m)}` +
       ` | مهامه المفتوحة: ${open.length ? open.join('، ') : 'لا شيء'}`;
   }).join('\n');
   let tasks = [];
@@ -2196,6 +2196,7 @@ function renderProfile(e) {
   const done = state.tasks.filter((t) => t.empId === e.id && t.status === 'done').length;
 
   const titleInput = h('input', { maxlength: 60, placeholder: titleFor({ ...e, customTitle: '' }), value: e.customTitle || '' });
+  const skillsInput = h('textarea', { rows: 3, maxlength: 1000, placeholder: skillsFor({ ...e, skills: '' }) }, e.skills || '');
   const mgrSelect = h('select', {},
     h('option', { value: '' }, 'مالك الوكالة مباشرة'),
     state.employees.filter((x) => x.id !== e.id && !isUnder(x.id, e.id))
@@ -2210,7 +2211,7 @@ function renderProfile(e) {
         h('dt', {}, 'المدير'), h('dd', {}, mgr ? mgr.name : 'مالك الوكالة'),
         h('dt', {}, 'المرؤوسون'), h('dd', {}, reports.length ? reports.map((r) => r.name).join('، ') : '—'),
         h('dt', {}, 'مهام منجزة'), h('dd', {}, String(done)),
-        h('dt', {}, 'المهارات'), h('dd', {}, DEPARTMENTS[e.dept].skills),
+        h('dt', {}, 'المهارات'), h('dd', {}, skillsFor(e)),
         h('dt', {}, 'العمر'), h('dd', {}, `${bioFor(e).age} سنة · خبرة ${bioFor(e).years} ${bioFor(e).years > 10 ? 'سنة' : 'سنوات'}`),
         h('dt', {}, 'الخلفية'), h('dd', {}, bioFor(e).background),
         h('dt', {}, 'أسلوبه'), h('dd', {}, bioFor(e).style))),
@@ -2232,9 +2233,11 @@ function renderProfile(e) {
       h('h3', {}, 'تعديل'),
       h('label', {}, 'مسمى وظيفي مخصص (اتركه فارغاً للمسمى التلقائي)', titleInput),
       h('label', {}, 'المدير المباشر', mgrSelect),
+      h('label', {}, 'المهارات (اتركها فارغة للمهارات التلقائية حسب القسم والمستوى)', skillsInput),
       h('button', { onclick: () => {
         e.customTitle = titleInput.value.trim();
         e.managerId = mgrSelect.value || null;
+        e.skills = skillsInput.value.trim().slice(0, 1000);
         save();
         refresh();
         toast('تم حفظ التعديلات');

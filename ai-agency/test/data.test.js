@@ -253,6 +253,25 @@ test('the HR manager leads HR in new agencies and joins older ones once', () => 
   assert.ok(!own.employees.some((e) => e.name === 'نورة'));
 });
 
+test('skills: set by hand, a deputy CEO\'s at level 7, else the department\'s; Khalid gets deputy skills once', async () => {
+  const { skillsFor, DEPUTY_SKILLS, bioFor } = await import('../public/js/data.js');
+  assert.match(skillsFor({ dept: 'content', level: 3 }), /كتابة إعلانية/);
+  assert.match(skillsFor({ dept: 'content', level: 7 }), /إدارة العمليات اليومية/);
+  assert.match(skillsFor({ dept: 'content', level: 7 }), /مع خبرته في المحتوى/);
+  assert.equal(skillsFor({ dept: 'content', level: 7, skills: ' مهارات خاصة ' }), 'مهارات خاصة');
+  const s = createInitialState();
+  s.migrations = s.migrations.filter((k) => k !== 'khalid-deputy-skills');
+  applyMigrations(s);
+  const k = s.employees.find((e) => e.name === 'خالد');
+  assert.ok(k.skills.startsWith(DEPUTY_SKILLS));
+  assert.match(k.skills, /الكتابة الإعلانية/);
+  assert.match(bioFor(k).background, /تنسيق العمل بين الأقسام/);
+  k.skills = 'ما كتبه المالك';
+  s.migrations = s.migrations.filter((x) => x !== 'khalid-deputy-skills');
+  applyMigrations(s);
+  assert.equal(k.skills, 'ما كتبه المالك'); // never overwrites a hand-written list
+});
+
 test('the marketing manager joins once; the general manager post is gone and level 7 is the deputy CEO', async () => {
   const { nextLevel, prevLevel, POSITIONS, LADDER } = await import('../public/js/data.js');
   const s = createInitialState();

@@ -83,6 +83,18 @@ export const nextLevel = (level) => (level + 1 <= STAFF_TOP ? level + 1 : null);
 export const prevLevel = (level) => { let l = level - 1; while (l >= 0 && LADDER[l]?.retired) l--; return l >= 0 ? l : null; };
 export const activeLevels = () => LADDER.map((l, i) => ({ ...l, i })).filter((l) => !l.retired);
 
+// What a deputy CEO does, whatever department they grew up in.
+export const DEPUTY_SKILLS = 'إدارة العمليات اليومية للوكالة ومتابعة كل الأقسام، التخطيط الاستراتيجي مع المدير التنفيذي والنيابة عنه، ' +
+  'إدارة الميزانيات والربحية، قيادة المدراء وتطويرهم، اتخاذ القرار وحل المشكلات، إدارة علاقات كبار العملاء والتفاوض معهم، متابعة مؤشرات الأداء والجودة';
+
+/** An employee's skills: their own if set, a deputy CEO's at level 7, otherwise their department's. */
+export function skillsFor(emp) {
+  if (typeof emp.skills === 'string' && emp.skills.trim()) return emp.skills.trim();
+  const dept = DEPARTMENTS[emp.dept];
+  if (emp.level === 7) return `${DEPUTY_SKILLS}، مع خبرته في ${dept?.name || 'قسمه'}: ${dept?.skills || ''}`.slice(0, 1100);
+  return dept?.skills || '';
+}
+
 export function titleFor(emp) {
   if (emp.customTitle) return emp.customTitle;
   const position = POSITIONS.find((p) => p.dept === emp.dept && p.level === emp.level);
@@ -504,6 +516,7 @@ const MIGRATIONS = [
   { key: 'add-deals', run: (state) => seedDeals(state) },
   { key: 'add-hr-manager', run: addHrManager },
   { key: 'add-marketing-manager', run: addMarketingManager },
+  { key: 'khalid-deputy-skills', run: khalidDeputySkills },
 ];
 
 // Whoever heads a department (its members whose manager is outside it)
@@ -525,6 +538,18 @@ function deptHeadsUnderHamo(state, dept) {
 function setUpFinance(state) {
   state.finance ||= createFinance();
   for (const e of state.employees) if (!(e.salary > 0)) e.salary = defaultSalary(e.level);
+}
+
+/** Khalid's skills and story fit the deputy CEO post (the owner's request), unless set by hand already. */
+function khalidDeputySkills(state) {
+  const k = state.employees.find((e) => e.name === 'خالد');
+  if (!k || (typeof k.skills === 'string' && k.skills.trim())) return;
+  k.skills = `${DEPUTY_SKILLS}، صياغة رسائل الوكالة وعروضها للعملاء، الكتابة الإعلانية وسرد القصص للعلامات التجارية`;
+  if (!k.bio?.background) {
+    k.bio = { age: 31, years: 8,
+      background: 'صحفي سابق انتقل إلى الكتابة الإعلانية وكتب لعلامات في الأغذية والسياحة، ثم قاد فريق المحتوى وتولّى تنسيق العمل بين الأقسام ومتابعة المشاريع الكبرى في الوكالة.',
+      style: 'هادئ وحاسم، يربط كل قرار بأثره على العميل والأرقام، ويحتفظ بحسّه الإبداعي وروحه المرحة مع الفريق.' };
+  }
 }
 
 /** Adds the marketing manager to agencies with nobody leading marketing; the marketing team moves under him. */
