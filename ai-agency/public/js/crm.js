@@ -1,0 +1,248 @@
+// Clients and projects: who the agency works for, what it has sold them,
+// who leads each project, how far the work has come, and how much has been
+// collected. Pure functions over state.clients, state.projects, state.tasks
+// and state.finance, so they can be tested without a browser.
+import { addLedger, hourlyRate } from './finance.js';
+
+export const CLIENT_STATUS = { active: 'نشط', prospect: 'محتمل', past: 'سابق' };
+export const PROJECT_STATUS = { proposal: 'عرض سعر', active: 'قيد التنفيذ', done: 'مكتمل', cancelled: 'ملغى' };
+export const PROJECT_TYPES = [
+  'حملة إعلانية', 'إدارة التواصل الاجتماعي', 'صناعة محتوى', 'تحسين محركات البحث', 'هوية بصرية',
+  'إطلاق منتج', 'علاقات عامة', 'تسويق بالبريد', 'استراتيجية تسويق',
+];
+const CRM_CAP = { name: 80, field: 80, notes: 600, brief: 1500, fee: 10_000_000, clients: 100, projects: 150 };
+
+function cleanText(value, max, what, { required = false } = {}) {
+  const v = String(value ?? '').trim();
+  if (required && !v) throw new Error(`${what} مطلوب`);
+  if (v.length > max) throw new Error(`${what} أطول من المسموح`);
+  return v;
+}
+function cleanAmount(value, what) {
+  const v = Number(value);
+  if (!Number.isFinite(v) || v < 0) throw new Error(`${what} يجب أن يكون رقماً صفراً أو أكثر`);
+  if (v > CRM_CAP.fee) throw new Error(`${what} أكبر من المسموح`);
+  return Math.round(v * 100) / 100;
+}
+function oneOf(map, value, what) {
+  if (!Object.hasOwn(map, value)) throw new Error(`${what} غير معروف`);
+  return value;
+}
+
+/** Creates a client, or updates it when `id` is given. */
+export function saveClient(state, input, { newId, now = Date.now() } = {}) {
+  const fields = {
+    name: cleanText(input.name, CRM_CAP.name, 'اسم العميل', { required: true }),
+    industry: cleanText(input.industry, CRM_CAP.field, 'القطاع'),
+    contact: cleanText(input.contact, CRM_CAP.field, 'جهة التواصل'),
+    city: cleanText(input.city, CRM_CAP.field, 'المدينة'),
+    status: oneOf(CLIENT_STATUS, input.status || 'active', 'حالة العميل'),
+    notes: cleanText(input.notes, CRM_CAP.notes, 'الملاحظات'),
+  };
+  state.clients ||= [];
+  if (input.id) {
+    const c = state.clients.find((x) => x.id === input.id);
+    if (!c) throw new Error('العميل غير موجود');
+    return Object.assign(c, fields);
+  }
+  if (state.clients.length >= CRM_CAP.clients) throw new Error('وصلت إلى الحد الأقصى لعدد العملاء');
+  const c = { id: newId(state, 'c'), ...fields, since: now };
+  state.clients.push(c);
+  return c;
+}
+
+/** Creates a project, or updates it when `id` is given. */
+export function saveProject(state, input, { newId, now = Date.now() } = {}) {
+  const ids = new Set(state.employees.map((e) => e.id));
+  if (!state.clients?.some((c) => c.id === input.clientId)) throw new Error('اختر عميلاً للمشروع');
+  if (input.leadId && !ids.has(input.leadId)) throw new Error('قائد المشروع غير موجود');
+  const fields = {
+    clientId: input.clientId,
+    name: cleanText(input.name, CRM_CAP.name, 'اسم المشروع', { required: true }),
+    type: PROJECT_TYPES.includes(input.type) ? input.type : PROJECT_TYPES[0],
+    brief: cleanText(input.brief, CRM_CAP.brief, 'موجز المشروع'),
+    fee: cleanAmount(input.fee ?? 0, 'قيمة المشروع'),
+    status: oneOf(PROJECT_STATUS, input.status || 'proposal', 'حالة المشروع'),
+    leadId: input.leadId || null,
+    team: [...new Set((input.team || []).filter((id) => ids.has(id) && id !== input.leadId))],
+    due: /^\d{4}-\d{2}-\d{2}$/.test(input.due || '') ? input.due : '',
+  };
+  state.projects ||= [];
+  if (input.id) {
+    const p = state.projects.find((x) => x.id === input.id);
+    if (!p) throw new Error('المشروع غير موجود');
+    if (fields.fee < (p.paid || 0)) throw new Error('قيمة المشروع أقل من المبلغ المحصّل منه');
+    if (fields.status === 'done' && p.status !== 'done') p.doneAt = now;
+    Object.assign(p, fields);
+    activateClient(state, p);
+    return p;
+  }
+  if (state.projects.length >= CRM_CAP.projects) throw new Error('وصلت إلى الحد الأقصى لعدد المشاريع');
+  const p = { id: newId(state, 'p'), ...fields, paid: 0, createdAt: now };
+  state.projects.push(p);
+  activateClient(state, p);
+  return p;
+}
+
+// A prospect becomes an active client once one of their projects is under way.
+function activateClient(state, p) {
+  const client = state.clients.find((c) => c.id === p.clientId);
+  if (client && client.status === 'prospect' && p.status === 'active') client.status = 'active';
+}
+
+export const outstanding = (p) => Math.max(0, Math.round(((p.fee || 0) - (p.paid || 0)) * 100) / 100);
+
+/** A client payment against a project: income in the ledger, less owed on the project. */
+export function recordPayment(state, projectId, amount, { at = Date.now(), note = '' } = {}) {
+  const p = state.projects.find((x) => x.id === projectId);
+  if (!p) throw new Error('المشروع غير موجود');
+  const v = Number(amount);
+  if (!Number.isFinite(v) || v <= 0) throw new Error('المبلغ يجب أن يكون أكبر من صفر');
+  if (v > outstanding(p)) throw new Error(`المبلغ أكبر من المتبقي على المشروع (${outstanding(p)})`);
+  const client = state.clients.find((c) => c.id === p.clientId);
+  const entry = addLedger(state, {
+    type: 'income', category: 'دفعة عميل', amount: v, at, projectId,
+    note: `${client?.name || 'عميل'} — ${p.name}${note ? ` — ${note}` : ''}`,
+  });
+  p.paid = Math.round(((p.paid || 0) + v) * 100) / 100;
+  return entry;
+}
+
+/** Money spent on a project (ads, tools, freelancers): an expense tied to it. */
+export function recordProjectExpense(state, projectId, amount, { note = '', category = 'مصروفات مشروع', at = Date.now() } = {}) {
+  const p = state.projects.find((x) => x.id === projectId);
+  if (!p) throw new Error('المشروع غير موجود');
+  const client = state.clients.find((c) => c.id === p.clientId);
+  return addLedger(state, { type: 'expense', category, amount, at, projectId,
+    note: `${client?.name || 'عميل'} — ${p.name}${note ? ` — ${note}` : ''}` });
+}
+
+const DEFAULT_HOURS = { low: 2, medium: 4, high: 8 };
+const REVIEW_HOURS = 0.5;
+
+/**
+ * What a project has cost so far and what it leaves: team time (estimated
+ * hours per finished task by priority, at each person's hourly rate, plus
+ * half an hour of the reviewer's time per review) and expenses booked
+ * against it. Uses current salaries, so it is an estimate.
+ */
+export function projectProfit(state, p) {
+  const fin = state.finance || {};
+  const hours = fin.taskHours || DEFAULT_HOURS;
+  const rate = (id) => {
+    const e = state.employees.find((x) => x.id === id);
+    return e ? hourlyRate(e.salary || 0, fin) : 0;
+  };
+  const tasks = state.tasks.filter((t) => t.projectId === p.id && t.status === 'done');
+  let laborHours = 0;
+  let labor = 0;
+  for (const t of tasks) {
+    const h = hours[t.priority] ?? DEFAULT_HOURS[t.priority] ?? 4;
+    laborHours += h;
+    labor += h * rate(t.empId);
+    for (const r of t.reviews || []) labor += REVIEW_HOURS * rate(r.by);
+  }
+  const expenses = (fin.ledger || []).filter((l) => l.projectId === p.id && l.type === 'expense').reduce((s, l) => s + l.amount, 0);
+  const cost = Math.round((labor + expenses) * 100) / 100;
+  const profit = Math.round(((p.fee || 0) - cost) * 100) / 100;
+  return {
+    labor: Math.round(labor * 100) / 100, laborHours, expenses: Math.round(expenses * 100) / 100, cost, profit,
+    margin: p.fee ? Math.round((profit / p.fee) * 100) : null, tasks: tasks.length,
+  };
+}
+
+export function clientProfit(state, clientId) {
+  const ps = (state.projects || []).filter((p) => p.clientId === clientId && p.status !== 'cancelled');
+  const sum = (k) => Math.round(ps.reduce((s, p) => s + projectProfit(state, p)[k], 0) * 100) / 100;
+  const fee = ps.reduce((s, p) => s + (p.fee || 0), 0);
+  const profit = sum('profit');
+  return { fee, cost: sum('cost'), profit, margin: fee ? Math.round((profit / fee) * 100) : null };
+}
+
+export function projectProgress(state, p) {
+  const tasks = state.tasks.filter((t) => t.projectId === p.id);
+  const done = tasks.filter((t) => t.status === 'done').length;
+  return { total: tasks.length, done, pct: tasks.length ? Math.round((done / tasks.length) * 100) : 0 };
+}
+
+export function isLate(p, today = new Date().toISOString().slice(0, 10)) {
+  return Boolean(p.due) && p.status === 'active' && p.due < today;
+}
+
+export function clientTotals(state, clientId) {
+  const ps = (state.projects || []).filter((p) => p.clientId === clientId && p.status !== 'cancelled');
+  const sum = (f) => Math.round(ps.reduce((s, p) => s + f(p), 0) * 100) / 100;
+  return { projects: ps.length, fee: sum((p) => p.fee || 0), paid: sum((p) => p.paid || 0), owed: sum(outstanding) };
+}
+
+export function receivables(state) {
+  return Math.round((state.projects || []).filter((p) => p.status !== 'cancelled').reduce((s, p) => s + outstanding(p), 0) * 100) / 100;
+}
+
+/** Context for the AI: the client and project a task belongs to. */
+export function projectContext(state, projectId) {
+  const p = state.projects?.find((x) => x.id === projectId);
+  if (!p) return '';
+  const c = state.clients.find((x) => x.id === p.clientId);
+  return [
+    `العميل: ${c?.name || '—'}${c?.industry ? ` (${c.industry}${c.city ? `، ${c.city}` : ''})` : ''}.`,
+    `المشروع: ${p.name} — ${p.type}.`,
+    p.brief ? `موجز المشروع: ${p.brief}` : '',
+    c?.notes ? `ملاحظات عن العميل: ${c.notes}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+/** One line per live project, for everyone's picture of the agency. */
+export function portfolioBrief(state, nameOf = (id) => id) {
+  const live = (state.projects || []).filter((p) => p.status === 'active' || p.status === 'proposal');
+  if (!live.length) return '';
+  return live.map((p) => {
+    const c = state.clients.find((x) => x.id === p.clientId);
+    return `${c?.name || '—'}: ${p.name} (${PROJECT_STATUS[p.status]}${p.leadId ? `، بقيادة ${nameOf(p.leadId)}` : ''})`;
+  }).join('؛ ').slice(0, 1150);
+}
+
+// ---- the client's side: deliveries, their verdict, satisfaction ------------
+/** Finished project work not yet sent to the client. */
+export const pendingDeliveries = (state, p) => state.tasks.filter((t) => t.projectId === p.id && t.status === 'done' && !t.sentToClient);
+
+/** The milestone a client pays when approving a delivery: 30% of the fee, at most what is still owed. */
+export const milestoneAmount = (p) => Math.min(outstanding(p), Math.round((p.fee || 0) * 0.3));
+
+/**
+ * Records the client's verdict on a batch of delivered tasks. Approval
+ * books a milestone payment; satisfaction (1-5) feeds the client's score.
+ */
+export function recordClientReview(state, p, { decision, feedback = '', satisfaction, taskIds, at = Date.now() }) {
+  const d = decision === 'changes' ? 'changes' : 'approve';
+  const sat = Math.min(5, Math.max(1, Math.round(Number(satisfaction) || (d === 'approve' ? 4 : 3))));
+  const review = { at, decision: d, feedback: String(feedback).trim().slice(0, 600), satisfaction: sat, taskIds: [...taskIds] };
+  p.clientReviews ||= [];
+  p.clientReviews.push(review);
+  p.clientReviews = p.clientReviews.slice(-20);
+  for (const t of state.tasks) if (taskIds.includes(t.id)) Object.assign(t, { sentToClient: true, clientDecision: d });
+  let payment = null;
+  if (d === 'approve' && milestoneAmount(p) > 0 && p.status !== 'cancelled') {
+    payment = recordPayment(state, p.id, milestoneAmount(p), { at, note: 'دفعة عند اعتماد العميل للأعمال' });
+  }
+  return { review, payment };
+}
+
+/** Average satisfaction over the client's last five reviews, or null. */
+export function clientSatisfaction(state, clientId) {
+  const all = (state.projects || []).filter((p) => p.clientId === clientId).flatMap((p) => p.clientReviews || [])
+    .sort((a, b) => a.at - b.at).slice(-5);
+  return all.length ? Math.round((all.reduce((s, r) => s + r.satisfaction, 0) / all.length) * 10) / 10 : null;
+}
+
+/** Removes a project; its tasks stay but lose the link. Payments stay in the ledger. */
+export function deleteProject(state, projectId) {
+  state.projects = state.projects.filter((p) => p.id !== projectId);
+  for (const t of state.tasks) if (t.projectId === projectId) delete t.projectId;
+}
+
+/** Removes a client that has no projects left. */
+export function deleteClient(state, clientId) {
+  if (state.projects?.some((p) => p.clientId === clientId)) throw new Error('احذف مشاريع العميل أولاً أو غيّر حالته إلى سابق');
+  state.clients = state.clients.filter((c) => c.id !== clientId);
+}

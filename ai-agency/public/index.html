@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>وكالة الذكاء الاصطناعي</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap">
+  <link rel="stylesheet" href="/styles.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "/vendor/three/build/three.module.js",
+        "three/addons/": "/vendor/three/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◆</span>
+      <div>
+        <h1 id="company-name">الوكالة</h1>
+        <small id="ai-mode" class="mode-pill">…</small>
+        <small id="sync-state" class="mode-pill" hidden></small>
+        <small id="clock-pill" class="mode-pill" hidden></small>
+      </div>
+    </div>
+    <div class="stats">
+      <span><b id="stat-emp">0</b> موظف</span>
+      <span><b id="stat-open">0</b> مهمة مفتوحة</span>
+      <span><b id="stat-done">0</b> مكتملة</span>
+    </div>
+    <nav class="actions">
+      <button id="btn-workday" class="primary">▶ ابدأ يوم العمل</button>
+      <button id="btn-board">📋 المهام</button>
+      <button id="btn-calendar">📅 التقويم</button>
+      <button id="btn-meeting">👥 اجتماع</button>
+      <button id="btn-org" title="الهيكل التنظيمي والسلم الوظيفي">🏛️ الهيكل</button>
+      <button id="btn-performance">📊 الأداء</button>
+      <button id="btn-approvals">📥 الموافقات <span id="approvals-count" class="count" hidden>0</span></button>
+      <button id="btn-clients">🤝 العملاء</button>
+      <button id="btn-library">📚 الأعمال</button>
+      <button id="btn-finance">💰 المالية</button>
+      <button id="btn-hire">➕ توظيف</button>
+      <button id="btn-settings" title="الإعدادات" aria-label="الإعدادات">⚙️</button>
+    </nav>
+  </header>
+
+  <main id="stage" aria-label="المكتب ثلاثي الأبعاد"></main>
+
+  <div id="roster" class="roster" aria-label="الفريق"></div>
+
+  <div id="nav-pad" class="nav-pad" aria-label="تحريك المكتب">
+    <button data-pan="0,1" title="للأعلى" aria-label="تحريك للأعلى">▲</button>
+    <button data-zoom="0.85" title="تقريب" aria-label="تقريب">＋</button>
+    <button data-pan="-1,0" title="لليسار" aria-label="تحريك لليسار">◀</button>
+    <button data-reset title="عرض المكتب كاملاً" aria-label="عرض المكتب كاملاً">⟲</button>
+    <button data-pan="1,0" title="لليمين" aria-label="تحريك لليمين">▶</button>
+    <button data-pan="0,-1" title="للأسفل" aria-label="تحريك للأسفل">▼</button>
+    <button data-zoom="1.18" title="تبعيد" aria-label="تبعيد">－</button>
+    <button id="light-toggle" title="الإضاءة: حسب الوقت" aria-label="تغيير الإضاءة">🌓</button>
+    <button id="office-toggle" title="انصراف الفريق وإغلاق المكتب" aria-label="فتح المكتب أو إغلاقه">🌙</button>
+  </div>
+
+  <aside id="panel" class="panel" hidden>
+    <div class="panel-head">
+      <div class="avatar" id="p-avatar"></div>
+      <div class="who">
+        <h2 id="p-name"></h2>
+        <p id="p-title"></p>
+      </div>
+      <button class="icon" id="p-close" aria-label="إغلاق">✕</button>
+    </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="chat" class="active">💬 محادثة</button>
+      <button role="tab" data-tab="tasks">✅ المهام</button>
+      <button role="tab" data-tab="team">👥 الزملاء</button>
+      <button role="tab" data-tab="profile">🪪 الملف</button>
+    </div>
+    <section data-pane="chat" class="pane active">
+      <div id="chat-log" class="chat-log"></div>
+      <form id="chat-form" class="chat-form">
+        <textarea id="chat-input" rows="2" maxlength="6000" placeholder="اكتب رسالتك للموظف…" required></textarea>
+        <button class="primary" type="submit">إرسال</button>
+      </form>
+    </section>
+    <section data-pane="tasks" class="pane">
+      <div id="emp-tasks" class="task-list"></div>
+      <form id="task-form" class="stack">
+        <h3>تكليف بمهمة جديدة</h3>
+        <input id="task-title" maxlength="200" placeholder="عنوان المهمة" required>
+        <textarea id="task-desc" rows="3" maxlength="1500" placeholder="التفاصيل والمطلوب بدقة"></textarea>
+        <select id="task-project" aria-label="المشروع"></select>
+        <div class="row">
+          <select id="task-priority">
+            <option value="low">أولوية منخفضة</option>
+            <option value="medium" selected>أولوية متوسطة</option>
+            <option value="high">أولوية عالية</option>
+          </select>
+          <button class="primary" type="submit">إضافة</button>
+        </div>
+      </form>
+    </section>
+    <section data-pane="team" class="pane" id="team-pane"></section>
+    <section data-pane="profile" class="pane" id="profile-pane"></section>
+  </aside>
+
+  <section id="meeting-panel" class="meeting-panel" hidden>
+    <div class="panel-head">
+      <div class="who">
+        <h2 id="m-title">اجتماع</h2>
+        <p id="m-topic"></p>
+      </div>
+    </div>
+    <div id="m-log" class="chat-log"></div>
+    <form id="m-form" class="chat-form">
+      <textarea id="m-input" rows="2" maxlength="3000" placeholder="تدخّل في الاجتماع (اختياري)…"></textarea>
+      <button type="submit">قل</button>
+    </form>
+    <div class="row m-actions">
+      <button id="m-round" class="primary">🔄 جولة نقاش</button>
+      <button id="m-end" class="danger">إنهاء وكتابة المحضر</button>
+    </div>
+  </section>
+
+  <!-- Dialogs -->
+  <dialog id="dlg-hire">
+    <form method="dialog" id="hire-form" class="stack">
+      <h2>توظيف موظف جديد</h2>
+      <p class="muted" id="hire-capacity"></p>
+      <label>الاسم <input id="hire-name" maxlength="40" required></label>
+      <label>المنصب <select id="hire-position"></select></label>
+      <div class="row">
+        <label>الجنس
+          <select id="hire-gender"><option value="m">ذكر</option><option value="f">أنثى</option></select>
+        </label>
+        <label>القسم <select id="hire-dept"></select></label>
+      </div>
+      <div class="row">
+        <label>المستوى الوظيفي <select id="hire-level"></select></label>
+        <label>المدير المباشر <select id="hire-manager"></select></label>
+      </div>
+      <label>الراتب الشهري (للتوظيف المباشر) <input id="hire-salary" type="number" min="1" step="any" required></label>
+      <label>الحد الأقصى للراتب في المقابلات (تفاوض الموارد البشرية لا يتجاوزه) <input id="hire-cap" type="number" min="1" step="any" placeholder="مثال: 12000"></label>
+      <label>الشخصية وأسلوب العمل (اختياري)
+        <textarea id="hire-personality" rows="2" maxlength="600" placeholder="مثال: دقيق ومنظم، يحب الأرقام، صريح في رأيه"></textarea>
+      </label>
+      <label class="check" id="hire-takeover-row" hidden>
+        <input type="checkbox" id="hire-takeover" checked>
+        <span id="hire-takeover-text"></span>
+      </label>
+      <p class="muted" id="hire-preview"></p>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button value="interview" formnovalidate id="hire-interview" title="يقترح مدير الموارد البشرية ثلاثة مرشحين تقابلهم ثم تختار">🎤 مقابلات: رشّحوا لي 3 مرشحين</button>
+        <button class="primary" value="ok" id="hire-submit">توظيف مباشر</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-board" class="wide">
+    <div class="dlg-head">
+      <h2>لوحة المهام</h2>
+      <div class="row">
+        <button id="board-assign" class="primary">📋 المدير يوزّع المهام</button>
+        <select id="board-project" aria-label="تصفية حسب المشروع"></select>
+        <select id="board-filter" aria-label="تصفية حسب الموظف"></select>
+        <button id="board-close" class="icon" aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <div id="board" class="board"></div>
+  </dialog>
+
+  <dialog id="dlg-org" class="wide">
+    <div class="dlg-head">
+      <h2>الهيكل التنظيمي والسلم الوظيفي</h2>
+      <button class="icon" data-close aria-label="إغلاق">✕</button>
+    </div>
+    <div class="org-grid">
+      <section>
+        <h3>الهيكل التنظيمي</h3>
+        <div id="org-tree" class="org-tree"></div>
+      </section>
+      <section>
+        <h3>السلم الوظيفي</h3>
+        <ol id="ladder" class="ladder"></ol>
+      </section>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-meeting">
+    <form method="dialog" id="meeting-form" class="stack">
+      <h2>بدء اجتماع</h2>
+      <label>الغرفة <select id="meet-room"></select></label>
+      <label>موضوع الاجتماع
+        <textarea id="meet-topic" rows="2" maxlength="600" required placeholder="مثال: أفكار حملة إطلاق منتج جديد لعميل في قطاع المطاعم"></textarea>
+      </label>
+      <fieldset>
+        <legend>الحاضرون · <span id="meet-count"></span></legend>
+        <p class="muted">لا يدخل الاجتماع إلا من تضيفه هنا.</p>
+        <div id="meet-suggest" hidden></div>
+        <div id="meet-people" class="checks"></div>
+      </fieldset>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">ابدأ الاجتماع</button>
+      </div>
+      <details id="meet-history">
+        <summary>محاضر الاجتماعات السابقة</summary>
+        <div id="meet-history-list"></div>
+      </details>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-output" class="wide">
+    <div class="dlg-head">
+      <h2 id="out-title"></h2>
+      <div class="row">
+        <button id="out-copy">نسخ</button>
+        <button id="out-download" hidden>⬇️ تنزيل</button>
+        <button class="icon" data-close aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <p class="muted" id="out-meta"></p>
+    <div id="out-body" class="rich"></div>
+  </dialog>
+
+  <dialog id="dlg-settings">
+    <form method="dialog" id="settings-form" class="stack">
+      <h2>إعدادات الوكالة</h2>
+      <label>اسم الوكالة <input id="set-name" maxlength="60" required></label>
+      <label>نبذة عن الوكالة وعملائها
+        <textarea id="set-about" rows="3" maxlength="1000"></textarea>
+      </label>
+      <div class="row end">
+        <button type="button" class="danger" id="set-reset">إعادة الوكالة لبدايتها</button>
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-performance" class="wide">
+    <div class="dlg-head">
+      <h2>📊 أداء الفريق</h2>
+      <button class="icon" data-close aria-label="إغلاق">✕</button>
+    </div>
+    <div class="tabs crm-tabs" role="tablist">
+      <button role="tab" data-perf="score" class="active">الأداء</button>
+      <button role="tab" data-perf="attendance">الحضور والإجازات</button>
+    </div>
+    <div id="perf-body" class="fin-body"></div>
+  </dialog>
+
+  <dialog id="dlg-approvals" class="wide">
+    <div class="dlg-head">
+      <h2>📥 الموافقات</h2>
+      <button class="icon" data-close aria-label="إغلاق">✕</button>
+    </div>
+    <div id="approvals-body" class="fin-body"></div>
+  </dialog>
+
+  <dialog id="dlg-clients" class="wide">
+    <div class="dlg-head">
+      <h2>🤝 العملاء والمشاريع</h2>
+      <div class="row">
+        <button class="primary" id="btn-new-project">＋ مشروع جديد</button>
+        <button id="btn-new-client">＋ عميل جديد</button>
+        <button class="icon" data-close aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <div class="tabs crm-tabs" role="tablist">
+      <button role="tab" data-crm="projects" class="active">المشاريع</button>
+      <button role="tab" data-crm="pipeline">💼 المبيعات</button>
+      <button role="tab" data-crm="clients">العملاء</button>
+    </div>
+    <div id="crm-body" class="fin-body"></div>
+  </dialog>
+
+  <dialog id="dlg-library" class="wide">
+    <div class="dlg-head">
+      <h2>📚 مكتبة الأعمال</h2>
+      <div class="row">
+        <button id="lib-download-all" hidden>⬇️ تنزيل المعروض</button>
+        <button class="icon" data-close aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <div class="lib-filters">
+      <input id="lib-q" type="search" maxlength="80" placeholder="ابحث في العناوين والنصوص…" aria-label="بحث في الأعمال">
+      <select id="lib-client" aria-label="العميل"></select>
+      <select id="lib-emp" aria-label="الموظف"></select>
+      <select id="lib-kind" aria-label="النوع">
+        <option value="">كل الأعمال</option>
+        <option value="task">مخرجات المهام</option>
+        <option value="meeting">محاضر الاجتماعات</option>
+      </select>
+    </div>
+    <p class="muted" id="lib-count"></p>
+    <div id="lib-list" class="fin-body"></div>
+  </dialog>
+
+  <dialog id="dlg-calendar" class="wide">
+    <div class="dlg-head">
+      <h2 id="cal-title">📅 التقويم</h2>
+      <div class="row">
+        <button id="cal-weekly" title="يكتب المدير التنفيذي تقرير هذا الأسبوع حتى اليوم">📊 التقرير الأسبوعي الآن</button>
+        <button id="cal-prev" aria-label="الشهر السابق">→</button>
+        <button id="cal-today">اليوم</button>
+        <button id="cal-next" aria-label="الشهر التالي">←</button>
+        <button class="icon" data-close aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <div class="fin-body">
+      <div id="cal-grid" class="cal-grid"></div>
+      <div id="cal-workdays" class="cal-workdays"></div>
+      <p class="muted">كل يوم عمل يبدأ بخطة الصباح يكتبها أعلى المدراء من مكتبه، وينتهي بتقرير من كل مدير أنجز فريقه عملاً، وفي آخر يوم عمل من الأسبوع يكتب المدير التنفيذي التقرير الأسبوعي. 🌴 إجازة · 📌 تسليم · 👥 اجتماع · ✅ عمل منجز · 📝 تقرير</p>
+      <div id="cal-day" class="card"></div>
+    </div>
+  </dialog>
+
+  <dialog id="dlg-retain">
+    <form method="dialog" id="retain-form" class="stack">
+      <h2 id="retain-title">🤝 محاولة إبقاء الموظف</h2>
+      <div id="retain-why"></div>
+      <label>العرض <select id="retain-type"></select></label>
+      <label id="retain-amount-row">المبلغ <input id="retain-amount" type="number" min="1" step="any"></label>
+      <p class="muted" id="retain-hint"></p>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">قدّم العرض</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-train">
+    <form method="dialog" id="train-form" class="stack">
+      <h2 id="train-title">🎓 تسجيل في دورة</h2>
+      <label>الدورة <select id="train-course"></select></label>
+      <p class="muted" id="train-info"></p>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok" id="train-ok">سجّله</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-deal">
+    <form method="dialog" id="deal-form" class="stack">
+      <h2 id="deal-form-title">فرصة بيع جديدة</h2>
+      <label>العميل <select id="deal-client" required></select></label>
+      <div class="row" id="deal-new-client" hidden>
+        <label>اسم العميل الجديد <input id="deal-client-name" maxlength="80"></label>
+        <label>المجال <input id="deal-client-industry" maxlength="80"></label>
+      </div>
+      <label>عنوان الفرصة <input id="deal-title" maxlength="120" required placeholder="مثال: حملة إطلاق التطبيق"></label>
+      <div class="row">
+        <label>نوع المشروع <select id="deal-type"></select></label>
+        <label>القيمة التقديرية <input id="deal-value" type="number" min="0" step="any"></label>
+      </div>
+      <div class="row">
+        <label>المسؤول عن الفرصة <select id="deal-owner"></select></label>
+        <label id="deal-stage-row">المرحلة <select id="deal-stage"></select></label>
+      </div>
+      <label>احتياج العميل وملاحظات <textarea id="deal-note" rows="3" maxlength="600"></textarea></label>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-prompt">
+    <form method="dialog" class="stack">
+      <p id="prompt-msg"></p>
+      <input id="prompt-input" maxlength="300">
+      <div class="row end">
+        <button class="primary" value="ok">تأكيد</button>
+        <button value="cancel" formnovalidate>إلغاء</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-leave">
+    <form method="dialog" id="leave-form" class="stack">
+      <h2 id="leave-title">🌴 إجازة</h2>
+      <div class="row">
+        <label>نوع الإجازة <select id="leave-type"></select></label>
+        <label>عدد الأيام <input id="leave-days" type="number" min="1" max="30" step="1" value="1" required></label>
+      </div>
+      <label>تبدأ من <input id="leave-from" type="date" required></label>
+      <label>السبب (اختياري) <input id="leave-reason" maxlength="200" placeholder="مثال: سفر عائلي"></label>
+      <label>مهامه المفتوحة <select id="leave-handover"></select></label>
+      <p class="muted" id="leave-preview"></p>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">منح الإجازة</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-interviews" class="wide">
+    <div class="dlg-head">
+      <div>
+        <h2 id="iv-title">🎤 مقابلات التوظيف</h2>
+        <p class="muted" id="iv-sub"></p>
+      </div>
+      <div class="row">
+        <button id="iv-cancel" class="danger">إلغاء الجولة</button>
+        <button class="icon" data-close aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <div id="iv-note"></div>
+    <div id="iv-controls" class="row"></div>
+    <div id="iv-cards" class="iv-cards"></div>
+    <section id="iv-chat" hidden>
+      <h3 id="iv-chat-title"></h3>
+      <div id="iv-log" class="chat-log client-log"></div>
+      <form id="iv-form" class="chat-form">
+        <textarea id="iv-input" rows="2" maxlength="2000" placeholder="اسأل المرشح…" required></textarea>
+        <button class="primary" type="submit">إرسال</button>
+      </form>
+    </section>
+  </dialog>
+
+  <dialog id="dlg-client-chat">
+    <div class="dlg-head">
+      <div>
+        <h2 id="cc-title">محادثة العميل</h2>
+        <p class="muted" id="cc-sub"></p>
+      </div>
+      <button class="icon" data-close aria-label="إغلاق">✕</button>
+    </div>
+    <div id="cc-log" class="chat-log client-log"></div>
+    <form id="cc-form" class="chat-form">
+      <textarea id="cc-input" rows="2" maxlength="3000" placeholder="اكتب رسالتك للعميل…" required></textarea>
+      <button class="primary" type="submit">إرسال</button>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-project">
+    <form method="dialog" id="project-form" class="stack">
+      <h2 id="project-form-title">مشروع جديد</h2>
+      <input type="hidden" id="pj-id">
+      <div class="row">
+        <label>العميل <select id="pj-client" required></select></label>
+        <label>النوع <select id="pj-type"></select></label>
+      </div>
+      <label>اسم المشروع <input id="pj-name" maxlength="80" required placeholder="مثال: حملة إطلاق المنيو الجديد"></label>
+      <label>الموجز: ما المطلوب، والهدف، والجمهور
+        <textarea id="pj-brief" rows="3" maxlength="1500" placeholder="مثال: زيادة الطلبات عبر التطبيق 30% خلال شهرين، الجمهور عائلات في شمال المدينة"></textarea>
+      </label>
+      <div class="row">
+        <label>القيمة <input id="pj-fee" type="number" min="0" step="any" value="0"></label>
+        <label>تاريخ التسليم <input id="pj-due" type="date"></label>
+        <label>الحالة <select id="pj-status"></select></label>
+      </div>
+      <label>قائد المشروع <select id="pj-lead"></select></label>
+      <fieldset>
+        <legend>فريق المشروع</legend>
+        <div id="pj-team" class="checks"></div>
+      </fieldset>
+      <div class="row end">
+        <button type="button" class="danger" id="pj-delete" hidden>حذف المشروع</button>
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-client">
+    <form method="dialog" id="client-form" class="stack">
+      <h2 id="client-form-title">عميل جديد</h2>
+      <input type="hidden" id="cl-id">
+      <label>اسم العميل <input id="cl-name" maxlength="80" required></label>
+      <div class="row">
+        <label>القطاع <input id="cl-industry" maxlength="80" placeholder="مطاعم، عقارات، تجزئة…"></label>
+        <label>المدينة <input id="cl-city" maxlength="80"></label>
+      </div>
+      <div class="row">
+        <label>جهة التواصل <input id="cl-contact" maxlength="80" placeholder="الاسم والمنصب"></label>
+        <label>الحالة <select id="cl-status"></select></label>
+      </div>
+      <label>ملاحظات عن العميل (تصل للموظفين مع مهام مشاريعه)
+        <textarea id="cl-notes" rows="3" maxlength="600" placeholder="أسلوبه، جمهوره، ميزانيته، ما يحبه وما يرفضه"></textarea>
+      </label>
+      <div class="row end">
+        <button type="button" class="danger" id="cl-delete" hidden>حذف العميل</button>
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">حفظ</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-pay">
+    <form method="dialog" id="pay-form" class="stack">
+      <h2 id="pay-title">تحصيل دفعة</h2>
+      <p class="muted" id="pay-info"></p>
+      <label>المبلغ <input id="pay-amount" type="number" min="0.01" step="any" required></label>
+      <label>ملاحظة <input id="pay-note" maxlength="100" placeholder="مثال: الدفعة الأولى 40%"></label>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">تسجيل الدفعة</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-finance" class="wide">
+    <div class="dlg-head">
+      <h2>💰 المالية والرواتب</h2>
+      <div class="row">
+        <span id="fin-period" class="badge"></span>
+        <button class="icon" data-close aria-label="إغلاق">✕</button>
+      </div>
+    </div>
+    <div class="tabs fin-tabs" role="tablist">
+      <button role="tab" data-fin="summary" class="active">الملخص</button>
+      <button role="tab" data-fin="payroll">الرواتب</button>
+      <button role="tab" data-fin="moves">الحركات</button>
+      <button role="tab" data-fin="profit">الربحية</button>
+      <button role="tab" data-fin="invoices">الفواتير</button>
+      <button role="tab" data-fin="ledger">الدفتر</button>
+      <button role="tab" data-fin="settings">الإعدادات</button>
+    </div>
+    <div id="fin-body" class="fin-body"></div>
+  </dialog>
+
+  <dialog id="dlg-adjust">
+    <form method="dialog" id="adjust-form" class="stack">
+      <h2>حركة على الراتب</h2>
+      <label>الموظف <select id="adj-emp"></select></label>
+      <label>النوع
+        <select id="adj-type">
+          <option value="bonus">مكافأة</option>
+          <option value="deduction">خصم</option>
+          <option value="overtime">عمل إضافي (أوفرتايم)</option>
+          <option value="raise">زيادة دائمة على الراتب</option>
+          <option value="cut">تخفيض دائم للراتب (لك وللمدير المالي فقط)</option>
+        </select>
+      </label>
+      <label><span id="adj-amount-label">المبلغ</span> <input id="adj-amount" type="number" min="0.01" step="any" required></label>
+      <label>السبب <input id="adj-reason" maxlength="200" placeholder="مثال: تأخير، حملة ناجحة، تسليم عاجل"></label>
+      <p class="muted" id="adj-preview"></p>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">تسجيل</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-confirm">
+    <form method="dialog" class="stack">
+      <p id="confirm-msg"></p>
+      <div class="row end">
+        <button value="cancel">إلغاء</button>
+        <button class="danger" value="ok" id="confirm-ok">تأكيد</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
