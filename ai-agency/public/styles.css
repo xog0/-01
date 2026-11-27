@@ -314,6 +314,16 @@ table.fin tfoot td { font-weight: 700; }
 .cal-sec h4 { margin: 10px 0 4px; font-size: 13px; }
 .cal-sec ul { margin: 0; padding-inline-start: 18px; font-size: 13px; line-height: 1.8; }
 .linkish { background: none; border: 0; padding: 0; color: #c4b5fd; cursor: pointer; font: inherit; text-align: start; text-decoration: underline; text-underline-offset: 3px; }
+.mood-bar { height: 8px; border-radius: 99px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.mood-bar i { display: block; height: 100%; border-radius: 99px; }
+.mood-bar .happy { background: var(--ok); } .mood-bar .ok { background: #60a5fa; } .mood-bar .low { background: var(--warn); } .mood-bar .critical { background: #ef476f; }
+.factors { margin: 6px 0 0; padding: 0; list-style: none; font-size: 12px; line-height: 1.8; }
+.factors .plus { color: var(--ok); } .factors .minus { color: #ff9db3; }
+.load-strip { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
+.load-strip span { padding: 3px 8px; border-radius: 99px; background: rgba(255,255,255,0.06); border: 1px solid var(--line); }
+.load-strip span.over { background: rgba(239,71,111,0.18); border-color: rgba(239,71,111,0.5); }
+.load-strip span.idle { background: rgba(74,222,128,0.12); }
+.chip .mood { margin-inline-start: 4px; }
 .dm-thread { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: rgba(255,255,255,0.03); display: flex; flex-direction: column; gap: 6px; }
 .dm-thread h4 { margin: 0; font-size: 13px; display: flex; justify-content: space-between; gap: 8px; }
 .dm { font-size: 13px; line-height: 1.7; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,0.05); max-width: 92%; }

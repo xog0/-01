@@ -10,6 +10,8 @@
 //   core/deals/<id>       one sales opportunity
 //   core/dms/<a__b>       messages between two employees
 //   core/hr/people        leave records, daily attendance and promotion promises
+//   core/hr/training      courses booked and completed
+//   core/hr/resignations  resignation letters and what came of them
 //   core/reports/<id>     one manager report (morning plan, end of day, weekly)
 //   core/calendar/settings work days and holidays
 //   core/hr/hiring        the open hiring round with its interviews
@@ -47,7 +49,10 @@ function splitState(state) {
   for (const [k, list] of Object.entries(state.dms || {})) if (list?.length) docs.set(`dms/${k}`, { messages: list.slice(-40) });
   for (const r of state.reports || []) docs.set(`reports/${r.id}`, r);
   docs.set('calendar/settings', state.calendar || {});
-  docs.set('hr/people', { leaves: state.leaves || [], attendance: state.attendance || {}, promises: state.promises || [] });
+  docs.set('hr/people', { leaves: state.leaves || [], attendance: state.attendance || {}, promises: state.promises || [],
+    rebalanceAck: state.rebalanceAck || {}, peopleDay: state.peopleDay || '' });
+  docs.set('hr/training', { trainings: (state.trainings || []).slice(-300) });
+  docs.set('hr/resignations', { items: (state.resignations || []).slice(-30) });
   const round = state.hiring;
   docs.set('hr/hiring', { round: round ? { ...round, candidates: round.candidates.map((c) => ({ ...c,
     chat: c.chat.slice(-16).map((m) => ({ ...m, content: m.content.slice(0, 1200) })) })) } : null });
@@ -136,6 +141,10 @@ export async function connectCloud() {
     state.leaves = people.people?.leaves || [];
     state.attendance = people.people?.attendance || {};
     state.promises = people.people?.promises || [];
+    state.rebalanceAck = people.people?.rebalanceAck || {};
+    state.peopleDay = people.people?.peopleDay || '';
+    state.trainings = people.training?.trainings || [];
+    state.resignations = people.resignations?.items || [];
     state.hiring = people.hiring?.round || null;
     state.deals = Object.values(byId(deals)).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
     state.reports = Object.values(byId(reports)).sort((a, b) => (a.at || 0) - (b.at || 0));

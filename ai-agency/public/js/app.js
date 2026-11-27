@@ -30,6 +30,10 @@ import {
   DEAL_STAGES, OPEN_STAGES, isOpen, linkProposal, moveDeal, parseDealReview, parseLeads, pipelineStats, sampleLeads, saveDeal, syncDealWithProject,
 } from './sales.js';
 import {
+  COURSES, OFFERS, OVERLOAD_HOURS, RESIGN_BELOW, activeTraining, applyRebalance, completeTrainings, courseById, coursesFor, enroll,
+  graduationCandidates, moraleOf, pendingResignation, rebalancePlans, resignationRisk, retentionOutcome, trainingBudget, workloadOf,
+} from './people.js';
+import {
   REPORT_TYPES, WEEKDAYS, addReport, dayEvents, isWorkDay, lastWorkDayOfWeek, monthGrid, reportOf, setHoliday, weekStart, weeklyStats, workDays,
 } from './calendar.js';
 
@@ -123,6 +127,10 @@ let workdayRunning = false;
 const busy = new Set(); // employee ids currently waiting on the AI
 
 let cloud = null; // set once the claude.ai store has loaded
+// Send pending cloud writes right away when the page is hidden or closed
+// (switching apps on a phone, closing the tab), instead of after the usual pause.
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') cloud?.flush(); });
+window.addEventListener('pagehide', () => cloud?.flush());
 const save = () => {
   saveState(state);
   cloud?.save(state);
@@ -183,6 +191,11 @@ function memoryOf(e) {
   }
   const talk = Object.values(state.dms || {}).flat().filter((m) => m.from === e.id || m.to === e.id).sort((a, b) => a.at - b.at).slice(-4);
   if (talk.length) parts.push(`آخر رسائلك مع الزملاء: ${talk.map((m) => `${m.from === e.id ? `أنت إلى ${emp(m.to)?.name}` : `${emp(m.from)?.name} إليك`}: «${m.text.slice(0, 120)}»`).join('؛ ')}.`);
+  const mood = moraleOf(state, e);
+  if (mood.score < 55) parts.push(`معنوياتك هذه الأيام ${mood.mood.name} (${mood.score} من 100)، بسبب: ${mood.factors.filter((f) => f.delta < 0).slice(0, 3).map((f) => f.label).join('، ')}. يظهر ذلك في نبرتك بلطف دون مبالغة.`);
+  const courses = (state.trainings || []).filter((t) => t.empId === e.id);
+  if (courses.some((t) => t.status === 'done')) parts.push(`أنهيت دورات: ${courses.filter((t) => t.status === 'done').map((t) => t.title).join('، ')}، فطبّق ما تعلمته في عملك.`);
+  if (activeTraining(state, e.id)) parts.push(`تحضر الآن دورة «${activeTraining(state, e.id).title}» حتى ${activeTraining(state, e.id).to}.`);
   const promise = openPromise(state, e.id);
   if (promise) parts.push(`وعدتك ${emp(promise.by)?.name || 'الإدارة'} بالترقية إلى «${LADDER[promise.toLevel]?.name}»${promise.condition ? ` إذا: ${promise.condition}` : ''}، والقرار النهائي للمالك.`);
   if (!officeOpen && !awayNow(e)) parts.unshift('الوقت الآن خارج الدوام وأنت في منزلك، فترد على رسالة المالك من هاتفك باختصار.');
@@ -205,6 +218,8 @@ function hrBrief() {
     absent.length ? `أيام غياب آخر 30 يوماً: ${absent.join('، ')}.` : 'لا غياب مسجل آخر 30 يوماً.',
     evals.length ? `آخر التقييمات: ${evals.join('، ')}.` : 'لم يُقيَّم أحد بعد.',
     state.hiring ? `جولة توظيف مفتوحة لوظيفة ${state.hiring.title} (${state.hiring.candidates.length} مرشحين${state.hiring.cap ? `، الحد الأقصى للراتب ${state.hiring.cap}` : ''}).` : '',
+    (() => { const low = state.employees.map((x) => ({ x, m: moraleOf(state, x) })).filter((r) => r.m.score < 55); return low.length ? `معنويات منخفضة: ${low.map((r) => `${r.x.name} ${r.m.score}`).join('، ')}.` : 'لا أحد معنوياته منخفضة.'; })(),
+    `ميزانية التدريب المتبقية هذه السنة ${trainingBudget(state).left}.`,
     (state.promises || []).some((p) => p.status === 'open') ? `وعود ترقية مفتوحة: ${(state.promises || []).filter((p) => p.status === 'open').map((p) => emp(p.empId)?.name).filter(Boolean).join('، ')}.` : '',
   ].filter(Boolean).join(' ');
 }
@@ -266,13 +281,17 @@ function avatar(e) {
   return h('div', { class: 'avatar', style: `background:${hex(colorOf(e))}` }, e.name.slice(0, 1));
 }
 
+function moodIcon(e) {
+  const m = moraleOf(state, e);
+  return m.score < 55 ? h('span', { class: 'mood', title: `المعنويات ${m.score}: ${m.mood.name}` }, m.mood.icon) : null;
+}
 function renderRoster() {
   const r = $('#roster');
   fill(r, ...[...state.employees].sort(byRank).map((e) =>
     h('button', { class: `chip${e.id === selectedId ? ' selected' : ''}${awayNow(e) ? ' away' : ''}`, title: awayNote(e) || undefined, onclick: () => selectEmployee(e.id) },
       h('span', { class: `dot ${awayNow(e) ? 'away' : !officeOpen ? 'home' : e.status || 'idle'}`, title: !officeOpen && !awayNow(e) ? 'في المنزل (خارج الدوام)' : undefined }),
       avatar(e),
-      h('span', {}, awayNow(e) ? `🌴 ${e.name}` : e.name, h('small', {}, awayNow(e) ? `في إجازة حتى ${awayNow(e).to}` : titleFor(e))))));
+      h('span', {}, awayNow(e) ? `🌴 ${e.name}` : e.name, moodIcon(e), h('small', {}, awayNow(e) ? `في إجازة حتى ${awayNow(e).to}` : titleFor(e))))));
 }
 
 // ------------------------------------------------------------ side panel
@@ -766,6 +785,7 @@ async function startWorkday() {
   syncAway();
   markAttendance(state, today, atWork(state.employees).map((e) => e.id));
   save();
+  await peopleDaily();
   workdayLabel('☀️ خطة الصباح…');
   await morningStandup(today);
   workdayLabel('⏳ الفريق يعمل…');
@@ -1479,6 +1499,14 @@ function applyHrOrders(orders, hr) {
         createBonusRequest(state, { empId: e.id, recommenderId: hr.id, amount, reason: o.reason || `مكافأة اقترحتها ${hr.name}`, newId });
         later.push(() => processBonusQueue());
         lines.push(`💰 اقترحت مكافأة ${money(amount)} لـ${e.name}${amount < o.amount ? ' (خُفّضت إلى نصف راتبه)' : ''}. تمر على المدير المالي ثم المدير التنفيذي، ولا تُصرف إلا باعتمادك`);
+      } else if (o.kind === 'train') {
+        const options = coursesFor(state, e);
+        const words = o.course.split(/\s+/).filter((w) => w.length > 2);
+        const course = options.find((c) => c.title === o.course) || options.find((c) => words.some((w) => c.title.includes(w))) || options.find((c) => c.dept === e.dept);
+        if (!course) throw new Error(`لا توجد دورة متاحة تناسب ${e.name}`);
+        const t = enroll(state, { empId: e.id, courseId: course.id, by: hr.id }, { newId });
+        sendDm(hr.id, e.id, `سجّلتك في دورة «${t.title}» (${daysWord(t.days)}، من ${t.from}). بالتوفيق!`, 'hr');
+        lines.push(`🎓 سجّلت ${e.name} في دورة «${t.title}» بتكلفة ${money(t.cost)}، والمتبقي من ميزانية التدريب ${money(trainingBudget(state).left)}`);
       } else if (o.kind === 'promise') {
         const p = promisePromotion(state, { empId: e.id, by: hr.id, condition: o.condition, reason: o.reason, toLevel: nextLevel(e.level) }, { newId, maxLevel: STAFF_TOP });
         sendDm(hr.id, e.id, `أعدك بالترقية إلى «${LADDER[p.toLevel].name}»${p.condition ? ` إذا ${p.condition}` : ''}. القرار النهائي للمالك.`, 'hr');
@@ -1491,6 +1519,190 @@ function applyHrOrders(orders, hr) {
   }
   if (lines.length) { save(); refresh(); }
   return { note: lines.join('\n'), later };
+}
+
+// ------------------------------------------------------------ morale, workload, training
+function moraleCard(e) {
+  const mo = moraleOf(state, e);
+  const r = pendingResignation(state, e.id);
+  return h('div', { class: 'card' },
+    h('h3', {}, `${mo.mood.icon} المعنويات: ${mo.score} من 100 (${mo.mood.name})`),
+    h('div', { class: 'mood-bar' }, h('i', { class: mo.mood.cls, style: `width:${mo.score}%` })),
+    mo.factors.length ? h('ul', { class: 'factors' }, mo.factors.map((f) => h('li', { class: f.delta > 0 ? 'plus' : 'minus' }, `${f.delta > 0 ? '+' : ''}${f.delta} ${f.label}`)))
+      : h('p', { class: 'muted' }, 'لا شيء يؤثر في معنوياته الآن.'),
+    r ? h('p', { class: 'notice' }, `📄 قدّم استقالته. قرارك في صندوق الموافقات.`) : mo.score < RESIGN_BELOW ? h('p', { class: 'notice' }, '⚠️ معنوياته منخفضة جداً، وقد يستقيل قريباً.') : null);
+}
+
+function trainingCard(e) {
+  const now = activeTraining(state, e.id);
+  const done = (state.trainings || []).filter((t) => t.empId === e.id && t.status === 'done');
+  return h('div', { class: 'card' },
+    h('h3', {}, '🎓 التدريب والتطوير'),
+    now ? h('p', {}, `يحضر «${now.title}» حتى ${now.to}`) : null,
+    done.length ? h('p', { class: 'muted' }, `أنهى: ${done.map((t) => t.title).join('، ')}`) : h('p', { class: 'muted' }, 'لم يحضر دورات بعد.'),
+    h('button', { disabled: Boolean(now) || !coursesFor(state, e).length, onclick: () => openTraining(e) }, '🎓 تسجيل في دورة'));
+}
+
+let trainingFor = null;
+function openTraining(e) {
+  trainingFor = e.id;
+  const options = coursesFor(state, e);
+  const budget = trainingBudget(state);
+  $('#train-title').textContent = `🎓 تسجيل ${e.name} في دورة`;
+  fill($('#train-course'), options.map((c) => h('option', { value: c.id, disabled: c.cost > budget.left }, `${c.title} · ${daysWord(c.days)} · ${money(c.cost)}${c.cost > budget.left ? ' (الميزانية لا تكفي)' : ''}`)));
+  const update = () => {
+    const c = courseById($('#train-course').value);
+    $('#train-info').textContent = c ? `تضيف ${c.xp} نقطة خبرة عند انتهائها، وترفع معنوياته، ويطبّق ما تعلمه في عمله. المتبقي من ميزانية التدريب ${money(budget.left)} من ${money(budget.total)}.` : 'لا توجد دورات متاحة.';
+    $('#train-ok').disabled = !c || c.cost > budget.left;
+  };
+  $('#train-course').onchange = update;
+  update();
+  $('#dlg-train').showModal();
+}
+$('#dlg-train').addEventListener('close', () => {
+  if ($('#dlg-train').returnValue !== 'ok') return;
+  const e = emp(trainingFor);
+  if (!e) return;
+  try {
+    const t = enroll(state, { empId: e.id, courseId: $('#train-course').value, by: 'owner' }, { newId });
+    const hr = hrHead();
+    if (hr && hr.id !== e.id) sendDm(hr.id, e.id, `سجّلتك الإدارة في دورة «${t.title}» من ${t.from} إلى ${t.to}. بالتوفيق!`, 'hr');
+    save();
+    refresh();
+    toast(`🎓 سُجّل ${e.name} في «${t.title}» (${money(t.cost)})`);
+  } catch (err) { toast(err.message); }
+});
+
+// Once a day: finished courses, and whether someone at the end of their rope resigns.
+async function peopleDaily({ force = false } = {}) {
+  const today = dayKey();
+  if (!force && state.peopleDay === today) return;
+  state.peopleDay = today;
+  for (const t of completeTrainings(state)) {
+    const e = emp(t.empId);
+    const hr = hrHead();
+    if (e && hr && hr.id !== e.id) sendDm(hr.id, e.id, `مبروك إنهاء دورة «${t.title}»! أُضيفت لك ${t.xp} نقطة خبرة.`, 'hr');
+    if (e) toast(`🎓 أنهى ${e.name} دورة «${t.title}»`);
+  }
+  const candidates = atWork(state.employees).filter((e) => e.level < 8 && !pendingResignation(state, e.id) && !(e.retainedAt && Date.now() - e.retainedAt < 30 * 86400000))
+    .map((e) => ({ e, mo: moraleOf(state, e) })).filter((x) => x.mo.score < RESIGN_BELOW).sort((a, b) => a.mo.score - b.mo.score);
+  const quitter = candidates.find((x) => Math.random() < resignationRisk(x.mo.score));
+  if (quitter) await resign(quitter.e, quitter.mo);
+  save();
+  refresh();
+}
+
+async function resign(e, mo) {
+  let letter = '';
+  try {
+    letter = await ask(e, 'resign', [{ role: 'user', content: `أسبابك: ${mo.factors.filter((f) => f.delta < 0).map((f) => f.label).join('، ') || 'لم تعد مرتاحاً في العمل'}. معنوياتك ${mo.score} من 100.` }]);
+  } catch { letter = 'أقدّم استقالتي من الوكالة، فلم أعد مرتاحاً في عملي. شكراً على الفرصة.'; }
+  state.resignations ||= [];
+  state.resignations.push({ id: newId(state, 'rs'), empId: e.id, at: Date.now(), letter: letter.replace(/\[\[[^\]]*\]\]/g, '').trim().slice(0, 1500), status: 'pending', score: mo.score });
+  state.resignations = state.resignations.slice(-30);
+  save();
+  renderApprovalsBadge();
+  toast(`📄 ${e.name} قدّم استقالته. قرارك في صندوق الموافقات.`);
+}
+
+let retaining = null;
+function openRetain(r) {
+  const e = emp(r.empId);
+  if (!e) return;
+  retaining = r.id;
+  const mo = moraleOf(state, e);
+  $('#retain-title').textContent = `🤝 محاولة إبقاء ${e.name}`;
+  fill($('#retain-why'), h('p', { class: 'notice' }, `«${r.letter}»`),
+    h('ul', { class: 'factors' }, mo.factors.map((f) => h('li', { class: f.delta > 0 ? 'plus' : 'minus' }, `${f.delta > 0 ? '+' : ''}${f.delta} ${f.label}`))));
+  fill($('#retain-type'), Object.entries(OFFERS).map(([k, o]) => h('option', { value: k }, o.name)));
+  const update = () => {
+    const type = $('#retain-type').value;
+    $('#retain-amount-row').hidden = !OFFERS[type].amount;
+    if (OFFERS[type].amount && !$('#retain-amount').dataset.touched) $('#retain-amount').value = String(Math.round(e.salary * (type === 'raise' ? 0.1 : 0.3)));
+    $('#retain-hint').textContent = { raise: `راتبه الحالي ${money(e.salary)}.`, bonus: 'تُصرف مع راتب هذا الشهر.', promise: `وعد بالترقية إلى «${nextRung(e)?.name || '—'}»، والترقية نفسها قرارك لاحقاً.`,
+      lighten: `تنتقل نصف مهامه المنتظرة إلى زملائه (لديه ${workloadOf(state, e.id).hours} ساعة مفتوحة).`, talk: 'تتحدث معه فقط دون عرض.' }[type];
+  };
+  $('#retain-amount').oninput = () => { $('#retain-amount').dataset.touched = '1'; };
+  delete $('#retain-amount').dataset.touched;
+  $('#retain-type').onchange = () => { delete $('#retain-amount').dataset.touched; update(); };
+  update();
+  $('#dlg-retain').showModal();
+}
+$('#dlg-retain').addEventListener('close', async () => {
+  if ($('#dlg-retain').returnValue !== 'ok') return;
+  const r = (state.resignations || []).find((x) => x.id === retaining);
+  const e = r && emp(r.empId);
+  if (!e || r.status !== 'pending') return;
+  const offer = { type: $('#retain-type').value, amount: Number($('#retain-amount').value) || 0 };
+  if (OFFERS[offer.type].amount && !(offer.amount > 0)) return toast('حدد المبلغ');
+  if (offer.type === 'promise' && !nextRung(e)) return toast(`${e.name} في أعلى مستوى يمكن الترقية إليه`);
+  const outcome = retentionOutcome(state, e, offer);
+  const what = `${OFFERS[offer.type].name}${OFFERS[offer.type].amount ? ` ${money(offer.amount)}` : ''}`;
+  let reply = '';
+  try {
+    reply = await ask(e, 'retain_reply', [{ role: 'user', content: `استقالتك: «${r.letter}»\nعرض المالك: ${what}.\nالقرار: ${outcome.stays ? 'البقاء' : 'المغادرة'}` }]);
+  } catch { reply = outcome.stays ? 'شكراً لك، سأبقى.' : 'أقدّر عرضك، لكني أفضّل المغادرة.'; }
+  r.offer = offer;
+  r.reply = reply.trim().slice(0, 800);
+  r.decidedAt = Date.now();
+  if (!outcome.stays) {
+    r.status = 'accepted';
+    toast(`${e.name}: «${r.reply}»`);
+    departEmployee(e, 'resigned');
+    return;
+  }
+  try {
+    if (offer.type === 'raise') addAdjustment(state, { empId: e.id, type: 'raise', amount: offer.amount, reason: 'عرض للبقاء بعد الاستقالة', by: 'owner' });
+    if (offer.type === 'bonus') addAdjustment(state, { empId: e.id, type: 'bonus', amount: offer.amount, reason: 'عرض للبقاء بعد الاستقالة', by: 'owner' });
+    if (offer.type === 'promise') promisePromotion(state, { empId: e.id, by: 'owner', toLevel: nextLevel(e.level), condition: '', reason: 'عرض للبقاء بعد الاستقالة' }, { newId, maxLevel: STAFF_TOP });
+    if (offer.type === 'lighten') lightenLoad(e);
+  } catch (err) { toast(err.message); }
+  r.status = 'retained';
+  e.retainedAt = Date.now();
+  e.moraleBoost = { amount: outcome.boost, until: Date.now() + 60 * 86400000, reason: `عرض البقاء: ${OFFERS[offer.type].name}` };
+  save();
+  refresh();
+  toast(`🤝 ${e.name} قرر البقاء: «${r.reply}»`);
+});
+
+function acceptResignation(r) {
+  const e = emp(r.empId);
+  if (!e) return;
+  r.status = 'accepted';
+  r.decidedAt = Date.now();
+  departEmployee(e, 'resigned');
+}
+
+// Half of someone's waiting tasks go to their least busy teammates.
+function lightenLoad(e) {
+  const mates = atWork(state.employees.filter((x) => x.id !== e.id && x.managerId && x.managerId === e.managerId));
+  if (!mates.length) return 0;
+  const waiting = state.tasks.filter((t) => t.empId === e.id && t.status === 'todo').sort((a, b) => ({ low: 0, medium: 1, high: 2 })[a.priority] - ({ low: 0, medium: 1, high: 2 })[b.priority]);
+  let moved = 0;
+  for (const t of waiting.slice(0, Math.ceil(waiting.length / 2))) {
+    const to = [...mates].sort((a, b) => workloadOf(state, a.id).hours - workloadOf(state, b.id).hours)[0];
+    t.empId = to.id;
+    sendDm(e.managerId, to.id, `نقلت إليك مهمة «${t.title}» من ${e.name} لتخفيف الضغط عليه.`, 'task');
+    moved++;
+  }
+  return moved;
+}
+
+function runRebalance(plan) {
+  const m = emp(plan.managerId);
+  const moved = applyRebalance(state, plan);
+  for (const x of moved) {
+    sendDm(plan.managerId, x.to, `نقلت إليك مهمة «${x.title}» من ${emp(x.from)?.name} لتوزيع الضغط.`, 'task');
+    sendDm(plan.managerId, x.from, `نقلت مهمة «${x.title}» إلى ${emp(x.to)?.name} لتخفيف الضغط عليك.`, 'task');
+  }
+  toast(moved.length ? `⚖️ ${m?.name || 'المدير'} نقل ${countOf(moved.length, TASKS_WORD)}` : 'تغيّرت المهام منذ الاقتراح، فلم يُنقل شيء');
+}
+
+function graduate(e, by) {
+  if (e.level !== 0) return;
+  changeLevel(e, 1);
+  if (by && by.id !== e.id) sendDm(by.id, e.id, `🎉 مبروك! عُيّنت رسمياً بمسمى «${titleFor(e)}» بعد أدائك المتميز في فترة التدريب.`, 'hr');
+  e.moraleBoost = { amount: 12, until: Date.now() + 60 * 86400000, reason: 'تعيينه رسمياً' };
 }
 
 // ------------------------------------------------------------ leave and attendance
@@ -2003,6 +2215,8 @@ function renderProfile(e) {
         h('dt', {}, 'الخلفية'), h('dd', {}, bioFor(e).background),
         h('dt', {}, 'أسلوبه'), h('dd', {}, bioFor(e).style))),
     performanceCard(e),
+    moraleCard(e),
+    trainingCard(e),
     leaveCard(e),
     h('div', { class: 'card' },
       h('h3', {}, 'التقدم الوظيفي'),
@@ -2082,6 +2296,10 @@ function reseat(e, desk) {
 async function fire(e) {
   if (busy.has(e.id) || meeting?.attendees.includes(e.id)) return toast('لا يمكن إنهاء الخدمة أثناء العمل أو الاجتماع');
   if (!(await confirmBox(`هل تريد إنهاء خدمة ${e.name}؟ ستنتقل مهامه غير المكتملة إلى مديره.`, 'إنهاء الخدمة'))) return;
+  departEmployee(e, 'fired');
+}
+// Someone leaves (let go or resigned): open work goes to their manager, their reports move up.
+function departEmployee(e, why) {
   for (const t of state.tasks) {
     if (t.empId === e.id && t.status !== 'done') {
       if (e.managerId) t.empId = e.managerId;
@@ -2101,7 +2319,7 @@ async function fire(e) {
   save();
   closePanel();
   refresh();
-  toast(`تم إنهاء خدمة ${e.name}`);
+  toast(why === 'resigned' ? `👋 غادر ${e.name} الوكالة بعد استقالته، وانتقلت مهامه إلى مديره` : `تم إنهاء خدمة ${e.name}`);
 }
 
 // ------------------------------------------------------------ hiring
@@ -2242,7 +2460,11 @@ function renderBoard() {
     else toast('تمت إضافة المهمة');
   } }, h('h3', {}, 'تكليف جديد'), h('label', {}, 'الموظف', assign), title, desc, prio, proj, h('button', { class: 'primary', type: 'submit' }, 'إضافة'));
   cols[0].firstChild.after(form);
-  fill($('#board'), ...cols);
+  const loads = atWork(state.employees).map((x) => ({ x, w: workloadOf(state, x.id) })).sort((a, b) => b.w.hours - a.w.hours);
+  const strip = h('div', { class: 'load-strip', title: 'ساعات العمل المفتوحة لكل موظف (حسب أولوية مهامه)' },
+    h('b', {}, '⚖️ ضغط العمل:'),
+    loads.map(({ x, w }) => h('span', { class: w.hours >= OVERLOAD_HOURS ? 'over' : w.hours === 0 ? 'idle' : '' }, `${x.name} ${w.hours ? `${w.hours}س` : 'متاح'}`)));
+  fill($('#board'), strip, ...cols);
 }
 $('#btn-board').addEventListener('click', () => {
   const f = $('#board-filter');
@@ -2596,7 +2818,7 @@ function renderPerformance() {
       hrHead() ? h('button', { disabled: busy.has('rewards'), onclick: hrRewards },
         busy.has('rewards') ? `⏳ ${hrHead().name} تراجع…` : `🏅 ${hrHead().name} تقترح مكافآت ووعود ترقية`) : null),
     h('div', { class: 'table-wrap' }, h('table', { class: 'fin' },
-      h('thead', {}, h('tr', {}, ...['#', 'الموظف', 'الدرجة', 'التقدير', 'منجزة', 'من أول مرة', 'نجومك', 'آخر تقييم', ''].map((x) => h('th', {}, x)))),
+      h('thead', {}, h('tr', {}, ...['#', 'الموظف', 'الدرجة', 'التقدير', 'منجزة', 'من أول مرة', 'نجومك', 'المعنويات', 'آخر تقييم', ''].map((x) => h('th', {}, x)))),
       h('tbody', {}, ...rows.map((r, i) => {
         const ev = lastEvaluation(state, r.emp.id);
         return h('tr', {},
@@ -2607,6 +2829,7 @@ function renderPerformance() {
           h('td', { class: 'num' }, String(r.m.done)),
           h('td', { class: 'num' }, r.m.reviewed ? `${Math.round((r.m.firstPass / r.m.reviewed) * 100)}%` : '—'),
           h('td', { class: 'num' }, r.m.rated ? r.m.ratingAvg.toFixed(1) : '—'),
+          (() => { const mo = moraleOf(state, r.emp); return h('td', { title: mo.factors.map((f) => `${f.delta > 0 ? '+' : ''}${f.delta} ${f.label}`).join('\n') }, `${mo.mood.icon} ${mo.score}`); })(),
           h('td', {}, ev ? `${ev.grade} · ${RECOMMENDATIONS[ev.recommendation]}` : '—'),
           h('td', {}, h('button', { class: 'small', onclick: () => { $('#dlg-performance').close(); selectEmployee(r.emp.id); activeTab = 'profile'; renderPanel(); } }, 'الملف')));
       })))));
@@ -2692,7 +2915,10 @@ const dueForPromotion = () => state.employees.filter((e) => nextRung(e) && e.xp 
   && !pendingPromotions().some((ev) => ev.empId === e.id));
 const unreadWeekly = () => (state.reports || []).filter((r) => r.type === 'weekly' && !r.seen);
 const openPromisesForOwner = () => (state.promises || []).filter((p) => p.status === 'open' && !p.ack && emp(p.empId));
-const inboxCount = () => openPromisesForOwner().length + unreadWeekly().length + (state.hiring ? 1 : 0) + pendingForOwner(state).length + pendingPromotions().length + readyProposals().length + lateProjects().length + dueForPromotion().length;
+const pendingResignations = () => (state.resignations || []).filter((r) => r.status === 'pending' && emp(r.empId));
+const visiblePlans = () => rebalancePlans(state, { available: (x) => !awayNow(x) }).filter((p) => state.rebalanceAck?.[p.managerId] !== dayKey() && emp(p.managerId));
+const graduates = () => graduationCandidates(state, teamPerformance(state));
+const inboxCount = () => pendingResignations().length + visiblePlans().length + graduates().length + openPromisesForOwner().length + unreadWeekly().length + (state.hiring ? 1 : 0) + pendingForOwner(state).length + pendingPromotions().length + readyProposals().length + lateProjects().length + dueForPromotion().length;
 function renderApprovalsBadge() {
   const n = inboxCount();
   const badge = $('#approvals-count');
@@ -2769,6 +2995,34 @@ function inboxCard(title, badge, sub, text, actions) {
 
 function otherInboxCards() {
   const cards = [];
+  for (const r of pendingResignations()) {
+    const e = emp(r.empId);
+    const mo = moraleOf(state, e);
+    cards.push(inboxCard(`📄 ${e.name} قدّم استقالته`, 'استقالة', `${titleFor(e)} · المعنويات ${mo.mood.icon} ${mo.score} · ${mo.factors.filter((f) => f.delta < 0).slice(0, 3).map((f) => f.label).join('، ')}`,
+      r.letter, [
+        ['🤝 حاول إبقاءه', () => { $('#dlg-approvals').close(); openRetain(r); }, 'primary'],
+        ['✅ قبول الاستقالة', () => { acceptResignation(r); }, 'danger'],
+      ]));
+  }
+  for (const plan of visiblePlans()) {
+    const m = emp(plan.managerId);
+    const heavy = [...new Set(plan.moves.map((x) => x.from))].map(emp);
+    cards.push(inboxCard(`⚖️ ${m.name} تقترح إعادة توزيع المهام`, 'ضغط العمل',
+      heavy.map((x) => `${x.name}: ${workloadOf(state, x.id).hours} ساعة مفتوحة`).join(' · '),
+      plan.moves.map((x) => `«${state.tasks.find((t) => t.id === x.taskId)?.title}» من ${emp(x.from)?.name} إلى ${emp(x.to)?.name}`).join('؛ '), [
+        ['✅ نفّذ الخطة', () => runRebalance(plan), 'primary'],
+        ['ليس اليوم', () => { (state.rebalanceAck ||= {})[plan.managerId] = dayKey(); }],
+      ]));
+  }
+  for (const row of graduates()) {
+    const e = row.emp;
+    const by = hrHead() || emp(e.managerId);
+    cards.push(inboxCard(`🎓 ${by ? `${by.name} توصي` : 'توصية'} بتعيين ${e.name} رسمياً`, 'تعيين',
+      `${titleFor(e)} · أداء ${row.score} (${row.grade.name}) · ${row.m.done} مهام منجزة`, `يصبح «${LADDER[1].name}» براتب ${money(defaultSalary(1))} على الأقل.`, [
+        ['✅ تعيين رسمي', () => graduate(e, by), 'primary'],
+        ['ليس الآن', () => { e.gradAck = Date.now(); }],
+      ]));
+  }
   for (const r of unreadWeekly()) {
     cards.push(inboxCard(`📊 التقرير الأسبوعي من ${emp(r.by)?.name || 'الإدارة'}`, 'تقرير', `أسبوع ${weekStart(r.day)} — ${r.day}`, '',
       [['📄 قراءة التقرير', () => { $('#dlg-approvals').close(); showReport(r); }, 'primary'], ['تمت القراءة', () => { r.seen = true; }]]));
@@ -2790,7 +3044,7 @@ function otherInboxCards() {
   }
   for (const p of openPromisesForOwner()) {
     const e = emp(p.empId);
-    cards.push(inboxCard(`🤝 ${emp(p.by)?.name || 'الموارد البشرية'} وعدت ${e.name} بالترقية`, 'وعد ترقية',
+    cards.push(inboxCard(p.by === 'owner' ? `🤝 وعدت ${e.name} بالترقية` : `🤝 ${emp(p.by)?.name || 'الموارد البشرية'} وعدت ${e.name} بالترقية`, 'وعد ترقية',
       `من «${titleFor(e)}» إلى «${LADDER[p.toLevel]?.name}»${p.condition ? ` · الشرط: ${p.condition}` : ''}`, p.reason, [
         ['⬆️ رقّه الآن', () => { changeLevel(e, p.toLevel - e.level); }, 'primary'],
         ['لاحقاً', () => { p.ack = true; }],
@@ -3424,7 +3678,7 @@ function renderFinance() {
       ev.preventDefault();
       const num = (id) => Number($(`#${id}`).value);
       const vals = { ob: num('fs-ob'), ot: num('fs-ot'), hrs: num('fs-hrs'), low: num('fs-low'), med: num('fs-med'), high: num('fs-high'),
-        hl: num('fs-hl'), hm: num('fs-hm'), hh: num('fs-hh') };
+        hl: num('fs-hl'), hm: num('fs-hm'), hh: num('fs-hh'), tb: num('fs-tb') };
       if (Object.values(vals).some((v) => !Number.isFinite(v) || v < 0) || vals.ot < 1 || vals.hrs < 1) return toast('تحقق من الأرقام: يجب أن تكون موجبة.');
       fin.currency = $('#fs-cur').value.trim().slice(0, 8) || fin.currency;
       fin.openingBalance = vals.ob;
@@ -3432,6 +3686,7 @@ function renderFinance() {
       fin.monthlyHours = vals.hrs;
       fin.taskBonus = { low: vals.low, medium: vals.med, high: vals.high };
       fin.taskHours = { low: vals.hl, medium: vals.hm, high: vals.hh };
+      fin.trainingBudget = vals.tb;
       save();
       renderFinance();
       toast('تم حفظ الإعدادات المالية');
@@ -3443,6 +3698,7 @@ function renderFinance() {
     field('ساعات مهمة منخفضة (لحساب التكلفة)', 'fs-hl', (fin.taskHours || {}).low ?? 2, { type: 'number', min: '0', step: 'any' }),
     field('ساعات مهمة متوسطة', 'fs-hm', (fin.taskHours || {}).medium ?? 4, { type: 'number', min: '0', step: 'any' }),
     field('ساعات مهمة عالية', 'fs-hh', (fin.taskHours || {}).high ?? 8, { type: 'number', min: '0', step: 'any' }),
+    field('ميزانية التدريب السنوية', 'fs-tb', trainingBudget(state).total, { type: 'number', min: '0', step: 'any' }),
     field('المكافأة المقترحة لعمل متميز (أولوية منخفضة)', 'fs-low', fin.taskBonus.low, { type: 'number', min: '0' }),
     field('المكافأة المقترحة لعمل متميز (أولوية متوسطة)', 'fs-med', fin.taskBonus.medium, { type: 'number', min: '0' }),
     field('المكافأة المقترحة لعمل متميز (أولوية عالية)', 'fs-high', fin.taskBonus.high, { type: 'number', min: '0' }),
@@ -3626,6 +3882,7 @@ if (!officeOpen) {
 }
 updateDaylight();
 setInterval(updateDaylight, 60_000);
+setTimeout(() => peopleDaily(), 8000); // finished courses and resignations, once a day
 refresh();
 saveState(state);
 setInterval(() => { if (state.employees.some((e) => Boolean(awayNow(e)) !== (office.whereIs(e.id) === 'away'))) refresh(); }, 60_000); // leave starts or ends at midnight

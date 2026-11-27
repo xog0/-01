@@ -126,6 +126,13 @@ test('candidates mode asks for three distinct people as JSON; a candidate person
   assert.throws(() => validateChatRequest(base({ persona: { ...cand, duties: 'admin' } })), /مسؤوليات غير معروفة/);
 });
 
+test('resignation letters and replies to a retention offer keep to the decided outcome', () => {
+  assert.match(buildSystemPrompt(validateChatRequest(base({ mode: 'resign' }))), /رسالة استقالة قصيرة ومهذبة/);
+  const r = buildSystemPrompt(validateChatRequest(base({ mode: 'retain_reply' })));
+  assert.match(r, /قرارك محسوم/);
+  assert.match(r, /لا تغيّر القرار/);
+});
+
 test('report mode sticks to the data it is given', () => {
   const sys = buildSystemPrompt(validateChatRequest(base({ mode: 'report' })));
   assert.match(sys, /خطة الصباح/);

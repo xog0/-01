@@ -320,6 +320,32 @@
     </div>
   </dialog>
 
+  <dialog id="dlg-retain">
+    <form method="dialog" id="retain-form" class="stack">
+      <h2 id="retain-title">🤝 محاولة إبقاء الموظف</h2>
+      <div id="retain-why"></div>
+      <label>العرض <select id="retain-type"></select></label>
+      <label id="retain-amount-row">المبلغ <input id="retain-amount" type="number" min="1" step="any"></label>
+      <p class="muted" id="retain-hint"></p>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok">قدّم العرض</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-train">
+    <form method="dialog" id="train-form" class="stack">
+      <h2 id="train-title">🎓 تسجيل في دورة</h2>
+      <label>الدورة <select id="train-course"></select></label>
+      <p class="muted" id="train-info"></p>
+      <div class="row end">
+        <button value="cancel" formnovalidate>إلغاء</button>
+        <button class="primary" value="ok" id="train-ok">سجّله</button>
+      </div>
+    </form>
+  </dialog>
+
   <dialog id="dlg-deal">
     <form method="dialog" id="deal-form" class="stack">
       <h2 id="deal-form-title">فرصة بيع جديدة</h2>

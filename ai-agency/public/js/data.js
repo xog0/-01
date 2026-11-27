@@ -452,6 +452,8 @@ export function createInitialState() {
     leaves: [],
     attendance: {},
     promises: [],
+    trainings: [],
+    resignations: [],
     hiring: null,
     migrations: MIGRATIONS.map((m) => m.key), // a fresh agency already has these
   };

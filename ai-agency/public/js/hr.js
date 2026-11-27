@@ -218,6 +218,7 @@ export function sampleCandidates({ deptName, years, base, taken = [], seed = 0 }
 //   [[توظيف: القسم | المستوى | الحد الأقصى للراتب]]
 //   [[مكافأة: الاسم | المبلغ | السبب]]
 //   [[وعد ترقية: الاسم | الشرط | السبب]]
+//   [[تدريب: الاسم | اسم الدورة]]
 const LEAVE_WORDS = { 'سنوية': 'annual', 'مرضية': 'sick', 'اضطرارية': 'emergency', 'طارئة': 'emergency', 'بدون راتب': 'unpaid' };
 const arabicDigits = (s) => String(s).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
 const matchPeople = (text, employees) => {
@@ -228,7 +229,7 @@ const matchPeople = (text, employees) => {
 
 export function parseHrOrders(reply, employees, { today = dayKey(), departments = {}, ladder = [] } = {}) {
   const orders = [];
-  const text = reply.replace(/\[\[\s*(إنهاء إجازة|إجازة|تقييم|توظيف|مكافأة|مكافاة|وعد ترقية|وعد بترقية)\s*:([^\]]*)\]\]/g, (_, kind, body) => {
+  const text = reply.replace(/\[\[\s*(إنهاء إجازة|إجازة|تقييم|توظيف|مكافأة|مكافاة|وعد ترقية|وعد بترقية|تدريب)\s*:([^\]]*)\]\]/g, (_, kind, body) => {
     const parts = body.split('|').map((x) => x.trim());
     if (kind === 'إجازة') {
       const [who = '', typeWord = '', days = '', from = '', reason = ''] = parts;
@@ -249,6 +250,10 @@ export function parseHrOrders(reply, employees, { today = dayKey(), departments 
       const empIds = matchPeople(who, employees).slice(0, 1);
       const v = Number(arabicDigits(amount).replace(/[^\d.]/g, ''));
       if (empIds.length && v > 0) orders.push({ kind: 'bonus', empId: empIds[0], amount: Math.round(v), reason: reason.slice(0, 300) });
+    } else if (kind === 'تدريب') {
+      const [who = '', course = ''] = parts;
+      const empIds = matchPeople(who, employees).slice(0, 1);
+      if (empIds.length) orders.push({ kind: 'train', empId: empIds[0], course: course.slice(0, 80) });
     } else if (kind === 'وعد ترقية' || kind === 'وعد بترقية') {
       const [who = '', condition = '', reason = ''] = parts;
       const empIds = matchPeople(who, employees).slice(0, 1);

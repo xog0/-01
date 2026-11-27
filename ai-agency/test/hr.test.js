@@ -139,6 +139,7 @@ test('bonus proposals, promotion promises and a salary cap in her orders', () =>
   const staff = [{ id: 'e1', name: 'خالد' }, { id: 'e2', name: 'ليلى' }];
   const departments = { design: { name: 'التصميم' } };
   const ladder = [{ name: 'متدرب' }, { name: 'أخصائي مبتدئ' }, { name: 'أخصائي' }];
+  assert.deepEqual(parseHrOrders('[[تدريب: ليلى | صناعة الفيديو القصير]]', staff).orders, [{ kind: 'train', empId: 'e2', course: 'صناعة الفيديو القصير' }]);
   const { text, orders } = parseHrOrders('تم.\n[[مكافأة: خالد | ١٥٠٠ ريال | أنجز 6 مهام بتقييم ممتاز]]\n[[وعد ترقية: ليلى | إنهاء حملة لمسة بتقييم جيد جداً | أداؤها ثابت]]\n' +
     '[[توظيف: التصميم | أخصائي | 9,500]]\n[[مكافأة: خالد | صفر | لا شيء]]', staff, { departments, ladder });
   assert.equal(text, 'تم.');

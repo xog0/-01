@@ -105,7 +105,7 @@ async function serveFile(res, root, relPath) {
 }
 
 // --- Claude call ----------------------------------------------------------
-const MAX_TOKENS = { chat: 2000, meeting: 800, task: 8000, summary: 1500, assign: 4000, review: 800, memo: 1500, bonus: 600, evaluation: 1200, client_review: 800, candidates: 1800, leads: 1800, deal_review: 800, report: 1500, interview: 300, offer_reply: 400, hire_pick: 600, rewards: 1500, dm: 300 };
+const MAX_TOKENS = { chat: 2000, meeting: 800, task: 8000, summary: 1500, assign: 4000, review: 800, memo: 1500, bonus: 600, evaluation: 1200, client_review: 800, candidates: 1800, leads: 1800, deal_review: 800, report: 1500, interview: 300, offer_reply: 400, hire_pick: 600, rewards: 1500, dm: 300, resign: 400, retain_reply: 300 };
 
 async function askClaude(req) {
   const system = buildSystemPrompt(req);
