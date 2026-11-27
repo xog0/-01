@@ -1,6 +1,6 @@
 import { createOffice, ROOMS } from './scene.js';
 import {
-  LADDER, DEPARTMENTS, POSITIONS, OPEN_DESKS, PRIVATE_OFFICES, MANAGER_LEVEL, freeSeat, isPrivateOffice, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
+  LADDER, DEPARTMENTS, POSITIONS, OPEN_DESKS, PRIVATE_OFFICES, MANAGER_LEVEL, CEO_SUITE, CEO_LEVEL, freeSeat, isPrivateOffice, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
   titleFor, skillsFor, lookFor, bioFor, nextLevel, prevLevel, activeLevels, STAFF_TOP, loadState, saveState, createInitialState, applyMigrations, newId,
 } from './data.js';
 import { askEmployee, backendStatus } from './api.js';
@@ -2227,7 +2227,8 @@ function renderProfile(e) {
         : `${e.xp} نقطة خبرة · وصل إلى قمة السلم الوظيفي`),
       openPromise(state, e.id) ? h('p', { class: 'notice' }, `🤝 وعد بالترقية إلى «${LADDER[openPromise(state, e.id).toLevel]?.name}» من ${emp(openPromise(state, e.id).by)?.name || 'الموارد البشرية'}${openPromise(state, e.id).condition ? ` · الشرط: ${openPromise(state, e.id).condition}` : ''}`) : null,
       h('div', { class: 'row' },
-        h('button', { class: eligible ? 'primary' : '', disabled: !next, onclick: () => changeLevel(e, 1) }, '⬆️ ترقية'),
+        h('button', { class: eligible ? 'primary' : '', disabled: e.level >= CEO_LEVEL, onclick: () => changeLevel(e, 1) },
+          e.level === CEO_LEVEL - 1 ? '⬆️ تعيينه مديراً تنفيذياً' : '⬆️ ترقية'),
         h('button', { disabled: e.level === 0, onclick: () => changeLevel(e, -1) }, '⬇️ تخفيض'))),
     h('div', { class: 'card' },
       h('h3', {}, 'تعديل'),
@@ -2260,7 +2261,9 @@ function isUnder(id, bossId) {
 }
 
 function changeLevel(e, delta) {
+  if (delta > 0 && e.level + delta >= CEO_LEVEL) return makeCeo(e);
   const to = delta === 1 ? nextLevel(e.level) : delta === -1 ? prevLevel(e.level) : e.level + delta;
+  const leavesNoCeo = e.level >= CEO_LEVEL && delta < 0 && !state.employees.some((x) => x.id !== e.id && x.level >= CEO_LEVEL);
   if (to === null || to < 0 || to >= LADDER.length || LADDER[to].retired) return toast(delta > 0 ? `${e.name} في أعلى السلم الوظيفي المتاح` : 'لا يوجد مستوى أدنى');
   e.level = to;
   if (delta > 0 && e.xp < LADDER[to].xp) e.xp = LADDER[to].xp;
@@ -2285,7 +2288,43 @@ function changeLevel(e, delta) {
   }
   save();
   refresh();
-  toast((delta > 0 ? `🎉 تمت ترقية ${e.name} إلى "${titleFor(e)}"` : `تم تعديل مستوى ${e.name} إلى "${titleFor(e)}"`) + moved);
+  toast((delta > 0 ? `🎉 تمت ترقية ${e.name} إلى "${titleFor(e)}"` : `تم تعديل مستوى ${e.name} إلى "${titleFor(e)}"`) + moved
+    + (leavesNoCeo ? '. الوكالة الآن بلا مدير تنفيذي: عيّن أحداً من ملفه بزر «تعيينه مديراً تنفيذياً» (لمن في مستوى نائب المدير التنفيذي).' : ''));
+}
+
+// The owner names a CEO: the current one becomes deputy under them, the
+// department heads follow the new CEO, and they swap into the CEO suite.
+async function makeCeo(e) {
+  // The sitting CEO, or else a former CEO already moved down who still reports to the owner.
+  const current = state.employees.filter((x) => x.id !== e.id && (x.level >= CEO_LEVEL || (!x.managerId && x.level === CEO_LEVEL - 1)))
+    .sort(byRank)[0] || null;
+  if (busy.has(e.id) || (current && busy.has(current.id))) return toast('انتظر حتى ينهيا المهام الجارية');
+  if (!(await confirmBox(current
+    ? `تعيين ${e.name} مديراً تنفيذياً؟ ينتقل ${current.name} إلى «${LADDER[CEO_LEVEL - 1].name}» تحت إدارته، ويصبح المدراء الذين كانوا تحت ${current.name} تحت ${e.name}، ويتبادلان المكتب.`
+    : `تعيين ${e.name} مديراً تنفيذياً؟ يتبعك مباشرة وينتقل إلى جناح المدير التنفيذي.`, 'تعيين'))) return;
+  e.level = CEO_LEVEL;
+  if (e.xp < LADDER[CEO_LEVEL].xp) e.xp = LADDER[CEO_LEVEL].xp;
+  e.managerId = null;
+  if (state.finance && e.salary < defaultSalary(CEO_LEVEL)) {
+    addAdjustment(state, { empId: e.id, type: 'raise', amount: defaultSalary(CEO_LEVEL) - e.salary, reason: `تعيينه مديراً تنفيذياً`, by: 'owner' });
+  }
+  const promise = openPromise(state, e.id);
+  if (promise) closePromise(state, promise.id, 'kept');
+  if (current) {
+    for (const x of state.employees) if (x.managerId === current.id && x.id !== e.id) x.managerId = e.id;
+    current.level = Math.min(current.level, CEO_LEVEL - 1);
+    current.managerId = e.id;
+  }
+  // Seats: the new CEO takes the suite; whoever sat there takes the new CEO's old desk.
+  const suiteHolder = state.employees.find((x) => x.desk === CEO_SUITE && x.id !== e.id);
+  const old = e.desk;
+  if (suiteHolder) reseat(suiteHolder, old);
+  reseat(e, CEO_SUITE);
+  for (const x of [e, current].filter(Boolean)) sendDm(x.id === e.id ? (current?.id || null) : e.id, x.id,
+    x.id === e.id ? `مبروك تعيينك مديراً تنفيذياً. أنا معك لتسليم الملفات.` : `أصبحتَ نائباً لي. أعتمد عليك في العمليات اليومية.`, 'note');
+  save();
+  refresh();
+  toast(`🎉 أصبح ${e.name} المدير التنفيذي${current ? `، وانتقل ${current.name} إلى «${LADDER[CEO_LEVEL - 1].name}»` : ''}`);
 }
 
 function reseat(e, desk) {
