@@ -46,7 +46,7 @@ export async function askEmployee(payload) {
   return data.truncated ? `${data.reply}\n\n(…توقف الرد لأنه طويل جداً)` : data.reply;
 }
 
-const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick', bonus: 'quick', evaluation: 'quick', client_review: 'quick', candidates: 'quick', leads: 'quick', deal_review: 'quick', report: 'quick', interview: 'quick', offer_reply: 'quick', hire_pick: 'quick', rewards: 'quick' };
+const TIERS = { chat: 'quick', meeting: 'quick', task: 'default', summary: 'default', assign: 'default', review: 'quick', memo: 'quick', bonus: 'quick', evaluation: 'quick', client_review: 'quick', candidates: 'quick', leads: 'quick', deal_review: 'quick', report: 'quick', interview: 'quick', offer_reply: 'quick', hire_pick: 'quick', rewards: 'quick', dm: 'quick' };
 
 async function askViaSample(sample, payload) {
   const req = validateChatRequest(payload);
@@ -112,6 +112,7 @@ async function demoReply({ mode, persona, messages }) {
     if (last.includes('نهاية اليوم')) return `**ما أنجزناه اليوم**\n- سلّم الفريق مهامه المخطط لها.\n\n**خطة الغد**\n- استكمال المتبقي ومراجعة ملاحظات العملاء.${note}`;
     return `**الأسبوع باختصار**\n- تقدّم جيد في المشاريع الجارية.\n\n**توصيتان**\n1. التركيز على تحصيل المستحقات.\n2. متابعة الفرص في مرحلة التفاوض.${note}`;
   }
+  if (mode === 'dm') return pick(['حاضر، سأبدأ عليها الآن وأبلغك عند الانتهاء.', 'وصلت، سأنجزها اليوم إن شاء الله.', 'فهمت. سؤال واحد: هل هناك موعد تسليم محدد؟']);
   if (mode === 'interview') return pick(['حدثني عن مشروع نجحت فيه وما دورك تحديداً؟', 'كيف تتصرف إذا طلب العميل تعديلات كثيرة قبل التسليم بيوم؟', 'ما نقطة ضعفك وكيف تعمل عليها؟']);
   if (mode === 'offer_reply') {
     const offer = Number((last.match(/العرض:\s*([\d.]+)/) || [])[1]) || 0;

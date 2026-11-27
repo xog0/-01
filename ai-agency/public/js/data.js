@@ -34,7 +34,7 @@ export const LADDER = [
   { key: 'lead', name: 'قائد فريق', xp: 280, desc: 'يقود فريقاً صغيراً ويوزع المهام اليومية.' },
   { key: 'manager', name: 'مدير', xp: 400, desc: 'يدير قسماً كاملاً ويضع خططه.' },
   { key: 'director', name: 'مدير إدارة', xp: 550, desc: 'يشرف على عدة أقسام ويتابع الأداء العام.' },
-  { key: 'gm', name: 'المدير العام', xp: 750, desc: 'يدير عمليات الوكالة اليومية ويشرف على كل الأقسام ومدرائها.' },
+  { key: 'deputy', name: 'نائب المدير التنفيذي', xp: 750, desc: 'ينوب عن المدير التنفيذي ويتابع عمليات الوكالة اليومية مع مدراء الأقسام.' },
   { key: 'ceo', name: 'المدير التنفيذي', xp: 1000, desc: 'أعلى منصب في الوكالة: يضع الرؤية والاستراتيجية العامة ويتخذ القرارات الكبرى.' },
 ];
 
@@ -70,12 +70,18 @@ export const DEPARTMENTS = {
 // Named positions offered in the hire form. Unique ones can be held by one person.
 export const POSITIONS = [
   { key: 'ceo', name: 'المدير التنفيذي', dept: 'executive', level: 8, unique: true },
-  { key: 'gm', name: 'المدير العام', dept: 'executive', level: 7, unique: true },
   { key: 'marketing', name: 'مدير التسويق', dept: 'marketing', level: 5, unique: true, reportsTo: 'ceo' },
   { key: 'sales', name: 'مدير المبيعات', dept: 'sales', level: 5, unique: true, reportsTo: 'ceo' },
   { key: 'hr', name: 'مدير الموارد البشرية', dept: 'hr', level: 5, unique: true, reportsTo: 'ceo' },
   { key: 'cfo', name: 'المدير المالي', dept: 'finance', level: 6, unique: true, reportsTo: 'ceo' },
 ];
+
+// Promotions stop at deputy CEO (level 7): the CEO is a position held by one
+// person, not a rung. The general manager post was removed from hiring.
+export const STAFF_TOP = 7;
+export const nextLevel = (level) => (level + 1 <= STAFF_TOP ? level + 1 : null);
+export const prevLevel = (level) => { let l = level - 1; while (l >= 0 && LADDER[l]?.retired) l--; return l >= 0 ? l : null; };
+export const activeLevels = () => LADDER.map((l, i) => ({ ...l, i })).filter((l) => !l.retired);
 
 export function titleFor(emp) {
   if (emp.customTitle) return emp.customTitle;
@@ -173,6 +179,10 @@ const SHEIKA = { id: 'e6', name: 'شيكا', gender: 'm', dept: 'finance', level
 const NOURA = { id: 'e7', name: 'نورة', gender: 'f', dept: 'hr', level: 5, xp: 420, managerId: 'e5',
   personality: 'منصفة وحازمة بلطف، تعرف كل موظف باسمه وظروفه، تهتم بالعدالة والالتزام وتحب الأنظمة الواضحة.' };
 
+// The marketing manager: leads the marketing department under the CEO.
+const RAED = { id: 'e8', name: 'رائد', gender: 'm', dept: 'marketing', level: 5, xp: 420, managerId: 'e5',
+  personality: 'مسوّق مبدع يقرأ السوق جيداً، يربط كل فكرة بهدف تجاري واضح، ويحب الحملات الجريئة المدروسة بالأرقام.' };
+
 const STARTING_TEAM = [
   HAMO,
   SHEIKA,
@@ -185,11 +195,14 @@ const STARTING_TEAM = [
   { id: 'e4', managerId: 'e1', name: 'عمر', gender: 'm', dept: 'ads', level: 2, xp: 105,
     personality: 'تحليلي ودقيق، لا يقتنع إلا بالبيانات، يقترح دائماً طريقة لقياس النتائج.' },
   NOURA,
+  RAED,
 ];
 
 const DEFAULT_TASKS = [
   ['e6', 'إعداد ميزانية الربع القادم', 'ضع ميزانية تشغيلية للربع القادم: الرواتب، الإعلانات، الأدوات، والمصروفات العامة، مع هامش احتياطي.', 'high'],
   ['e6', 'سياسة المكافآت والخصومات', 'اكتب سياسة واضحة للمكافآت والخصومات والعمل الإضافي في الوكالة، مع أمثلة وحدود لكل بند.', 'medium'],
+  ['e8', 'خطة التسويق للربع القادم', 'ضع خطة تسويق الوكالة نفسها للربع القادم: الجمهور المستهدف من العملاء، الرسائل، القنوات، والميزانية، و3 مؤشرات أداء.', 'high'],
+  ['e8', 'دراسة المنافسين', 'حلّل 3 وكالات تسويق منافسة في السوق المحلي: خدماتها، أسعارها التقريبية، نقاط قوتها وضعفها، وكيف نتميز عنها.', 'medium'],
   ['e7', 'سياسة الإجازات والحضور', 'اكتب سياسة واضحة للإجازات (السنوية والمرضية والاضطرارية وبدون راتب) والحضور والانصراف في الوكالة، مع طريقة طلب الإجازة واعتمادها.', 'medium'],
   ['e7', 'خطة تقييم الأداء الربعي', 'ضع خطة لتقييم أداء كل موظفي الوكالة كل ربع سنة: المعايير، من يقيّم من، المواعيد، وكيف تُربط النتائج بالمكافآت والترقيات.', 'medium'],
   ['e5', 'رؤية الوكالة لثلاث سنوات', 'اكتب رؤية ورسالة وقيم الوكالة مع 3 أهداف استراتيجية للسنوات الثلاث القادمة.', 'high'],
@@ -251,6 +264,7 @@ const LOOKS = {
   'عمر': { hair: 'buzz', skin: 1, hairColor: 2, glasses: true },
   'شيكا': { hair: 'short', skin: 1, hairColor: 2, glasses: true, beard: true },
   'نورة': { hair: 'hijab', hijab: 0x6b1f2e, skin: 1 },
+  'رائد': { hair: 'short', skin: 0, hairColor: 1, beard: true, height: 1.03 },
   'يوسف': { hair: 'short', skin: 2, hairColor: 2, beard: true },
   'رنا': { hair: 'hijab', hijab: 0xcbb994, skin: 0, height: 0.95 },
   'زياد': { hair: 'short', skin: 3, hairColor: 1 },
@@ -268,6 +282,8 @@ const LOOKS = {
 const BIOS = {
   'حمو': { age: 46, years: 22, background: 'بدأ في المبيعات، ثم أسس وأدار وكالتين قبل أن يقود الوكالة. يحمل ماجستير في إدارة الأعمال.',
     style: 'يتحدث باختصار وثقة، يسأل عن الأرقام وأثر القرار على العميل، يشكر الفريق علناً وينتقد على انفراد.' },
+  'رائد': { age: 35, years: 12, background: 'بدأ في التسويق الرقمي لعلامات استهلاكية، ثم قاد فرق التسويق في وكالتين وأطلق حملات لعلامات محلية معروفة.',
+    style: 'متحمس ومباشر، يعرض الفكرة بمثال سريع ثم يسأل عن الرقم الذي ستحركه.' },
   'نورة': { age: 37, years: 13, background: 'بدأت أخصائية توظيف في شركة اتصالات، ثم أدارت الموارد البشرية لوكالة إعلانية وبنت أنظمة الإجازات والتقييم فيها.',
     style: 'تسمع أولاً ثم تقرر، تشرح الأنظمة بهدوء، وتتابع كل موظف بنفسها دون مجاملة.' },
   'شيكا': { age: 39, years: 15, background: 'محاسب قانوني عمل في التدقيق لدى مكتب محاسبة، ثم أدار الحسابات والرواتب لشركات خدمات.',
@@ -485,6 +501,7 @@ const MIGRATIONS = [
   { key: 'add-clients', run: (state) => seedClients(state) },
   { key: 'add-deals', run: (state) => seedDeals(state) },
   { key: 'add-hr-manager', run: addHrManager },
+  { key: 'add-marketing-manager', run: addMarketingManager },
 ];
 
 // Whoever heads a department (its members whose manager is outside it)
@@ -506,6 +523,21 @@ function deptHeadsUnderHamo(state, dept) {
 function setUpFinance(state) {
   state.finance ||= createFinance();
   for (const e of state.employees) if (!(e.salary > 0)) e.salary = defaultSalary(e.level);
+}
+
+/** Adds the marketing manager to agencies with nobody leading marketing; the marketing team moves under him. */
+function addMarketingManager(state) {
+  if (state.employees.some((e) => e.dept === 'marketing' && e.level >= MANAGER_LEVEL)) return;
+  if (state.employees.some((e) => e.name === RAED.name)) return;
+  const desk = freeSeat(state, RAED.level);
+  if (desk === undefined) return;
+  const ceo = state.employees.filter((e) => e.level >= CEO_LEVEL).sort((a, b) => (b.xp || 0) - (a.xp || 0))[0];
+  const id = state.employees.some((e) => e.id === RAED.id) ? newId(state, 'e') : RAED.id;
+  state.employees.push({ ...RAED, id, desk, managerId: ceo ? ceo.id : null, salary: defaultSalary(RAED.level), hiredAt: Date.now(), status: 'idle' });
+  for (const e of state.employees) if (e.dept === 'marketing' && e.id !== id) e.managerId = id;
+  for (const [, title, description, priority] of DEFAULT_TASKS.filter(([who]) => who === RAED.id)) {
+    state.tasks.push({ id: newId(state, 't'), empId: id, title, description, priority, status: 'todo', output: '', createdAt: Date.now() });
+  }
 }
 
 /** Adds the HR manager to agencies that have nobody leading HR; the HR team moves under her. */

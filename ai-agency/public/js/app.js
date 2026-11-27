@@ -1,7 +1,7 @@
 import { createOffice, ROOMS } from './scene.js';
 import {
   LADDER, DEPARTMENTS, POSITIONS, OPEN_DESKS, PRIVATE_OFFICES, MANAGER_LEVEL, freeSeat, isPrivateOffice, ROLE_TASKS, TASK_XP, PRIORITY_NAMES, STATUS_NAMES,
-  titleFor, lookFor, bioFor, loadState, saveState, createInitialState, applyMigrations, newId,
+  titleFor, lookFor, bioFor, nextLevel, prevLevel, activeLevels, STAFF_TOP, loadState, saveState, createInitialState, applyMigrations, newId,
 } from './data.js';
 import { askEmployee, backendStatus } from './api.js';
 import { connectCloud } from './cloud.js';
@@ -24,7 +24,7 @@ import { invoiceHtml, invoiceNumber, itemsMarkdown, ledgerCsv, libraryItems, sta
 import {
   LEAVE_TYPES, MAX_LEAVE_DAYS, addDays, attendanceOf, dayKey, daysWord, endLeave, grantLeave, leaveBalance, leaveOn, markAttendance,
   parseCandidates, parseHrOrders, salaryRange, sampleCandidates, upcomingLeaves,
-  promisePromotion, openPromise, closePromise, parseOfferReply, nextOffer, parsePick, parseRewards,
+  promisePromotion, openPromise, closePromise, parseOfferReply, nextOffer, parsePick, parseRewards, parseMessageOrders,
 } from './hr.js';
 import {
   DEAL_STAGES, OPEN_STAGES, isOpen, linkProposal, moveDeal, parseDealReview, parseLeads, pipelineStats, sampleLeads, saveDeal, syncDealWithProject,
@@ -119,6 +119,9 @@ const actorOf = (e) => ({ ...e, color: colorOf(e), look: lookFor(e) });
 const fmt = (n) => new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 }).format(n);
 const money = (n) => `${fmt(n)} ${state.finance?.currency || ''}`.trim();
 const cfo = () => state.employees.filter((x) => x.dept === 'finance' && x.level >= MANAGER_LEVEL).sort(byRank)[0] || null;
+// The rung someone can be promoted to (none above deputy CEO: the CEO's chair is not a promotion).
+const nextRung = (e) => (nextLevel(e.level) === null ? undefined : LADDER[nextLevel(e.level)]);
+const ceoNow = () => state.employees.filter((x) => x.level >= 8).sort((a, b) => (b.xp || 0) - (a.xp || 0))[0] || null;
 // Arabic number agreement: 1 مشروع واحد، 2 مشروعان، 3-10 مشاريع، 11+ مشروعاً.
 function countOf(n, [one, two, few, many]) {
   if (n === 0) return `لا ${few}`;
@@ -160,6 +163,8 @@ function memoryOf(e) {
   if (live.length) {
     parts.push(`مشاريعك: ${live.map((p) => `${p.name} لـ${clientOf(p)?.name || 'عميل'} (${p.leadId === e.id ? 'أنت قائده' : 'عضو في الفريق'})`).join('، ')}.`);
   }
+  const talk = Object.values(state.dms || {}).flat().filter((m) => m.from === e.id || m.to === e.id).sort((a, b) => a.at - b.at).slice(-4);
+  if (talk.length) parts.push(`آخر رسائلك مع الزملاء: ${talk.map((m) => `${m.from === e.id ? `أنت إلى ${emp(m.to)?.name}` : `${emp(m.from)?.name} إليك`}: «${m.text.slice(0, 120)}»`).join('؛ ')}.`);
   const promise = openPromise(state, e.id);
   if (promise) parts.push(`وعدتك ${emp(promise.by)?.name || 'الإدارة'} بالترقية إلى «${LADDER[promise.toLevel]?.name}»${promise.condition ? ` إذا: ${promise.condition}` : ''}، والقرار النهائي للمالك.`);
   if (!officeOpen && !awayNow(e)) parts.unshift('الوقت الآن خارج الدوام وأنت في منزلك، فترد على رسالة المالك من هاتفك باختصار.');
@@ -286,6 +291,7 @@ function renderPanel() {
   if (activeTab === 'chat') renderChat(e);
   if (activeTab === 'tasks') renderEmpTasks(e);
   if (activeTab === 'profile') renderProfile(e);
+  if (activeTab === 'team') renderTeamTalk(e);
 }
 
 // ---- chat
@@ -322,9 +328,20 @@ $('#chat-form').addEventListener('submit', async (ev) => {
     let raw = await ask(e, 'chat', history.slice(-30));
     let financeNote = '';
     if (e.id === cfo()?.id) {
-      const parsed = parseFinanceOrders(raw, state.employees);
+      const parsed = parseFinanceOrders(raw, state.employees.filter((x) => x.id !== e.id));
       raw = parsed.text;
       financeNote = applyFinanceOrders(parsed.orders, e);
+    }
+    let messageNote = '';
+    const reach = e.id === ceoNow()?.id || e.id === hrHead()?.id ? state.employees.filter((x) => x.id !== e.id) : teamOf(e.id);
+    if (reach.length) {
+      const parsed = parseMessageOrders(raw, reach);
+      raw = parsed.text;
+      for (const o of parsed.orders) {
+        for (const id of o.empIds) { sendDm(e.id, id, o.text, 'order'); queueReply(e, emp(id)); }
+        messageNote = `📨 أرسلت الرسالة إلى ${o.empIds.map((id) => emp(id)?.name).join('، ')}. تجد ردودهم في تبويب «👥 الزملاء».`;
+      }
+      if (parsed.orders.length) save();
     }
     let hrJobs = null;
     if (e.id === hrHead()?.id) {
@@ -336,6 +353,7 @@ $('#chat-form').addEventListener('submit', async (ev) => {
     const { text: reply, order } = extractAssignOrder(raw, e, text);
     history.push({ role: 'assistant', content: reply || 'حاضر.' });
     if (financeNote) history.push({ role: 'assistant', content: financeNote });
+    if (messageNote) history.push({ role: 'assistant', content: messageNote });
     if (hrJobs?.later.length) hrJobs.later.forEach((job) => job()); // evaluations and hiring run after the reply is shown
     if (order) {
       save();
@@ -538,6 +556,8 @@ async function runTask(id) {
         break;
       }
       t.feedback = verdict.feedback || 'راجع العمل وحسّنه.';
+      sendDm(mgr.id, e.id, `بخصوص «${t.title}»: ${t.feedback}`, 'review');
+      sendDm(e.id, mgr.id, 'حاضر، سأعدّلها الآن وأرسلها لك.', 'auto');
       t.status = 'doing';
       setStatus(e, 'working', `✏️ يعدّل: ${t.title}`);
       toast(`↩️ ${mgr.name} طلب تعديلات من ${e.name}: ${t.title}`);
@@ -574,7 +594,7 @@ function finishTask(t, e, mgr, verdict) {
   }
   const before = e.xp;
   e.xp += TASK_XP[t.priority];
-  const next = LADDER[e.level + 1];
+  const next = nextRung(e);
   if (next && before < next.xp && e.xp >= next.xp) toast(`🎉 ${e.name} أصبح مستحقاً للترقية إلى "${next.name}"`);
   else if (mgr) toast(`✅ ${mgr.name} ${verdict?.decision === 'approve' ? 'اعتمد' : 'اعتمد مع ملاحظات'} عمل ${e.name}: ${t.title}`);
   else toast(`✅ ${e.name} أنهى: ${t.title}`);
@@ -686,6 +706,14 @@ async function assignTasks(manager, members, perMember, focus, proj, { urgent = 
   busy.delete(key);
   setStatus(manager, prev === 'talking' ? 'idle' : prev);
   const got = [...new Set(tasks.map((t) => t.empId))];
+  for (const id of got) {
+    const mine = created.filter((t) => t.empId === id);
+    const m0 = emp(id);
+    if (!m0 || !mine.length) continue;
+    sendDm(manager.id, id, `${m0.name}، كلّفتك ${mine.length === 1 ? 'بمهمة' : `بـ${mine.length} مهام`}${proj ? ` في مشروع «${proj.name}»` : ''}${urgent ? ' عاجلة، ابدأ بها فوراً' : ''}:\n` +
+      mine.map((t) => `- ${t.title} (أولوية ${PRIORITY_NAMES[t.priority]})`).join('\n') + (focus ? `\nالتركيز: ${focus}` : ''), 'task');
+    queueReply(manager, m0);
+  }
   for (const id of got) {
     const m = emp(id);
     if (m && m.status === 'idle') {
@@ -1408,6 +1436,7 @@ function applyHrOrders(orders, hr) {
       if (o.kind === 'leave') {
         const l = grantLeave(state, { empId: o.empId, type: o.type, from: o.from, days: o.days, reason: o.reason || `بطلب من المالك عبر ${hr.name}` }, { newId, by: hr.id });
         lines.push(`✅ إجازة ${LEAVE_TYPES[l.type].name} لـ${e.name}: ${daysWord(l.days)} من ${l.from} إلى ${l.to}`);
+        sendDm(hr.id, e.id, `سجّلت لك إجازة ${LEAVE_TYPES[l.type].name} ${daysWord(l.days)} من ${l.from} إلى ${l.to}.`, 'hr');
       } else if (o.kind === 'endLeave') {
         const l = upcomingLeaves(state).find((x) => x.empId === o.empId);
         if (!l) throw new Error(`${e.name} ليس في إجازة`);
@@ -1433,7 +1462,9 @@ function applyHrOrders(orders, hr) {
         later.push(() => processBonusQueue());
         lines.push(`💰 اقترحت مكافأة ${money(amount)} لـ${e.name}${amount < o.amount ? ' (خُفّضت إلى نصف راتبه)' : ''}. تمر على المدير المالي ثم المدير التنفيذي، ولا تُصرف إلا باعتمادك`);
       } else if (o.kind === 'promise') {
-        const p = promisePromotion(state, { empId: e.id, by: hr.id, condition: o.condition, reason: o.reason, toLevel: e.level + 1 }, { newId, maxLevel: LADDER.length - 1 });
+        const p = promisePromotion(state, { empId: e.id, by: hr.id, condition: o.condition, reason: o.reason, toLevel: nextLevel(e.level) }, { newId, maxLevel: STAFF_TOP });
+        sendDm(hr.id, e.id, `أعدك بالترقية إلى «${LADDER[p.toLevel].name}»${p.condition ? ` إذا ${p.condition}` : ''}. القرار النهائي للمالك.`, 'hr');
+        queueReply(hr, e);
         lines.push(`🤝 وعدت ${e.name} بالترقية إلى «${LADDER[p.toLevel].name}»${p.condition ? ` إذا: ${p.condition}` : ''}. الترقية نفسها قرارك، وتجد الوعد في صندوق الموافقات`);
       }
     } catch (err) {
@@ -1860,10 +1891,74 @@ const isClientPayment = (l) => l.type === 'income' && (l.projectId || l.category
 const invoiceButton = (l, label = '🧾 فاتورة') => dlButton(label, () => [`فاتورة ${invoiceNumber(l)}`, 'html', invoiceHtml(state, l)]);
 const statementButton = (c, label = '📄 كشف حساب') => dlButton(label, () => [`كشف حساب ${c.name} ${today()}`, 'html', statementHtml(state, c.id)]);
 
+// ---- messages between employees: a manager's orders and tasks, and the replies
+const threadKey = (a, b) => [a, b].sort().join('__');
+const threadOf = (a, b) => state.dms?.[threadKey(a, b)] || [];
+function sendDm(fromId, toId, text, kind = 'note') {
+  if (!fromId || !toId || fromId === toId || !text) return null;
+  state.dms ||= {};
+  const k = threadKey(fromId, toId);
+  const m = { from: fromId, to: toId, text: String(text).trim().slice(0, 1500), at: Date.now(), kind };
+  state.dms[k] = [...(state.dms[k] || []), m].slice(-40);
+  const from = emp(fromId);
+  if (from?.status === 'idle') {
+    office.setStatus(fromId, 'idle', `💬 ← ${emp(toId)?.name || ''}`);
+    setTimeout(() => emp(fromId)?.status === 'idle' && office.setStatus(fromId, 'idle'), 4000);
+  }
+  if (selectedId === toId || selectedId === fromId) renderPanel();
+  return m;
+}
+// The recipient answers in their own voice; someone on leave sends an automatic note.
+const replyQueue = [];
+let replying = false;
+function queueReply(from, to) { replyQueue.push([from.id, to.id]); drainReplies(); }
+async function drainReplies() {
+  if (replying) return;
+  replying = true;
+  while (replyQueue.length) {
+    const [fromId, toId] = replyQueue.shift();
+    const from = emp(fromId);
+    const to = emp(toId);
+    if (!from || !to) continue;
+    if (awayNow(to)) { sendDm(to.id, from.id, `رد تلقائي: أنا في إجازة حتى ${awayNow(to).to}، وسأتابع عند عودتي.`, 'auto'); continue; }
+    const thread = threadOf(from.id, to.id).slice(-12);
+    try {
+      const reply = await ask(to, 'dm', [{ role: 'user', content: (
+        `${thread.map((m) => `${emp(m.from)?.name || '—'}: ${m.text}`).join('\n')}\n\n` +
+        `آخر رسالة وصلتك من ${from.name} (${titleFor(from)}). اكتب ردك عليه.`).slice(0, 5800) }]);
+      sendDm(to.id, from.id, reply.replace(/\[\[[^\]]*\]\]/g, '').trim() || 'حاضر.', 'reply');
+      save();
+    } catch (err) {
+      sendDm(to.id, from.id, 'حاضر، وصلتني رسالتك.', 'auto');
+    }
+  }
+  replying = false;
+}
+
+let openThreads = new Set();
+function renderTeamTalk(e) {
+  const threads = Object.entries(state.dms || {}).filter(([k]) => k.split('__').includes(e.id))
+    .map(([k, list]) => ({ other: emp(k.split('__').find((id) => id !== e.id)), list }))
+    .filter((t) => t.other && t.list.length)
+    .sort((a, b) => b.list.at(-1).at - a.list.at(-1).at);
+  fill($('#team-pane'),
+    h('p', { class: 'muted' }, `رسائل ${e.name} مع زملائه: أوامر المدراء وتكليفاتهم، والردود عليها، وإشعارات الموارد البشرية والإدارة.`),
+    threads.length ? threads.map(({ other, list }) => {
+      const k = threadKey(e.id, other.id);
+      const shown = openThreads.has(k) ? list : list.slice(-6);
+      return h('div', { class: 'dm-thread' },
+        h('h4', {}, h('span', {}, `مع ${other.name}`), h('small', { class: 'muted' }, titleFor(other))),
+        list.length > shown.length ? h('button', { class: 'linkish', onclick: () => { openThreads.add(k); renderPanel(); } }, `عرض كل الرسائل (${list.length})`) : null,
+        shown.map((m) => h('div', { class: `dm ${m.from === e.id ? 'mine' : 'theirs'}` },
+          h('small', {}, `${emp(m.from)?.name || '—'} · ${new Date(m.at).toLocaleString('ar', { dateStyle: 'short', timeStyle: 'short' })}`),
+          richText(m.text))));
+    }) : h('div', { class: 'empty' }, 'لا توجد رسائل مع الزملاء بعد. تظهر هنا رسائل المدير عند التكليف بالمهام أو الأوامر، وردود الموظف عليها.'));
+}
+
 // ---- profile, promotion, termination
 function renderProfile(e) {
   const level = LADDER[e.level];
-  const next = LADDER[e.level + 1];
+  const next = nextRung(e);
   const pct = next ? Math.min(100, Math.round(((e.xp - level.xp) / (next.xp - level.xp)) * 100)) : 100;
   const eligible = next && e.xp >= next.xp;
   const mgr = e.managerId ? emp(e.managerId) : null;
@@ -1881,7 +1976,7 @@ function renderProfile(e) {
       h('dl', { class: 'kv' },
         h('dt', {}, 'المسمى'), h('dd', {}, titleFor(e)),
         h('dt', {}, 'القسم'), h('dd', {}, DEPARTMENTS[e.dept].name),
-        h('dt', {}, 'المستوى'), h('dd', {}, `${e.level + 1} / ${LADDER.length} — ${level.name}`),
+        h('dt', {}, 'المستوى'), h('dd', {}, `${activeLevels().findIndex((l) => l.i === e.level) + 1} / ${activeLevels().length} — ${level.name}`),
         h('dt', {}, 'المدير'), h('dd', {}, mgr ? mgr.name : 'مالك الوكالة'),
         h('dt', {}, 'المرؤوسون'), h('dd', {}, reports.length ? reports.map((r) => r.name).join('، ') : '—'),
         h('dt', {}, 'مهام منجزة'), h('dd', {}, String(done)),
@@ -1930,8 +2025,8 @@ function isUnder(id, bossId) {
 }
 
 function changeLevel(e, delta) {
-  const to = e.level + delta;
-  if (to < 0 || to >= LADDER.length) return;
+  const to = delta === 1 ? nextLevel(e.level) : delta === -1 ? prevLevel(e.level) : e.level + delta;
+  if (to === null || to < 0 || to >= LADDER.length || LADDER[to].retired) return toast(delta > 0 ? `${e.name} في أعلى السلم الوظيفي المتاح` : 'لا يوجد مستوى أدنى');
   e.level = to;
   if (delta > 0 && e.xp < LADDER[to].xp) e.xp = LADDER[to].xp;
   const promise = openPromise(state, e.id);
@@ -2002,14 +2097,14 @@ function fillHireForm() {
     : 'لا توجد مكاتب شاغرة.';
   $('#hire-submit').disabled = freeOpen + freeOffices <= 0;
   fill($('#hire-dept'), ...Object.entries(DEPARTMENTS).map(([k, d]) => h('option', { value: k }, d.name)));
-  fill($('#hire-level'), ...LADDER.map((l, i) => h('option', { value: i, selected: i === 1 }, l.name)));
+  fill($('#hire-level'), ...activeLevels().map((l) => h('option', { value: l.i, selected: l.i === 1 }, l.name)));
   fill($('#hire-manager'), h('option', { value: '' }, 'مالك الوكالة مباشرة'),
     ...[...state.employees].sort(byRank).map((x, i) => h('option', { value: x.id, selected: i === 0 }, `${x.name} — ${titleFor(x)}`)));
   $('#hire-takeover-row').hidden = true;
   fill($('#hire-position'), h('option', { value: '' }, 'منصب مخصص (اختر القسم والمستوى)'),
     ...POSITIONS.map((p) => {
       const holder = p.unique && positionHolder(p);
-      return h('option', { value: p.key, disabled: Boolean(holder) }, holder ? `${p.name} (يشغله ${holder.name})` : p.name);
+      return h('option', { value: p.key, disabled: Boolean(holder) }, holder ? `${p.name} (${holder.gender === 'f' ? 'تشغله' : 'يشغله'} ${holder.name})` : p.name);
     }));
   updateHirePreview();
   $('#hire-interview').textContent = state.hiring ? '🎤 جولة المقابلات المفتوحة' : '🎤 مقابلات: رشّحوا لي 3 مرشحين';
@@ -2023,9 +2118,8 @@ $('#hire-position').addEventListener('change', () => {
   $('#hire-level').value = String(p.level);
   // Report to the next post up: CEO to the owner, GM to the CEO, department heads to the GM or CEO.
   const ceo = positionHolder(POSITIONS[0]);
-  const gm = positionHolder(POSITIONS[1]);
   const top = [...state.employees].sort(byRank)[0];
-  const boss = p.key === 'ceo' ? null : p.key === 'gm' || p.reportsTo === 'ceo' ? ceo || gm || top : gm || ceo || top;
+  const boss = p.key === 'ceo' ? null : ceo || top;
   $('#hire-manager').value = boss ? boss.id : '';
   updateHirePreview();
 });
@@ -2033,7 +2127,7 @@ $('#hire-position').addEventListener('change', () => {
 // to the same boss the new hire reports to (the owner, or the CEO for a GM).
 function takeoverCandidates() {
   const pos = $('#hire-position').value;
-  if (pos !== 'ceo' && pos !== 'gm') return [];
+  if (pos !== 'ceo') return [];
   const boss = $('#hire-manager').value || null;
   return state.employees.filter((x) => (x.managerId || null) === boss);
 }
@@ -2166,7 +2260,7 @@ function renderOrg() {
   fill($('#org-tree'), h('ul', {}, h('li', {},
     h('div', { class: 'org-node owner' }, h('div', { class: 'avatar', style: 'background:#7c5cff' }, '★'), h('span', {}, 'أنت', h('small', {}, 'مالك الوكالة'))),
     children(null))));
-  fill($('#ladder'), ...LADDER.map((l, i) => {
+  fill($('#ladder'), ...activeLevels().map(({ i, ...l }, n) => {
     const people = state.employees.filter((x) => x.level === i);
     return h('li', { style: `border-color:hsl(${250 - i * 25} 80% 65%)` },
       h('b', {}, `${i + 1}. ${l.name}`, h('span', { class: 'muted' }, `${l.xp} نقطة`)),
@@ -2369,7 +2463,7 @@ async function evaluate(e, { quiet = false, by = null } = {}) {
   const notes = state.tasks.filter((t) => t.empId === e.id && t.status === 'done' && t.reviews?.length)
     .sort((a, b) => (b.doneAt || 0) - (a.doneAt || 0)).slice(0, 5)
     .map((t) => `- ${t.title}: ${t.reviews.map((r) => `${r.decision === 'approve' ? 'اعتماد' : 'تعديل'}${r.feedback ? ` («${r.feedback}»)` : ''}`).join(' ثم ')}${t.rating ? ` · تقييم المالك ${t.rating}/5` : ''}`);
-  const next = LADDER[e.level + 1];
+  const next = nextRung(e);
   const content = [
     `تقييم أداء ${e.name} (${titleFor(e)})، آخر 90 يوماً.`,
     `الدرجة المحسوبة: ${row.score} من 100 (${row.grade.name}). التفصيل: ${Object.entries(row.parts).map(([k, v]) => `${PART_NAMES[k]} ${v}%`).join('، ')}.`,
@@ -2407,7 +2501,7 @@ function actOnRecommendation(e, evaluator, ev) {
       processBonusQueue();
     } catch { /* e.g. evaluating oneself: no request */ }
   }
-  if (ev.recommendation === 'promote' && LADDER[e.level + 1]) ev.pendingPromotion = true;
+  if (ev.recommendation === 'promote' && nextRung(e)) ev.pendingPromotion = true;
 }
 
 async function evaluateAll({ by = null, people: only = null } = {}) {
@@ -2439,7 +2533,7 @@ async function hrRewards() {
     const ev = lastEvaluation(state, e.id);
     return `- ${e.name} (${titleFor(e)}): درجة ${score === null ? 'لا بيانات' : `${score} (${grade.name})`} · منجزة ${m.done} · من أول مراجعة ${m.firstPass} من ${m.reviewed}` +
       ` · آخر تقييم: ${ev ? `${ev.grade}، توصية ${RECOMMENDATIONS[ev.recommendation]}` : 'لا يوجد'} · الراتب ${e.salary} · حد المكافأة ${Math.round(e.salary * 0.25)}` +
-      `${LADDER[e.level + 1] ? '' : ' · في أعلى السلم'}${openPromise(state, e.id) ? ' · لديه وعد ترقية مفتوح' : ''}${pendingBonus.has(e.id) ? ' · لديه مكافأة قيد المراجعة' : ''}`;
+      `${nextRung(e) ? '' : ' · في أعلى السلم'}${openPromise(state, e.id) ? ' · لديه وعد ترقية مفتوح' : ''}${pendingBonus.has(e.id) ? ' · لديه مكافأة قيد المراجعة' : ''}`;
   });
   let made = { bonuses: 0, promises: 0 };
   try {
@@ -2451,7 +2545,7 @@ async function hrRewards() {
     }
     for (const p of parsed.promotions) {
       const e = emp(p.empId);
-      try { promisePromotion(state, { empId: e.id, by: hr.id, condition: p.condition, reason: p.reason, toLevel: e.level + 1 }, { newId, maxLevel: LADDER.length - 1 }); made.promises++; } catch { /* skip */ }
+      try { promisePromotion(state, { empId: e.id, by: hr.id, condition: p.condition, reason: p.reason, toLevel: nextLevel(e.level) }, { newId, maxLevel: STAFF_TOP }); made.promises++; } catch { /* skip */ }
     }
     save();
     if (made.bonuses) processBonusQueue();
@@ -2570,13 +2664,13 @@ async function processBonusQueue() {
   }
 }
 
-const pendingPromotions = () => (state.evaluations || []).filter((ev) => ev.pendingPromotion && emp(ev.empId) && LADDER[emp(ev.empId).level + 1]);
+const pendingPromotions = () => (state.evaluations || []).filter((ev) => ev.pendingPromotion && emp(ev.empId) && nextRung(emp(ev.empId)));
 // Everything else that waits on the owner: proposals written, projects past
 // their due date, and people whose points qualify them for the next rung.
 const proposalTask = (p) => state.tasks.filter((t) => t.projectId === p.id && t.status === 'done' && t.title.startsWith('عرض فني ومالي')).at(-1);
 const readyProposals = () => (state.projects || []).filter((p) => p.status === 'proposal' && !p.proposalSeen && proposalTask(p));
 const lateProjects = () => (state.projects || []).filter((p) => isLate(p) && p.lateAck !== p.due);
-const dueForPromotion = () => state.employees.filter((e) => LADDER[e.level + 1] && e.xp >= LADDER[e.level + 1].xp && e.promoAck !== e.level
+const dueForPromotion = () => state.employees.filter((e) => nextRung(e) && e.xp >= nextRung(e).xp && e.promoAck !== e.level
   && !pendingPromotions().some((ev) => ev.empId === e.id));
 const unreadWeekly = () => (state.reports || []).filter((r) => r.type === 'weekly' && !r.seen);
 const openPromisesForOwner = () => (state.promises || []).filter((p) => p.status === 'open' && !p.ack && emp(p.empId));
@@ -2630,7 +2724,7 @@ function requestCard(req, { actions = false } = {}) {
 
 function promotionCard(ev) {
   const e = emp(ev.empId);
-  const next = LADDER[e.level + 1];
+  const next = nextRung(e);
   const done = (promote) => {
     ev.pendingPromotion = false;
     if (promote) changeLevel(e, 1); else { save(); toast(`أبقيت ${e.name} على مستواه`); }
@@ -2711,7 +2805,7 @@ function otherInboxCards() {
       ]));
   }
   for (const e of dueForPromotion()) {
-    const next = LADDER[e.level + 1];
+    const next = nextRung(e);
     cards.push(inboxCard(`⬆️ ${e.name} مستوفٍ للترقية`, 'نقاط الخبرة', `${titleFor(e)} · ${e.xp} نقطة من ${next.xp} المطلوبة لـ«${next.name}»`, '', [
       ['✅ ترقية', () => changeLevel(e, 1), 'primary'],
       ['ليس الآن', () => { e.promoAck = e.level; }],
@@ -3153,7 +3247,15 @@ function applyFinanceOrders(orders, by) {
           empId: id, type: o.type, reason: o.reason, by: by.id,
           ...(o.type === 'overtime' ? { hours: o.value } : { amount: o.value }),
         });
-        done.push(`- ${ADJ_TYPES[o.type].name} لـ${e.name}: ${o.type === 'overtime' ? `${hoursLabel(a.hours)} = ` : ''}${money(a.amount)}${o.type === 'raise' ? ` (الراتب الآن ${money(e.salary)})` : ''}${a.reason ? ` — ${a.reason}` : ''}`);
+        done.push(`- ${ADJ_TYPES[o.type].name} لـ${e.name}: ${o.type === 'overtime' ? `${hoursLabel(a.hours)} = ` : ''}${money(a.amount)}${o.type === 'raise' || o.type === 'cut' ? ` (الراتب الآن ${money(e.salary)})` : ''}${a.reason ? ` — ${a.reason}` : ''}`);
+        const why = `السبب: ${a.reason || '—'}`;
+        sendDm(by.id, id, {
+          cut: `بطلب من المالك خُفّض راتبك الشهري ${money(a.amount)} ليصبح ${money(e.salary)}. ${why}`,
+          deduction: `خُصم ${money(a.amount)} من راتبك هذا الشهر. ${why}`,
+          bonus: `🎉 أُضيفت لك مكافأة ${money(a.amount)} مع راتب هذا الشهر. ${why}`,
+          raise: `🎉 زيد راتبك الشهري ${money(a.amount)} ليصبح ${money(e.salary)}. ${why}`,
+          overtime: `سُجّل لك عمل إضافي ${hoursLabel(a.hours)} بقيمة ${money(a.amount)}. ${why}`,
+        }[o.type], 'pay');
       } catch (err) {
         failed.push(`- ${e?.name || id}: ${err.message}`);
       }

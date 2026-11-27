@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   LEAVE_TYPES, addDays, attendanceOf, dayKey, endLeave, grantLeave, leaveBalance, leaveOn, markAttendance, parseCandidates,
-  sampleCandidates, upcomingLeaves, validDay, parseHrOrders, promisePromotion, openPromise, closePromise, parseOfferReply, nextOffer, parsePick, parseRewards,
+  sampleCandidates, upcomingLeaves, validDay, parseHrOrders, promisePromotion, openPromise, closePromise, parseOfferReply, nextOffer, parsePick, parseRewards, parseMessageOrders,
 } from '../public/js/hr.js';
 import { createFinance, payrollPreview } from '../public/js/finance.js';
 import { newId } from '../public/js/data.js';
@@ -185,4 +185,11 @@ test('her bonus and promotion review is matched to people and kept within limits
   assert.deepEqual(r.bonuses, [{ empId: 'e1', amount: 2000, reason: '6 مهام بتقييم ممتاز' }]); // capped at a quarter of the salary
   assert.deepEqual(r.promotions, [{ empId: 'e2', condition: 'إنهاء حملة لمسة', reason: 'تقدم ثابت' }]);
   assert.equal(parseRewards('لا أقترح شيئاً', staff), null);
+});
+
+test('a manager\'s message orders go to the named team members only', () => {
+  const team = [{ id: 'e2', name: 'خالد' }, { id: 'e3', name: 'ليلى' }];
+  const r = parseMessageOrders('أبلغتهم.\n[[رسالة: خالد | جهّز مسودة الإعلان قبل الظهر | شكراً]]\n[[رسالة: الكل | اجتماع غداً 9 صباحاً]]\n[[رسالة: سالم | مرحبا]]', team);
+  assert.equal(r.text, 'أبلغتهم.');
+  assert.deepEqual(r.orders, [{ empIds: ['e2'], text: 'جهّز مسودة الإعلان قبل الظهر | شكراً' }, { empIds: ['e2', 'e3'], text: 'اجتماع غداً 9 صباحاً' }]);
 });

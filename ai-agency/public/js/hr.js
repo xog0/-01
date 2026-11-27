@@ -353,3 +353,17 @@ export function parseRewards(reply, employees, { maxShare = 0.25, exclude = [] }
     return null;
   }
 }
+
+// ---- messages a manager sends to their team on the owner's request ------------
+//   [[رسالة: الاسم أو الكل | النص]]
+export function parseMessageOrders(reply, people) {
+  const orders = [];
+  const text = reply.replace(/\[\[\s*رسالة\s*:([^\]]*)\]\]/g, (_, body) => {
+    const [who = '', ...rest] = body.split('|');
+    const message = rest.join('|').trim().slice(0, 1200);
+    const empIds = matchPeople(who, people);
+    if (empIds.length && message) orders.push({ empIds, text: message });
+    return '';
+  }).trim();
+  return { text, orders };
+}

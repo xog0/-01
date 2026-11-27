@@ -314,6 +314,12 @@ table.fin tfoot td { font-weight: 700; }
 .cal-sec h4 { margin: 10px 0 4px; font-size: 13px; }
 .cal-sec ul { margin: 0; padding-inline-start: 18px; font-size: 13px; line-height: 1.8; }
 .linkish { background: none; border: 0; padding: 0; color: #c4b5fd; cursor: pointer; font: inherit; text-align: start; text-decoration: underline; text-underline-offset: 3px; }
+.dm-thread { border: 1px solid var(--line); border-radius: 12px; padding: 10px; background: rgba(255,255,255,0.03); display: flex; flex-direction: column; gap: 6px; }
+.dm-thread h4 { margin: 0; font-size: 13px; display: flex; justify-content: space-between; gap: 8px; }
+.dm { font-size: 13px; line-height: 1.7; padding: 6px 10px; border-radius: 10px; background: rgba(255,255,255,0.05); max-width: 92%; }
+.dm.mine { align-self: flex-start; background: rgba(124, 92, 255, 0.18); }
+.dm.theirs { align-self: flex-end; }
+.dm small { display: block; color: var(--muted); font-size: 11px; }
 .lib-filters { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; padding-bottom: 6px; }
 .lib-group { margin-bottom: 16px; }
 .lib-group h3 { font-size: 14px; margin: 4px 0 8px; }

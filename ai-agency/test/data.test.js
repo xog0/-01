@@ -4,7 +4,8 @@ import { createInitialState, applyMigrations, titleFor, freeSeat, moveManagersTo
 
 const oldAgency = () => {
   const s = createInitialState();
-  s.employees = s.employees.filter((e) => e.name !== 'حمو' && e.level > 0); // before Hamo and the interns
+  // before Hamo, the interns, and the HR and marketing managers
+  s.employees = s.employees.filter((e) => !['حمو', 'نورة', 'رائد'].includes(e.name) && e.level > 0);
   const ids = new Set(s.employees.map((e) => e.id));
   s.tasks = s.tasks.filter((t) => ids.has(t.empId));
   s.employees.find((e) => e.name === 'سارة').managerId = null;
@@ -156,6 +157,7 @@ test('a new agency seats Hamo and Sara in private offices', () => {
   assert.equal(byName('شيكا').desk, 26);
   assert.equal(byName('سارة').desk, 27);
   assert.equal(byName('نورة').desk, 28);
+  assert.equal(byName('رائد').desk, 29);
   assert.ok(byName('خالد').desk < 25);
 });
 
@@ -179,8 +181,8 @@ test('current managers move into offices once, by rank, until the wing is full',
 test('seats: non-managers never get offices; managers fall back to open desks when the wing is full', () => {
   const s = createInitialState();
   assert.ok(freeSeat(s, 0) < 25);
-  assert.equal(freeSeat(s, 6), 29);
-  for (let k = 29; k < 34; k++) s.employees.push({ id: `o${k}`, level: 5, desk: k });
+  assert.equal(freeSeat(s, 6), 30);
+  for (let k = 30; k < 34; k++) s.employees.push({ id: `o${k}`, level: 5, desk: k });
   assert.ok(freeSeat(s, 6) < 25);
   assert.equal(freeSeat(s, 6, { officeOnly: true }), undefined);
   assert.deepEqual(moveManagersToOffices(s), []);
@@ -249,4 +251,27 @@ test('the HR manager leads HR in new agencies and joins older ones once', () => 
   own.migrations = own.migrations.filter((k) => k !== 'add-hr-manager');
   applyMigrations(own);
   assert.ok(!own.employees.some((e) => e.name === 'نورة'));
+});
+
+test('the marketing manager joins once; the general manager post is gone and level 7 is the deputy CEO', async () => {
+  const { nextLevel, prevLevel, POSITIONS, LADDER } = await import('../public/js/data.js');
+  const s = createInitialState();
+  const raed = s.employees.find((e) => e.name === 'رائد');
+  assert.equal(titleFor(raed), 'مدير التسويق');
+  assert.equal(raed.managerId, s.employees.find((e) => e.name === 'حمو').id);
+  assert.ok(s.employees.filter((e) => e.dept === 'marketing' && e.id !== raed.id).every((e) => e.managerId === raed.id));
+  const old = createInitialState();
+  old.employees = old.employees.filter((e) => e.name !== 'رائد');
+  old.tasks = old.tasks.filter((t) => t.empId !== 'e8');
+  old.migrations = old.migrations.filter((k) => k !== 'add-marketing-manager');
+  assert.equal(applyMigrations(old), true);
+  assert.ok(old.employees.some((e) => e.name === 'رائد'));
+  assert.equal(applyMigrations(old), false);
+  assert.ok(!POSITIONS.some((p) => p.key === 'gm' || p.name === 'المدير العام'));
+  assert.ok(!LADDER.some((l) => l.name === 'المدير العام'));
+  assert.equal(titleFor({ dept: 'executive', level: 7 }), 'نائب المدير التنفيذي');
+  assert.equal(nextLevel(6), 7);
+  assert.equal(nextLevel(7), null); // nobody is promoted into the CEO's chair
+  assert.equal(prevLevel(8), 7);
+  assert.equal(prevLevel(0), null);
 });

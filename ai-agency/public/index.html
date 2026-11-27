@@ -76,6 +76,7 @@
     <div class="tabs" role="tablist">
       <button role="tab" data-tab="chat" class="active">💬 محادثة</button>
       <button role="tab" data-tab="tasks">✅ المهام</button>
+      <button role="tab" data-tab="team">👥 الزملاء</button>
       <button role="tab" data-tab="profile">🪪 الملف</button>
     </div>
     <section data-pane="chat" class="pane active">
@@ -102,6 +103,7 @@
         </div>
       </form>
     </section>
+    <section data-pane="team" class="pane" id="team-pane"></section>
     <section data-pane="profile" class="pane" id="profile-pane"></section>
   </aside>
 
@@ -508,7 +510,7 @@
           <option value="deduction">خصم</option>
           <option value="overtime">عمل إضافي (أوفرتايم)</option>
           <option value="raise">زيادة دائمة على الراتب</option>
-          <option value="cut">تخفيض دائم للراتب (صلاحيتك وحدك)</option>
+          <option value="cut">تخفيض دائم للراتب (لك وللمدير المالي فقط)</option>
         </select>
       </label>
       <label><span id="adj-amount-label">المبلغ</span> <input id="adj-amount" type="number" min="0.01" step="any" required></label>

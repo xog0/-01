@@ -143,13 +143,26 @@ test('sales modes: the sales head proposes prospects; a prospect answers a propo
   assert.match(review, /ولست موظفاً فيها/);
 });
 
+test('the finance manager may order cuts; managers can message their team; colleagues reply briefly', () => {
+  const cfo = { name: 'شيكا', title: 'المدير المالي', level: 'مدير إدارة', department: 'المالية', duties: 'finance' };
+  const sys = buildSystemPrompt(validateChatRequest(base({ persona: cfo })));
+  assert.match(sys, /تخفيض \(تخفيض دائم للراتب/);
+  assert.match(sys, /لا تسجّل حركة على راتبك أنت/);
+  assert.throws(() => validateChatRequest(base({ persona: { ...cfo, duties: 'ceo' } })), /مسؤوليات غير معروفة/);
+  const boss = { name: 'سارة', title: 'مدير', level: 'مدير', department: 'الاستراتيجية', reports: 'خالد (أخصائي)' };
+  assert.match(buildSystemPrompt(validateChatRequest(base({ persona: boss }))), /\[\[رسالة:/);
+  const dm = buildSystemPrompt(validateChatRequest(base({ mode: 'dm' })));
+  assert.match(dm, /رسالة داخلية من زميل أو مدير/);
+  assert.match(dm, /لا تكتب أوامر بين أقواس مربعة/);
+});
+
 test('the HR manager can grant leave, evaluate and hire on request, but not touch pay', () => {
   const hr = { name: 'نورة', title: 'مدير الموارد البشرية', level: 'مدير', department: 'الموارد البشرية', duties: 'hr' };
   const sys = buildSystemPrompt(validateChatRequest(base({ persona: hr })));
   assert.match(sys, /\[\[إجازة: اسم الموظف/);
   assert.match(sys, /\[\[تقييم:/);
   assert.match(sys, /\[\[توظيف:/);
-  assert.match(sys, /تخفيض الراتب للمالك وحده/);
+  assert.match(sys, /تخفيض الراتب للمالك والمدير المالي/);
   assert.match(sys, /\[\[مكافأة:/);
   assert.match(sys, /\[\[وعد ترقية:/);
   assert.match(sys, /الحد الأقصى يحدده المالك/);

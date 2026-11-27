@@ -68,7 +68,10 @@ export function addAdjustment(state, { empId, type, amount, hours, reason = '', 
   const e = state.employees.find((x) => x.id === empId);
   if (!e) throw new Error('الموظف غير موجود');
   if (!ADJ_TYPES[type]) throw new Error('نوع الحركة غير معروف');
-  if (type === 'cut' && by !== 'owner') throw new Error('تخفيض الراتب صلاحية المالك وحده');
+  // Cutting a salary is for the owner and the finance manager only; nobody deducts from or cuts their own pay.
+  const cfo = state.employees.filter((x) => x.dept === 'finance' && x.level >= 5).sort((a, b) => b.level - a.level || (b.xp || 0) - (a.xp || 0))[0];
+  if (type === 'cut' && by !== 'owner' && by !== cfo?.id) throw new Error('تخفيض الراتب صلاحية المالك والمدير المالي فقط');
+  if ((type === 'cut' || type === 'deduction') && by === empId) throw new Error('لا يخصم أحد من راتبه بنفسه');
   const entry = { id: `a${fin.nextId++}`, empId, type, reason: String(reason).trim().slice(0, FIN_LIMITS.reason), by, at, period: fin.period, paid: false };
   if (type === 'overtime') {
     entry.hours = positive(hours, FIN_LIMITS.hours, 'عدد الساعات');
@@ -165,7 +168,11 @@ function trim(fin) {
 }
 
 // ---- orders from the finance manager's chat replies -------------------------
-const ORDER_TYPES = { 'خصم': 'deduction', 'مكافأة': 'bonus', 'مكافاة': 'bonus', 'أوفرتايم': 'overtime', 'اوفرتايم': 'overtime', 'عمل إضافي': 'overtime', 'زيادة': 'raise' };
+const ORDER_TYPES = { 'خصم': 'deduction', 'مكافأة': 'bonus', 'مكافاة': 'bonus', 'أوفرتايم': 'overtime', 'اوفرتايم': 'overtime', 'عمل إضافي': 'overtime', 'زيادة': 'raise',
+  'تخفيض': 'cut', 'تخفيض راتب': 'cut', 'تخفيض الراتب': 'cut' };
+// The finance manager's orders, on the owner's request: deductions, bonuses,
+// overtime, raises and salary cuts.
+export const CFO_ORDERS = ['deduction', 'bonus', 'overtime', 'raise', 'cut'];
 const toNumber = (s) => Number(String(s).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/[٬,\s]/g, '').replace('٫', '.'));
 
 /**
@@ -173,11 +180,11 @@ const toNumber = (s) => Number(String(s).replace(/[٠-٩]/g, (d) => '٠١٢٣٤�
  * reply, strips them, and resolves names to employee ids. Unknown types or
  * names are dropped.
  */
-export function parseFinanceOrders(reply, employees) {
+export function parseFinanceOrders(reply, employees, { allowed = CFO_ORDERS } = {}) {
   const orders = [];
   const text = reply.replace(/\[\[\s*مالية\s*:([^\]]*)\]\]/g, (_, body) => {
     const [kind = '', who = '', value = '', reason = ''] = body.split('|').map((x) => x.trim());
-    const type = ORDER_TYPES[kind];
+    const type = allowed.includes(ORDER_TYPES[kind]) ? ORDER_TYPES[kind] : null;
     const names = who.split(/[،,]| و/).map((x) => x.trim()).filter(Boolean);
     const all = names.some((n) => /^(ال)?كل|الجميع|الفريق/.test(n));
     const empIds = all ? employees.map((e) => e.id)

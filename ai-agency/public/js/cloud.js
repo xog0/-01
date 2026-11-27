@@ -8,6 +8,7 @@
 //   core/finance/ledger   income and expense entries
 //   core/crm/book         clients and projects
 //   core/deals/<id>       one sales opportunity
+//   core/dms/<a__b>       messages between two employees
 //   core/hr/people        leave records, daily attendance and promotion promises
 //   core/reports/<id>     one manager report (morning plan, end of day, weekly)
 //   core/calendar/settings work days and holidays
@@ -43,6 +44,7 @@ function splitState(state) {
   }
   if (state.clients || state.projects) docs.set('crm/book', { clients: state.clients || [], projects: state.projects || [] });
   for (const d of state.deals || []) docs.set(`deals/${d.id}`, d);
+  for (const [k, list] of Object.entries(state.dms || {})) if (list?.length) docs.set(`dms/${k}`, { messages: list.slice(-40) });
   for (const r of state.reports || []) docs.set(`reports/${r.id}`, r);
   docs.set('calendar/settings', state.calendar || {});
   docs.set('hr/people', { leaves: state.leaves || [], attendance: state.attendance || {}, promises: state.promises || [] });
@@ -105,8 +107,8 @@ export async function connectCloud() {
       return null;
     }
     const c = snap.data();
-    const [outputs, chats, meetings, finance, crm, evaluations, clientchats, hr, deals, reports, calendar] = await withTimeout(Promise.all(
-      ['outputs', 'chats', 'meetings', 'finance', 'crm', 'evaluations', 'clientchats', 'hr', 'deals', 'reports', 'calendar'].map((name) => core.collection(name).get()),
+    const [outputs, chats, meetings, finance, crm, evaluations, clientchats, hr, deals, reports, calendar, dms] = await withTimeout(Promise.all(
+      ['outputs', 'chats', 'meetings', 'finance', 'crm', 'evaluations', 'clientchats', 'hr', 'deals', 'reports', 'calendar', 'dms'].map((name) => core.collection(name).get()),
     ), LOAD_TIMEOUT_MS);
     const byId = (qs) => Object.fromEntries(qs.docs.map((d) => [d.id, d.data()]));
     const out = byId(outputs);
@@ -137,6 +139,7 @@ export async function connectCloud() {
     state.hiring = people.hiring?.round || null;
     state.deals = Object.values(byId(deals)).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
     state.reports = Object.values(byId(reports)).sort((a, b) => (a.at || 0) - (b.at || 0));
+    state.dms = Object.fromEntries(Object.entries(byId(dms)).map(([k, v]) => [k, v.messages || []]));
     const cal = byId(calendar).settings;
     if (cal?.workDays) state.calendar = cal;
     // Record what is stored now so the first save only sends real changes.
@@ -148,6 +151,7 @@ export async function connectCloud() {
     for (const d of clientchats.docs) written.set(`clientchats/${d.id}`, written.get(`clientchats/${d.id}`) ?? '?');
     for (const d of deals.docs) written.set(`deals/${d.id}`, written.get(`deals/${d.id}`) ?? '?');
     for (const d of reports.docs) written.set(`reports/${d.id}`, written.get(`reports/${d.id}`) ?? '?');
+    for (const d of dms.docs) written.set(`dms/${d.id}`, written.get(`dms/${d.id}`) ?? '?');
     enabled = true;
     return state;
   }

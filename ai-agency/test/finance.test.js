@@ -102,11 +102,10 @@ test('a new agency has Sheika as CFO with salaries for everyone; older ones get 
   assert.equal(applyMigrations(old), false);
 });
 
-test('only the owner can cut a salary, and never to zero or below', () => {
+test('only the owner or the finance manager can cut a salary, and never to zero or below', () => {
   const s = agency();
-  for (const by of ['cfo', 'e1', 'manager', undefined]) {
-    if (by === undefined) continue;
-    assert.throws(() => addAdjustment(s, { empId: 'a', type: 'cut', amount: 500, by }), /صلاحية المالك وحده/);
+  for (const by of ['e1', 'manager', 'ceo']) {
+    assert.throws(() => addAdjustment(s, { empId: 'a', type: 'cut', amount: 500, by }), /المالك والمدير المالي فقط/);
   }
   assert.equal(s.employees[0].salary, 9000);
   const c = addAdjustment(s, { empId: 'a', type: 'cut', amount: 1500, reason: 'إعادة هيكلة', by: 'owner' });
@@ -115,8 +114,16 @@ test('only the owner can cut a salary, and never to zero or below', () => {
   assert.throws(() => addAdjustment(s, { empId: 'a', type: 'cut', amount: 7500, by: 'owner' }), /أقل من راتب/);
 });
 
-test('the finance manager cannot cut salaries through chat orders', () => {
+test('the finance manager orders every pay change, cuts included, but never on her own pay', () => {
+  const s = agency();
+  s.employees.push({ id: 'cfo', name: 'شيكا', dept: 'finance', level: 6, salary: 15000 });
+  const cfoId = 'cfo';
+  const cut = addAdjustment(s, { empId: 'a', type: 'cut', amount: 1000, reason: 'إعادة هيكلة', by: cfoId });
+  assert.equal(cut.to, 8000);
+  assert.throws(() => addAdjustment(s, { empId: cfoId, type: 'cut', amount: 100, by: cfoId }), /بنفسه/);
+  assert.throws(() => addAdjustment(s, { empId: cfoId, type: 'deduction', amount: 100, by: cfoId }), /بنفسه/);
   const emps = [{ id: 'a', name: 'خالد' }];
-  assert.deepEqual(parseFinanceOrders('[[مالية: تخفيض | خالد | 500 | x]]', emps).orders, []);
-  assert.deepEqual(parseFinanceOrders('[[مالية: cut | خالد | 500 | x]]', emps).orders, []);
+  const parsed = parseFinanceOrders('حاضر.\n[[مالية: تخفيض | خالد | 500 | أداء ضعيف]]\n[[مالية: خصم | خالد | 100 | تأخير]]\n[[مالية: مكافأة | خالد | 100 | إنجاز]]\n[[مالية: زيادة | خالد | 300 | ترقية]]', emps);
+  assert.deepEqual(parsed.orders.map((o) => o.type), ['cut', 'deduction', 'bonus', 'raise']);
+  assert.equal(parsed.text, 'حاضر.');
 });
