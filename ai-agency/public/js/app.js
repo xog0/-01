@@ -81,6 +81,24 @@ function promptBox(message, placeholder = '') {
   return new Promise((resolve) => dlg.addEventListener('close',
     () => resolve(dlg.returnValue === 'ok' ? $('#prompt-input').value.trim().slice(0, 300) : null), { once: true }));
 }
+// Background updates redraw panels and dialogs, which rebuilds their dropdowns
+// and fields. While the owner is using one (a list open, a value being typed),
+// the redraw waits until they leave it, so a choice is never closed or reset
+// under their fingers. The chat box is exempt: replies should keep arriving.
+const waitingRedraws = new Map();
+const inUse = (container) => {
+  const a = document.activeElement;
+  return Boolean(a && a.matches?.('select, input, textarea') && !a.closest('#chat-form, #cc-form, #iv-form, #m-form')
+    && document.querySelector(container)?.contains(a));
+};
+function whenIdle(container, redraw) {
+  if (inUse(container)) { waitingRedraws.set(container, redraw); return; }
+  waitingRedraws.delete(container);
+  redraw();
+}
+document.addEventListener('focusout', () => setTimeout(() => {
+  for (const [container, redraw] of [...waitingRedraws]) if (!inUse(container)) { waitingRedraws.delete(container); redraw(); }
+}, 0));
 // replaceChildren() would print "null" for an empty optional section; fill() skips it.
 function fill(el, ...kids) {
   el.replaceChildren(...kids.flat().filter((k) => k !== null && k !== undefined && k !== false));
@@ -1771,7 +1789,7 @@ async function hrInterviews() {
   r.pick = null;
   const cur = state.finance.currency;
   const company = { name: state.company.name, about: state.company.about || '' };
-  const rerender = () => { if ($('#dlg-interviews').open) renderInterviews(); };
+  const rerender = () => { if ($('#dlg-interviews').open) whenIdle('#dlg-interviews', renderInterviews); };
   const prev = hr.status;
   setStatus(hr, 'talking', '🎤 تقابل المرشحين');
   toast(`🎤 ${hr.name} بدأت المقابلات (الحد الأقصى ${money(r.cap)})`);
@@ -1905,7 +1923,7 @@ function sendDm(fromId, toId, text, kind = 'note') {
     office.setStatus(fromId, 'idle', `💬 ← ${emp(toId)?.name || ''}`);
     setTimeout(() => emp(fromId)?.status === 'idle' && office.setStatus(fromId, 'idle'), 4000);
   }
-  if (selectedId === toId || selectedId === fromId) renderPanel();
+  if (selectedId === toId || selectedId === fromId) whenIdle('#panel', renderPanel);
   return m;
 }
 // The recipient answers in their own voice; someone on leave sends an automatic note.
@@ -3583,8 +3601,8 @@ function refresh() {
     const label = k === 0 ? (who ? `جناح المدير التنفيذي · ${who.name}` : 'جناح المدير التنفيذي (شاغر)') : who ? `مكتب ${who.name}` : 'مكتب شاغر';
     office.setOfficeLabel(k, label, Boolean(who));
   }
-  if (selectedId) renderPanel();
-  if ($('#dlg-board').open) renderBoard();
+  if (selectedId) whenIdle('#panel', renderPanel);
+  if ($('#dlg-board').open) whenIdle('#dlg-board', renderBoard);
 }
 
 // Swap in a whole new state (cloud load or reset) and rebuild the office.
